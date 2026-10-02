@@ -77,10 +77,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-export const useToast = (): ToastContextType => {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
+/** Used when no ToastProvider is mounted: messages go to the console instead of crashing the page. */
+const consoleToast: ToastContextType = {
+  showToast: (message, type = 'success') => {
+    const log = type === 'error' ? console.error : console.warn;
+    log(`[toast:${type}] ${message} (no ToastProvider mounted; wrap the app in <ToastProvider>)`);
+  },
 };
+
+export const useToast = (): ToastContextType => useContext(ToastContext) ?? consoleToast;
