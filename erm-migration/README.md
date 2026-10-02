@@ -11,10 +11,14 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 
 ## Applying the React patch
 
-Paths in the patch are relative to the React app's source root (for example `pages/DashboardListPage.tsx`).
+Two copies of the same patch, differing only in line endings. Paths are relative to the React app's `src/` folder.
 
 ```bash
-git apply --directory=src erm-migration/react-patch/erm-react-toast-and-list-refresh.patch   # if the code lives under src/
+# Windows checkout (files use CRLF line endings)
+git apply --directory=src erm-migration/react-patch/erm-react-toast-and-list-refresh.crlf.patch
+
+# LF checkout
+git apply --directory=src erm-migration/react-patch/erm-react-toast-and-list-refresh.patch
 ```
 
-Add `--ignore-whitespace` if the files use Windows line endings.
+The "trailing whitespace" warnings on the CRLF copy are the carriage returns and are harmless. If your files have changed since the analysed code, add `--reject` to apply what matches and leave `.rej` files for the rest.

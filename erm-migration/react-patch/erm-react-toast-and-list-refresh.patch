@@ -1,8 +1,8 @@
 diff --git a/components/AddDashboardDialog.tsx b/components/AddDashboardDialog.tsx
-index ba9ee64..990b700 100644
+index 8c95572..d7395a3 100644
 --- a/components/AddDashboardDialog.tsx
 +++ b/components/AddDashboardDialog.tsx
-@@ -68,7 +68,18 @@ interface AddDashboardDialogProps {
+@@ -67,7 +67,18 @@ interface AddDashboardDialogProps {
    dashboardToEdit?: DashboardDisplay | null;
    /** Lifecycle mode. Defaults to 'edit' when a dashboard is given, else 'create'. */
    mode?: DashboardDialogMode;
@@ -22,7 +22,7 @@ index ba9ee64..990b700 100644
  }
  
  const DASHBOARD_STATUS_OPTIONS = ['Active', 'Draft', 'Archived', 'Released', 'Validated', 'Deleted'] as const;
-@@ -515,6 +526,7 @@ export const AddDashboardDialog: React.FC<AddDashboardDialogProps> = ({
+@@ -514,6 +525,7 @@ export const AddDashboardDialog: React.FC<AddDashboardDialogProps> = ({
        const settings =
          mode === 'create' ? (basedOnDashboard ? sourceSettings : '') || JSON.stringify(DEFAULT_NEUTRAL_SETTINGS) : sourceSettings;
  
@@ -30,7 +30,7 @@ index ba9ee64..990b700 100644
        await client(executeAddEditWorkflow).applyAction({
          userMail: currentUserEmail,
          actionType: ACTION_TYPE[mode],
-@@ -546,7 +558,12 @@ export const AddDashboardDialog: React.FC<AddDashboardDialogProps> = ({
+@@ -545,7 +557,12 @@ export const AddDashboardDialog: React.FC<AddDashboardDialogProps> = ({
  
        resetForm();
        onOpenChange(false);
@@ -45,17 +45,16 @@ index ba9ee64..990b700 100644
        const errorObj = err as { message?: string };
        console.error(`Dashboard ${mode} failed:`, err);
 diff --git a/components/dashboard-view/DashboardActionTrackerTab.tsx b/components/dashboard-view/DashboardActionTrackerTab.tsx
-index a1b6f6e..c6eb88e 100644
+index 147e47a..ebc2853 100644
 --- a/components/dashboard-view/DashboardActionTrackerTab.tsx
 +++ b/components/dashboard-view/DashboardActionTrackerTab.tsx
-@@ -1,5 +1,6 @@
- 
+@@ -1,4 +1,5 @@
  import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 +import { useToast } from '../../context/ToastContext';
  import { useDashboardContext, type ActionRow } from '../../context/DashboardContext';
  import { RiskFilter, defaultRiskFilters } from './RiskFilter';
  import { ColumnSelectorPopover } from './ColumnSelectorPopover';
-@@ -24,12 +25,9 @@ import {
+@@ -23,12 +24,9 @@ import {
    Trash2,
    Save,
    Download,
@@ -68,7 +67,7 @@ index a1b6f6e..c6eb88e 100644
  } from 'lucide-react';
  
  import { Button } from '../../../@/components/ui/button';
-@@ -54,6 +52,7 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
+@@ -53,6 +51,7 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
      setSelectedType,
      refetchPayload,
    } = useDashboardContext();
@@ -76,7 +75,7 @@ index a1b6f6e..c6eb88e 100644
  
    const [isFilterOpen, setIsFilterOpen] = useState(false);
  
-@@ -83,14 +82,6 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
+@@ -82,14 +81,6 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
  
    const [cellValues, setCellValues] = useState<Record<string, string>>({});
    const [isSaving, setIsSaving] = useState(false);
@@ -91,7 +90,7 @@ index a1b6f6e..c6eb88e 100644
  
    const rawActionsList = useMemo<ActionRow[]>(() => {
      if (!armRoPayload?.mitigation_rows) return [];
-@@ -921,33 +912,7 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
+@@ -920,31 +911,6 @@ export const DashboardActionTrackerTab: React.FC<{ dashboardId: string }> = ({ d
          </div>
        </div>
  
@@ -123,14 +122,11 @@ index a1b6f6e..c6eb88e 100644
      </div>
    );
  };
- 
--
 diff --git a/components/dashboard-view/DashboardFullSearchTab.tsx b/components/dashboard-view/DashboardFullSearchTab.tsx
-index db06578..8e4d592 100644
+index c8eff52..5d29f2c 100644
 --- a/components/dashboard-view/DashboardFullSearchTab.tsx
 +++ b/components/dashboard-view/DashboardFullSearchTab.tsx
-@@ -1,14 +1,14 @@
- 
+@@ -1,13 +1,13 @@
  import React, { useEffect, useState, useCallback, useRef } from 'react';
 +import { useToast } from '../../context/ToastContext';
  import { useDashboardContext } from '../../context/DashboardContext';
@@ -146,7 +142,7 @@ index db06578..8e4d592 100644
  
  const parseStringArray = (val: unknown): string[] => {
    if (!val) return [];
-@@ -35,14 +35,12 @@ const parseStringArray = (val: unknown): string[] => {
+@@ -34,14 +34,12 @@ const parseStringArray = (val: unknown): string[] => {
  
  export const DashboardFullSearchTab: React.FC<{ dashboardId: string }> = ({ dashboardId }) => {
    const { currentDashboard, currentUserEmail, canEdit, refetchPayload, allRiskRows } = useDashboardContext();
@@ -162,7 +158,7 @@ index db06578..8e4d592 100644
    const isInitializedRef = useRef(false);
  
    // Re-initialize initial selected risks whenever dashboardId or allRiskRows changes
-@@ -79,14 +77,6 @@ export const DashboardFullSearchTab: React.FC<{ dashboardId: string }> = ({ dash
+@@ -78,14 +76,6 @@ export const DashboardFullSearchTab: React.FC<{ dashboardId: string }> = ({ dash
      logger.info('DashboardFullSearchTab', `Loaded Full Search Tab for: ${dashboardId}`);
    }, [dashboardId]);
  
@@ -177,7 +173,7 @@ index db06578..8e4d592 100644
    const handleToggleRiskSelection = useCallback((risk: RiskSearchResult) => {
      setSelectedRisksMap((prev) => {
        const next = new Map(prev);
-@@ -230,35 +220,7 @@ export const DashboardFullSearchTab: React.FC<{ dashboardId: string }> = ({ dash
+@@ -229,33 +219,6 @@ export const DashboardFullSearchTab: React.FC<{ dashboardId: string }> = ({ dash
          />
        </div>
  
@@ -211,14 +207,11 @@ index db06578..8e4d592 100644
      </div>
    );
  };
- 
--
 diff --git a/components/dashboard-view/DashboardHeader.tsx b/components/dashboard-view/DashboardHeader.tsx
-index 5881044..78cf85d 100644
+index 827dc33..0ce100c 100644
 --- a/components/dashboard-view/DashboardHeader.tsx
 +++ b/components/dashboard-view/DashboardHeader.tsx
-@@ -1,18 +1,17 @@
- 
+@@ -1,17 +1,16 @@
 -import React, { useState, useMemo, useCallback } from 'react';
 +import React, { useState, useMemo } from 'react';
 +import { useToast } from '../../context/ToastContext';
@@ -246,7 +239,7 @@ index 5881044..78cf85d 100644
  } from 'lucide-react';
  import { client, CURRENT_ENV } from '../../client';
  import { ermValidateDashboardAndRisksv2 } from '@fca0-enterprise-risk-management/sdk';
-@@ -76,18 +75,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ dashboardId, a
+@@ -75,18 +74,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ dashboardId, a
      currentUserEmail, 
      refetchPayload 
    } = useDashboardContext();
@@ -266,7 +259,7 @@ index 5881044..78cf85d 100644
  
    const tabs: { id: DashboardTabType; label: string }[] = [
      { id: 'maps', label: 'Maps' },
-@@ -437,33 +429,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ dashboardId, a
+@@ -436,31 +428,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ dashboardId, a
          </Button>
        </div>
  
@@ -298,20 +291,17 @@ index 5881044..78cf85d 100644
      </header>
    );
  };
- 
--
 diff --git a/components/dashboard-view/DashboardTableTab.tsx b/components/dashboard-view/DashboardTableTab.tsx
-index 0f32c5a..e17e98b 100644
+index 899586e..8852711 100644
 --- a/components/dashboard-view/DashboardTableTab.tsx
 +++ b/components/dashboard-view/DashboardTableTab.tsx
-@@ -1,5 +1,6 @@
- 
+@@ -1,4 +1,5 @@
  import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 +import { useToast } from '../../context/ToastContext';
  import { useNavigate } from 'react-router-dom';
  import { useDashboardContext } from '../../context/DashboardContext';
  import { RiskFilter, defaultRiskFilters } from './RiskFilter';
-@@ -34,14 +35,11 @@ import {
+@@ -33,14 +34,11 @@ import {
    Trash2,
    Save,
    Download,
@@ -326,7 +316,7 @@ index 0f32c5a..e17e98b 100644
  } from 'lucide-react';
  
  import { Button } from '../../../@/components/ui/button';
-@@ -68,6 +66,7 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
+@@ -67,6 +65,7 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
      setSelectedType,
      refetchPayload,
    } = useDashboardContext();
@@ -334,7 +324,7 @@ index 0f32c5a..e17e98b 100644
  
    const [isFilterOpen, setIsFilterOpen] = useState(false);
    const [includeChildren, setIncludeChildren] = useState(false);
-@@ -81,14 +80,6 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
+@@ -80,14 +79,6 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
  
    const [isSaving, setIsSaving] = useState(false);
@@ -349,7 +339,7 @@ index 0f32c5a..e17e98b 100644
  
    const risksList = useMemo(() => {
      return allRiskRows.filter((r) => {
-@@ -975,33 +966,7 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
+@@ -974,31 +965,6 @@ export const DashboardTableTab: React.FC<{ dashboardId: string }> = ({ dashboard
          </div>
        </div>
  
@@ -381,14 +371,11 @@ index 0f32c5a..e17e98b 100644
      </div>
    );
  };
- 
--
 diff --git a/components/dashboard-view/RiskEditDrawer.tsx b/components/dashboard-view/RiskEditDrawer.tsx
-index ae00cb9..996b08f 100644
+index 52215c8..3c1b8ea 100644
 --- a/components/dashboard-view/RiskEditDrawer.tsx
 +++ b/components/dashboard-view/RiskEditDrawer.tsx
-@@ -1,18 +1,17 @@
- 
+@@ -1,17 +1,16 @@
  import React, { useState, useEffect, useMemo } from 'react';
  import { useDashboardContext, type ArmRiskRow } from '../../context/DashboardContext';
 +import { useToast } from '../../context/ToastContext';
@@ -407,7 +394,7 @@ index ae00cb9..996b08f 100644
    ExternalLink,
  } from 'lucide-react';
  
-@@ -32,6 +31,8 @@ interface RiskEditDrawerProps {
+@@ -31,6 +30,8 @@ interface RiskEditDrawerProps {
  
  export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChange, risk }) => {
    const { currentDashboard, allRiskRows, canEdit, refetchPayload } = useDashboardContext();
@@ -416,7 +403,7 @@ index ae00cb9..996b08f 100644
  
    // Local Form States
    const [title, setTitle] = useState('');
-@@ -48,7 +49,6 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
+@@ -47,7 +48,6 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
    // Submission & Feedback States
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -424,7 +411,7 @@ index ae00cb9..996b08f 100644
  
    // Available Parent Risk Options
    const availableParentOptions = useMemo(() => {
-@@ -171,13 +171,13 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
+@@ -170,13 +170,13 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
  
        await refetchPayload();
  
@@ -440,7 +427,7 @@ index ae00cb9..996b08f 100644
      } finally {
        setIsSubmitting(false);
      }
-@@ -413,32 +413,6 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
+@@ -412,32 +412,6 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
          </Button>
        </div>
  
@@ -474,17 +461,16 @@ index ae00cb9..996b08f 100644
    );
  };
 diff --git a/components/dashboard-view/onepager/OnePager.tsx b/components/dashboard-view/onepager/OnePager.tsx
-index 968d721..534aaee 100644
+index 8c7a677..5c76c91 100644
 --- a/components/dashboard-view/onepager/OnePager.tsx
 +++ b/components/dashboard-view/onepager/OnePager.tsx
-@@ -1,5 +1,6 @@
- 
+@@ -1,4 +1,5 @@
  import React, { useState, useEffect, useCallback, useMemo } from 'react';
 +import { useToast } from '../../../context/ToastContext';
  import { useNavigate, useSearchParams } from 'react-router-dom';
  import { useDashboardContext, type ArmRiskRow } from '../../../context/DashboardContext';
  import { OnePagerArmInfo } from './OnePagerArmInfo';
-@@ -22,7 +23,7 @@ import {
+@@ -21,7 +22,7 @@ import {
    ResizablePanel,
    ResizableHandle,
  } from '../../../../@/components/ui/resizable';
@@ -493,7 +479,7 @@ index 968d721..534aaee 100644
  import { cn } from '../../../../@/lib/utils';
  
  // Typed wrapper alias for Shadcn ResizablePanelGroup
-@@ -133,11 +134,11 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
+@@ -132,11 +133,11 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
    const navigate = useNavigate();
    const [searchParams, setSearchParams] = useSearchParams();
    const { armRoPayload, canEdit, refetchPayload, allRiskRows } = useDashboardContext();
@@ -506,7 +492,7 @@ index 968d721..534aaee 100644
    
    const [isEditMode, setIsEditMode] = useState<boolean>(false);
  
-@@ -173,13 +174,6 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
+@@ -172,13 +173,6 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
  
    const risk = activeRisk;
  
@@ -520,7 +506,7 @@ index 968d721..534aaee 100644
    const initialLayoutSettings = useMemo(() => {
      try {
        const rawSettings = risk?.print_settings || risk?.settings || armRoPayload?.settings;
-@@ -1284,33 +1278,7 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
+@@ -1283,31 +1277,6 @@ export const OnePager: React.FC<OnePagerProps> = ({ risk: initialPropRisk, dashb
          )}
        </div>
  
@@ -552,8 +538,6 @@ index 968d721..534aaee 100644
      </div>
    );
  };
- 
--
 diff --git a/context/ToastContext.tsx b/context/ToastContext.tsx
 new file mode 100644
 index 0000000..94f6e74
@@ -647,11 +631,10 @@ index 0000000..94f6e74
 +  return context;
 +};
 diff --git a/hooks/useDashboards.ts b/hooks/useDashboards.ts
-index 8d410cf..e4d31af 100644
+index d79b246..90bb9b8 100644
 --- a/hooks/useDashboards.ts
 +++ b/hooks/useDashboards.ts
-@@ -1,41 +1,79 @@
- 
+@@ -1,40 +1,78 @@
 -import { useState, useEffect, useMemo, useCallback } from 'react';
 +import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
  import { client, CURRENT_ENV } from '../client';
@@ -755,21 +738,18 @@ index 8d410cf..e4d31af 100644
    useEffect(() => {
      fetchDashboards();
    }, [fetchDashboards]);
-@@ -65,8 +103,5 @@ export function useDashboards(currentUserEmail: string) {
+@@ -64,5 +102,5 @@ export function useDashboards(currentUserEmail: string) {
      return Array.from(new Set([...allSiglums, ...dashboardSiglums])).sort();
    }, [dashboards, allSiglums]);
  
 -  return { dashboards, isLoading, combinedSiglums, refetch: fetchDashboards };
 +  return { dashboards, isLoading, isRefreshing, error, combinedSiglums, refetch: fetchDashboards };
  }
--
--
--
 diff --git a/main.tsx b/main.tsx
-index 39e4dd3..04c6452 100644
+index 5549107..d4e29a7 100644
 --- a/main.tsx
 +++ b/main.tsx
-@@ -2,11 +2,14 @@
+@@ -1,10 +1,13 @@
  import React from 'react';
  import ReactDOM from 'react-dom/client';
  import App from './App';
@@ -784,12 +764,11 @@ index 39e4dd3..04c6452 100644
 +    </ToastProvider>
    </React.StrictMode>,
  );
- 
 diff --git a/pages/DashboardListPage.tsx b/pages/DashboardListPage.tsx
-index 6603730..f9b3339 100644
+index 592efc9..e76f005 100644
 --- a/pages/DashboardListPage.tsx
 +++ b/pages/DashboardListPage.tsx
-@@ -6,13 +6,34 @@ import { useDashboards } from '../hooks/useDashboards';
+@@ -4,13 +4,34 @@ import { useDashboards } from '../hooks/useDashboards';
  import { useErmUsers } from '../hooks/useErmUsers';
  import { matchUserPermission } from '../utils/permissionMatcher';
  import { DashboardTable } from '../components/DashboardTable';
@@ -826,7 +805,7 @@ index 6603730..f9b3339 100644
  
  /**
   * Parses dates across standard ISO, numeric Unix timestamps, and Airbus string formats (e.g. "24-Aug-2026 14:30").
-@@ -70,7 +91,19 @@ const isDateInRange = (dateVal: unknown, range?: DateRange): boolean => {
+@@ -68,7 +89,19 @@ const isDateInRange = (dateVal: unknown, range?: DateRange): boolean => {
  };
  
  export default function DashboardListPage({ currentUserEmail }: { currentUserEmail: string }) {
@@ -847,7 +826,7 @@ index 6603730..f9b3339 100644
    const { users: ermUsers, isLoadingUsers } = useErmUsers();
  
    const [activeTab, setActiveTab] = useState<'standard' | 'access' | 'riskSharing'>('standard');
-@@ -195,6 +228,18 @@ export default function DashboardListPage({ currentUserEmail }: { currentUserEma
+@@ -193,6 +226,18 @@ export default function DashboardListPage({ currentUserEmail }: { currentUserEma
            </Button>
          </div>
  
@@ -866,7 +845,7 @@ index 6603730..f9b3339 100644
          {/* Render Tab Views */}
          {activeTab === 'riskSharing' ? (
            <RiskSharingView currentUserEmail={currentUserEmail} />
-@@ -242,7 +287,7 @@ export default function DashboardListPage({ currentUserEmail }: { currentUserEma
+@@ -240,7 +285,7 @@ export default function DashboardListPage({ currentUserEmail }: { currentUserEma
            combinedSiglums={combinedSiglums}
            dashboardToEdit={dashboardToEdit}
            mode={dialogMode}
