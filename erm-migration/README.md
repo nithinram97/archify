@@ -6,7 +6,7 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 |---|---|---|
 | `backend/executeAddEditWorkflow.ts` | Patched Foundry function: ARM read access is derived on the server from stored vs final board state (gap G-32). `executeAddEditWorkflow.diff` is the change against the previous version. | Deployed |
 | `react-patch/erm-react-toast-and-list-refresh.patch` | React patch (11 files): app-wide toast provider, success feedback on dashboard create/edit, list refresh that waits for the saved dashboard, risk edit drawer toast fix (gaps G-33, G-34). | Not deployed |
-| `react-src/src/` | The same React change as full files (11 files, same paths as the app's `src/`). Copy them over the app's files instead of applying the patch. | Not deployed |
+| `react-src/src/` | The same React change as full files (11 files, same paths as the app's `src/`). The toast provider is mounted in `App.tsx`; `main.tsx` needs no change. Copy them over the app's files instead of applying the patch. | Not deployed |
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 
