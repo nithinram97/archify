@@ -16,7 +16,7 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 | `docs/AI-Assisted-Legacy-App-Migration-Playbook.pdf` | The AI-assisted migration playbook: context packing with pack-project.ts, the seven steps, deliverables, teamwork, transferability and a jury demo script. | — |
-| `docs/ERM-Migration-Jury-Pitch.pdf` | Six-slide jury pitch: the challenge, the method, KPIs, results and reuse. The GIF animations appear as still frames in the PDF. | — |
+| `docs/ERM-Migration-Jury-Pitch.pdf` | PDF of the eight-slide PowerPoint pitch. The GIF animations and slide 7 build appear as still frames. | — |
 | `docs/ERM-Migration-Jury-Pitch.pptx` | Eight-slide jury pitch as PowerPoint, with speaker notes: adds the effort-saved estimate (team of 2) and an animated slide mapping the work to the 2026 objectives. The two GIFs play in Slide Show. | — |
 
 ## Applying the React patch
