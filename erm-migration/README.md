@@ -9,6 +9,8 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `react-src/src/` | The same React change as full files (11 files, same paths as the app's `src/`). The toast provider is mounted in `App.tsx`; `main.tsx` needs no change. Copy them over the app's files instead of applying the patch. | Not deployed |
 | `diagrams/erm-slate-detailed.html` | Detailed Archify architecture of the Slate app: shell internals, 7 modules, Foundry functions, object sets, actions and objects. | — |
 | `diagrams/erm-slate-dashboard-lifecycle.html` | Archify lifecycle of a dashboard in the Slate app: statuses, versions and iterations, and who can trigger each change. | — |
+| `diagrams/erm-react-detailed.html` | Detailed Archify architecture of the React app: pages, dialogs, dashboard view and tabs, OSDK client, Foundry functions, actions and objects. | — |
+| `diagrams/erm-react-dashboard-lifecycle.html` | Archify lifecycle of a dashboard in the React app: statuses, locking, versions and iterations, and who can trigger each change. | — |
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 
