@@ -15,6 +15,7 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `diagrams/erm-react-risk-lifecycle.html` | Archify lifecycle of a risk or opportunity in the React app only: Full Search and executeAddEditWorkflow, drawer and one-pager edits, key-message save and validation, sharing inbox, locking, carry-forward and removal. | — |
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
+| `docs/AI-Assisted-Legacy-App-Migration-Playbook.pdf` | The AI-assisted migration playbook: context packing with pack-project.ts, the seven steps, deliverables, teamwork, transferability and a jury demo script. | — |
 
 ## Applying the React patch
 
