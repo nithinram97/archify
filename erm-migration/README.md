@@ -11,6 +11,7 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `diagrams/erm-slate-dashboard-lifecycle.html` | Archify lifecycle of a dashboard in the Slate app: statuses, versions and iterations, and who can trigger each change. | — |
 | `diagrams/erm-react-detailed.html` | Detailed Archify architecture of the React app: pages, dialogs, dashboard view and tabs, OSDK client, Foundry functions, actions and objects. | — |
 | `diagrams/erm-react-dashboard-lifecycle.html` | Archify lifecycle of a dashboard in the React app: statuses, locking, versions and iterations, and who can trigger each change. | — |
+| `diagrams/erm-risk-lifecycle.html` | Archify lifecycle of a risk or opportunity across both apps: ARM source, per-board record, assessment, key messages, sharing, locking, carry-forward and removal. | — |
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 
