@@ -16,9 +16,9 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `diagrams/erm-legacy-full.html` | Archify architecture diagram of the legacy Slate app (shell + 7 modules). | — |
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 | `docs/AI-Assisted-Legacy-App-Migration-Playbook.pdf` | The AI-assisted migration playbook: context packing with pack-project.ts, the seven steps, deliverables, teamwork, transferability and a jury demo script. | — |
-| `docs/ERM-Migration-Jury-Pitch.pdf` | PDF of the eight-slide PowerPoint pitch. The GIF animations and the slide 7 flow chart appear as still frames. | — |
-| `docs/ERM-Migration-Jury-Pitch.pptx` | Eight-slide jury pitch as PowerPoint, with speaker notes: adds the effort-saved estimate (team of 2) and an animated flow chart linking the work to four 2026 objectives. The two GIFs play in Slide Show. | — |
-| `docs/gifs/legacy-breakdown.gif`, `docs/gifs/migration-to-react.gif` | The two pitch animations as standalone GIFs: the Slate app splitting into modules and 105 features, and features flowing from Slate modules into React tabs. | — |
+| `docs/ERM-Migration-Jury-Pitch.pdf` | PDF of the nine-slide PowerPoint pitch. Animations appear as still frames. | — |
+| `docs/ERM-Migration-Jury-Pitch.pptx` | Nine-slide jury pitch in the Airbus theme, with speaker notes: what ERM is, adoption, why migrate, the AI method, KPIs, effort saved, 2026 objectives and reuse. Animated GIFs and auto-playing slide builds play in Slide Show. | — |
+| `docs/gifs/legacy-breakdown.gif`, `docs/gifs/migration-to-react.gif` | The two pitch animations as standalone GIFs, in the Airbus palette. | — |
 
 ## Applying the React patch
 
