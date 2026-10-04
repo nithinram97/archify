@@ -17,7 +17,7 @@ Fixes and architecture diagrams from the Slate-to-React gap analysis.
 | `diagrams/erm-react-full.html` | Archify architecture diagram of the React + OSDK app. | — |
 | `docs/AI-Assisted-Legacy-App-Migration-Playbook.pdf` | The AI-assisted migration playbook: context packing with pack-project.ts, the seven steps, deliverables, teamwork, transferability and a jury demo script. | — |
 | `docs/ERM-Migration-Jury-Pitch.pdf` | PDF of the twelve-slide PowerPoint pitch. Animations appear as still frames. | — |
-| `docs/ERM-Migration-Jury-Pitch-v2.pptx`, `docs/ERM-Migration-Jury-Pitch-v2.pdf` | Recommended ten-slide pitch in the Airbus theme, built on SCQA and Problem → Insight → Proof → Scale, each slide tagged with the award criterion it answers. Animated GIFs and auto-playing slide builds; the PDF shows still frames. | — |
+| `docs/ERM-Migration-Jury-Pitch-v2.pptx`, `docs/ERM-Migration-Jury-Pitch-v2.pdf` | Recommended nine-slide pitch in the Airbus theme, built on SCQA and Problem → Insight → Proof → Scale, each slide tagged with the award criterion it answers. Animated GIFs and auto-playing slide builds; the PDF shows still frames. | — |
 | `docs/ERM-Migration-Jury-Pitch.pptx` | Twelve-slide jury pitch in the Airbus theme, with speaker notes: what ERM is, adoption, usage by organisation and site, why migrate, the AI method, KPIs, effort and cost saved, easier to build and run, business testimonials, 2026 objectives and reuse. Animated GIFs and auto-playing slide builds play in Slide Show. | — |
 | `docs/gifs/legacy-breakdown.gif`, `docs/gifs/migration-to-react.gif` | The two pitch animations as standalone GIFs, in the Airbus palette. | — |
 
