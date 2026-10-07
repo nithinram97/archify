@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboardContext, type ArmRiskRow } from '../../context/DashboardContext';
 import { useToast } from '../../context/ToastContext';
 import { client, CURRENT_ENV } from '../../client';
-import { ermEditRisk, ermEditRiskDev } from '@fca0-enterprise-risk-management/sdk';
+import {
+  ermEditRisk,
+  ermEditRiskDev,
+  // Function-backed action on ermEditChildrenNewPermissions (G-30); use the action's API name.
+  ermEditChildrenNewPermissions,
+} from '@fca0-enterprise-risk-management/sdk';
 import { logger } from '../../utils/logger';
 import { cn } from '../../../@/lib/utils';
 import { getScoreCode } from '../../utils/reportTableUtils';
@@ -22,6 +27,35 @@ import { Checkbox } from '../../../@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../../@/components/ui/command';
 
+const parseStringArray = (val: unknown): string[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+      } catch {
+        // Fallback to comma-separated
+      }
+    }
+    return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
+
+/** pkImpactId of a risk row. */
+const pkOf = (row: ArmRiskRow): number =>
+  Number(row.pk_impact_id || row.PKImpactID || String(row.primary_key ?? '').split('_').pop() || 0);
+
+/** First non-empty value among a dashboard's display / raw / snake_case permission fields. */
+const dashboardList = (dashboard: unknown, camel: string): string[] => {
+  const d = (dashboard ?? {}) as Record<string, unknown>;
+  const snake = camel.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+  return parseStringArray(d[`${camel}_display`] ?? d[camel] ?? d[snake]);
+};
+
 interface RiskEditDrawerProps {
   open: boolean;
   onOpenChange: (_open: boolean) => void;
@@ -29,7 +63,7 @@ interface RiskEditDrawerProps {
 }
 
 export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChange, risk }) => {
-  const { currentDashboard, allRiskRows, canEdit, refetchPayload } = useDashboardContext();
+  const { currentDashboard, currentUserEmail, allRiskRows, canEdit, refetchPayload } = useDashboardContext();
   // App-level toast: it stays visible after this drawer closes (a local one unmounted with it).
   const { showToast } = useToast();
 
@@ -49,27 +83,50 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Available Parent Risk Options
+  // Parent links on this dashboard, used to keep the risk tree free of cycles.
+  const rowByPk = useMemo(() => new Map(allRiskRows.map((r) => [pkOf(r), r])), [allRiskRows]);
+
+  /** The current risk and all of its ancestors (parent, grandparent, ...). */
+  const ancestorPks = useMemo(() => {
+    const seen = new Set<number>();
+    let current = risk ? pkOf(risk) : 0;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      current = Number(rowByPk.get(current)?.riskParent ?? 0);
+    }
+    return seen;
+  }, [risk, rowByPk]);
+
+  /** The current risk and all of its descendants (children, grandchildren, ...). */
+  const descendantPks = useMemo(() => {
+    const childrenOf = new Map<number, number[]>();
+    allRiskRows.forEach((r) => {
+      const parent = Number(r.riskParent ?? 0);
+      if (parent) childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), pkOf(r)]);
+    });
+    const seen = new Set<number>();
+    const stack = risk ? [pkOf(risk)] : [];
+    while (stack.length > 0) {
+      const pk = stack.pop()!;
+      if (seen.has(pk)) continue;
+      seen.add(pk);
+      stack.push(...(childrenOf.get(pk) ?? []));
+    }
+    return seen;
+  }, [risk, allRiskRows]);
+
+  // Available Parent Risk Options: not the risk itself or one of its descendants.
   const availableParentOptions = useMemo(() => {
     if (!risk) return [];
-    const currentPk = risk.pk_impact_id || Number(risk.primary_key);
+    return allRiskRows.filter((r) => !descendantPks.has(pkOf(r)));
+  }, [allRiskRows, risk, descendantPks]);
 
-    return allRiskRows.filter((r) => {
-      const pk = r.pk_impact_id || Number(r.primary_key);
-      return pk !== currentPk;
-    });
-  }, [allRiskRows, risk]);
-
-  // Available Child Risk Options
+  // Available Child Risk Options: not the risk itself or one of its ancestors. Current children stay
+  // listed so they can be unticked (they were filtered out before, so they could never be removed).
   const availableChildrenOptions = useMemo(() => {
     if (!risk) return [];
-    const currentPk = risk.pk_impact_id || Number(risk.primary_key);
-
-    return allRiskRows.filter((r) => {
-      const pk = r.pk_impact_id || Number(r.primary_key);
-      return pk !== currentPk && String(r.riskParent) !== String(currentPk);
-    });
-  }, [allRiskRows, risk]);
+    return allRiskRows.filter((r) => !ancestorPks.has(pkOf(r)));
+  }, [allRiskRows, risk, ancestorPks]);
 
   // Hydrate local form inputs when opening
   useEffect(() => {
@@ -116,6 +173,12 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
       return;
     }
 
+    const parentNumCheck = selectedParentId ? Number(selectedParentId) : 0;
+    if (parentNumCheck && selectedChildIds.includes(parentNumCheck)) {
+      setErrorMessage('A risk cannot be both the parent and a child of this risk.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
@@ -126,10 +189,9 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
       const parentNum = selectedParentId ? Number(selectedParentId) : undefined;
 
       // Construct primary key: (dashboardId with single '_' between version and iteration) + "_" + pkImpactId
+      const normalizedDashId = String(currentDashboard?.dashboardId || '').replace(/___/g, '_');
       let primaryKey = risk.primary_key;
       if (!primaryKey || !primaryKey.includes('_')) {
-        const rawDashId = currentDashboard?.dashboardId || '';
-        const normalizedDashId = String(rawDashId).replace(/___/g, '_');
         primaryKey = `${normalizedDashId}_${pkImpactId}`;
       }
 
@@ -168,7 +230,54 @@ export const RiskEditDrawer: React.FC<RiskEditDrawerProps> = ({ open, onOpenChan
         });
       }
 
+      // G-30: save child links (legacy w_edit_children_action), only when they changed.
+      const currentChildIds = Array.isArray(risk.list_items) ? risk.list_items.map(Number) : [];
+      const childrenToAdd = selectedChildIds.filter((id) => !currentChildIds.includes(id));
+      const childrenToRemove = currentChildIds.filter((id) => !selectedChildIds.includes(id));
+      let childrenError: string | null = null;
+
+      if (childrenToAdd.length > 0 || childrenToRemove.length > 0) {
+        // riskObjectId = "<creationDate>_<version>_<iteration>_<pkImpactId>", the risk row's primary key.
+        const toObjectIds = (pks: number[]) =>
+          pks.map((pk) => {
+            const row = rowByPk.get(pk) as Record<string, unknown> | undefined;
+            const explicit = row?.risk_object_id ?? row?.riskObjectId;
+            if (explicit) return String(explicit);
+            const rowKey = String(row?.primary_key ?? '');
+            return rowKey.includes('_') ? rowKey : `${normalizedDashId}_${pk}`;
+          });
+
+        try {
+          logger.info('RiskEditDrawer', 'Submitting ermEditChildrenNewPermissions', {
+            idParent: pkImpactId,
+            add: childrenToAdd,
+            remove: childrenToRemove,
+            env: CURRENT_ENV,
+          });
+          await client(ermEditChildrenNewPermissions).applyAction({
+            idParent: pkImpactId,
+            userMail: currentUserEmail,
+            idsChildrenToAdd: toObjectIds(childrenToAdd),
+            idsChildrenToRemove: toObjectIds(childrenToRemove),
+            env: CURRENT_ENV ?? 'dev',
+            permissionsWriteNames: dashboardList(currentDashboard, 'permissionsWriteNames'),
+            permissionsOwnerNames: dashboardList(currentDashboard, 'permissionsOwnerNames'),
+            permissionsOfficerNames: dashboardList(currentDashboard, 'permissionsOfficerNames'),
+          });
+        } catch (err: unknown) {
+          logger.error('RiskEditDrawer', 'Failed to save child links', err);
+          childrenError = (err as { message?: string })?.message || 'R&O links failed.';
+        }
+      }
+
       await refetchPayload();
+
+      if (childrenError) {
+        // The risk itself was saved; keep the drawer open so the user sees why the links were not.
+        setErrorMessage(`Risk saved, but child links were not: ${childrenError}`);
+        showToast('Risk saved, but child links failed.', 'error');
+        return;
+      }
 
       showToast(`Risk #${risk.riskid_raw || pkImpactId} updated successfully!`, 'success');
       onOpenChange(false);

@@ -9,9 +9,10 @@ import { ErmRiskUserInput, ErmRiskUserInputDev } from "@ontology/sdk";
  *   idsChildrenToRemove  riskObjectIds that get riskParent = 0
  *   idParent             pkImpactId of the parent risk; 0 means no change (same as v1)
  *
- * Every risk row whose riskObjectId matches is edited, on every dashboard (same as v1).
+ * riskObjectId is the risk row's primary key, "<creationDate>_<version>_<iteration>_<pkImpactId>",
+ * so each id is one risk on one dashboard and the parent chain is followed inside that dashboard.
  * Guards (not in v1):
- *  - a child cannot be idParent itself or one of its ancestors (no parent/child cycles);
+ *  - a child cannot be idParent itself or one of its ancestors on the same dashboard (no cycles);
  *  - "remove" only detaches children whose current riskParent is idParent.
  * The permission lists and userMail are not used in the logic: they are parameters only so
  * the action can check rights against them, as in v1.
@@ -36,13 +37,19 @@ async function fetchAll(query: any): Promise<any[]> {
     return out;
 }
 
-/** idParent plus all of its ancestors, following riskParent upwards (stops on existing cycles). */
-async function ancestorsOf(client: Client, RiskType: any, pk: number): Promise<Set<number>> {
+/** "<creationDate>_<version>_<iteration>" part of a riskObjectId (everything before the last "_"). */
+const dashboardPrefix = (riskObjectId: string): string => riskObjectId.slice(0, riskObjectId.lastIndexOf("_"));
+
+/**
+ * pk plus all of its ancestors on one dashboard, following riskParent upwards.
+ * Stops on a cycle already in the data, on a missing row, or after 100 levels.
+ */
+async function ancestorsOf(client: Client, RiskType: any, prefix: string, pk: number): Promise<Set<number>> {
     const seen = new Set<number>();
     let current = pk;
     while (current && !seen.has(current) && seen.size < 100) {
         seen.add(current);
-        const page = await client(RiskType).where({ pkImpactId: current }).fetchPage({ $pageSize: 1 });
+        const page = await client(RiskType).where({ riskObjectId: `${prefix}_${current}` }).fetchPage({ $pageSize: 1 });
         current = Number(page.data[0]?.riskParent ?? 0);
     }
     return seen;
@@ -80,11 +87,16 @@ export default async function ermEditChildrenNewPermissions(
     );
     const risksChildren = parts.flat();
 
-    const ancestors = await ancestorsOf(client, RiskType, Number(idParent));
-    const looping = risksChildren.filter(r =>
-        toAdd.includes(String(r.riskObjectId)) && ancestors.has(Number(r.pkImpactId)));
-    if (looping.length > 0) {
-        throw new Error(`Cannot link: risk ${looping[0].pkImpactId} is ${idParent} or one of its parents.`);
+    const ancestorsByDashboard = new Map<string, Set<number>>();
+    for (const child of risksChildren) {
+        if (!toAdd.includes(String(child.riskObjectId))) continue;
+        const prefix = dashboardPrefix(String(child.riskObjectId));
+        if (!ancestorsByDashboard.has(prefix)) {
+            ancestorsByDashboard.set(prefix, await ancestorsOf(client, RiskType, prefix, Number(idParent)));
+        }
+        if (ancestorsByDashboard.get(prefix)!.has(Number(child.pkImpactId))) {
+            throw new Error(`Cannot link: risk ${child.pkImpactId} is ${idParent} or one of its parents.`);
+        }
     }
 
     const now = new Date().toISOString();
