@@ -6,8 +6,10 @@ The reveal -> Nothing lost -> 11 new -> seven feature shots on a card carousel -
 
 Requirements
   Blender 4.2 or newer (EEVEE). Tested API paths cover 4.2 to 5.x; older versions may need small changes.
-  The textures/ folder next to this script (mock app screens). Replace any PNG with a real screenshot of
-  the same name (16:10, sample data only) for a more authentic result.
+  The textures/ folder next to this script (mock app screens). Real screenshots take priority when present:
+    slate_<name>.png  for the wall in shots 2 and 3 (heat, table, onepager, tracker)
+    react_<name>.png  for the feature cards (search, share, slide, filters, onepager_pick, report, locked, toast)
+  See textures/SCREENSHOTS.md for what to capture. Use sample or test data only.
 
 Run
   Build the scene and open it:          blender -P erm2_trailer.py
@@ -212,11 +214,14 @@ def fade(sock, f_in, f_out, ramp=10, peak=1.0):
         kf(sock, 'default_value', f_out, 0.0)
 
 
-def load_image(name):
-    path = os.path.join(ASSETS, name + '.png')
-    if os.path.exists(path):
-        return bpy.data.images.load(path, check_existing=True)
-    print(f'[erm2] texture missing, using a flat card: {path}')
+def load_image(*names):
+    """First image found among `names` (.png or .jpg in ASSETS), e.g. a real screenshot before the mock-up."""
+    for name in names:
+        for ext in ('.png', '.jpg', '.jpeg'):
+            path = os.path.join(ASSETS, name + ext)
+            if os.path.exists(path):
+                return bpy.data.images.load(path, check_existing=True)
+    print(f'[erm2] no texture for {names}, using a flat card')
     return None
 
 
@@ -506,7 +511,8 @@ def wall(n, dim):
     centre = o + Vector((0, -9, 0))
     for r in range(3):
         for k in range(5):
-            img = load_image(WALL_TEX[(r * 5 + k) % 4])
+            name = WALL_TEX[(r * 5 + k) % 4]
+            img = load_image('slate_' + name, name)  # the app users know today, if you add Slate screenshots
             m = Mat('screen', '#9aa4b2', 0.28 if dim else 1.0, 1.0, image=img, blend=False)
             ang = (k - 2) * 0.32
             pos = centre + Vector((11 * math.sin(ang), 11 * math.cos(ang), (1 - r) * 2.4))
@@ -674,7 +680,7 @@ def shot_carousel():
     step = 2 * math.pi / n
     for k, (tex, t0, t1, cap, eyebrow) in enumerate(CARDS):
         phi = -math.pi / 2 - k * step
-        img = load_image(tex)
+        img = load_image('react_' + tex, tex)  # a real React screenshot wins over the mock-up
         m = Mat('card ' + tex, '#cfd5df', 1.0, 1.0, image=img, blend=False)
         card = plane('card ' + tex, 6.4, 4.0, c, m)
         card.parent = hub
