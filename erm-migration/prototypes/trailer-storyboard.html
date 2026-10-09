@@ -224,6 +224,27 @@ const drawToast = (g, w, h) => {
   g.fillStyle = '#ffffff'; g.font = 'bold 24px Segoe UI, Arial'; g.fillText('✓  Risk #R-2041 updated successfully!', w - 496, h - 55);
 };
 
+
+// ---------- Texture export (?tex=1): the same mock screens as flat PNGs for the Blender trailer ----------
+if (new URLSearchParams(location.search).has('tex')) {
+  const mk = (draw) => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
+    const g = c.getContext('2d');
+    g.fillStyle = PAGE; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, 64);
+    g.fillStyle = PINK; g.font = 'bold 30px Segoe UI, Arial'; g.fillText('ERM', 28, 43);
+    g.fillStyle = MUTED; g.font = '22px Segoe UI, Arial'; g.fillText('Programme X · Q3 2026', 110, 42);
+    draw(g, c.width, c.height);
+    return c.toDataURL('image/png');
+  };
+  window.__tex = {
+    heat: mk(drawHeat), table: mk(drawTable), onepager: mk(drawOnePager), tracker: mk(drawTracker),
+    search: mk(drawSearch), share: mk(drawShare), slide: mk(drawSlide),
+    filters: mk((g, w, h) => drawTable(g, w, h, { resize: true, chips: true })),
+    onepager_pick: mk(drawOnePagerPick), report: mk(drawReport), locked: mk(drawLocked), toast: mk(drawToast),
+  };
+}
+
 // ---------- Shots ----------
 const variety = [drawHeat, drawTable, drawOnePager, drawTracker];
 function wall(dim) {
