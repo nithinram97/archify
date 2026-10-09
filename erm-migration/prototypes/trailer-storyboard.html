@@ -6,15 +6,17 @@
   html, body { margin: 0; background: #070b16; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
   #wrap { position: relative; width: 1600px; height: 900px; }
   .ov { position: absolute; left: 0; right: 0; text-align: center; color: #f1f5f9; pointer-events: none; }
-  .cap { bottom: 70px; font-size: 40px; font-weight: 600; letter-spacing: 0.5px; text-shadow: 0 2px 18px rgba(0,0,0,0.8); }
-  .sub { bottom: 34px; font-size: 20px; color: #94a3b8; letter-spacing: 3px; text-transform: uppercase; }
-  .bar { position: absolute; left: 0; right: 0; height: 60px; background: #000; }
-  .lbl { color: #e2e8f0; font-size: 18px; font-weight: 600; background: rgba(7,11,22,0.75); border: 1px solid rgba(148,163,184,0.35); padding: 4px 12px; border-radius: 6px; white-space: nowrap; }
-  .kpi { color: #f8fafc; font-size: 64px; font-weight: 700; text-align: center; text-shadow: 0 0 24px rgba(236,79,143,0.6); white-space: nowrap; }
-  .kpi small { display: block; font-size: 22px; font-weight: 500; color: #cbd5e1; letter-spacing: 2px; text-transform: uppercase; text-shadow: none; }
-  .logo { top: 330px; font-size: 150px; font-weight: 800; letter-spacing: 6px; color: #fff; text-shadow: 0 0 40px rgba(236,79,143,0.75), 0 0 90px rgba(99,102,241,0.5); }
+  .cap { bottom: 78px; font-size: 40px; font-weight: 600; text-shadow: 0 2px 18px rgba(0,0,0,0.85); }
+  .sub { bottom: 38px; font-size: 18px; color: #f9a8d4; letter-spacing: 4px; text-transform: uppercase; }
+  .bar { position: absolute; left: 0; right: 0; height: 60px; background: #000; z-index: 3; }
+  .lbl { color: #e2e8f0; font-size: 18px; font-weight: 600; background: rgba(7,11,22,0.78); border: 1px solid rgba(148,163,184,0.35); padding: 4px 12px; border-radius: 6px; white-space: nowrap; }
+  .logo { top: 300px; font-size: 160px; font-weight: 800; letter-spacing: 6px; color: #fff; text-shadow: 0 0 40px rgba(236,79,143,0.75), 0 0 90px rgba(99,102,241,0.5); }
   .logo span { color: #ec4f8f; }
-  .tag { top: 640px; font-size: 26px; color: #cbd5e1; letter-spacing: 4px; text-transform: uppercase; }
+  .intro { top: 250px; font-size: 26px; letter-spacing: 8px; color: #cbd5e1; text-transform: uppercase; }
+  .tag { top: 520px; font-size: 30px; color: #e2e8f0; }
+  .soon { top: 600px; font-size: 20px; letter-spacing: 6px; color: #f9a8d4; text-transform: uppercase; }
+  .quote { top: 300px; padding: 0 180px; font-size: 54px; line-height: 1.25; font-style: italic; font-weight: 500; color: #f8fafc; text-shadow: 0 2px 24px rgba(0,0,0,0.6); }
+  .who { top: 520px; font-size: 22px; color: #94a3b8; letter-spacing: 2px; }
 </style>
 <script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
 </head>
@@ -43,148 +45,221 @@ wrap.appendChild(labels.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#070b16');
-scene.fog = new THREE.FogExp2('#070b16', 0.03);
 const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 300);
-scene.add(new THREE.HemisphereLight('#cbd5e1', '#070b16', 0.9));
-const key = new THREE.DirectionalLight('#ffffff', 1.4); key.position.set(8, 14, 10); scene.add(key);
+scene.add(new THREE.HemisphereLight('#cbd5e1', '#070b16', 1.0));
 
-let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const emissive = (c, i = 1) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: i, roughness: 0.4 });
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 const overlay = (cls, html) => { const d = document.createElement('div'); d.className = 'ov ' + cls; d.innerHTML = html; wrap.appendChild(d); };
 const caption = (main, sub) => { overlay('cap', main); if (sub) overlay('sub', sub); };
-const label = (html, cls, pos) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; const o = new CSS2DObject(d); o.position.copy(pos); scene.add(o); };
+const label = (html, pos) => { const d = document.createElement('div'); d.className = 'lbl'; d.innerHTML = html; const o = new CSS2DObject(d); o.position.copy(pos); scene.add(o); };
 const level = s => s >= 12 ? '#ef4444' : s >= 8 ? '#f59e0b' : s >= 4 ? '#eab308' : '#22c55e';
-let bloom = { strength: 0.9, radius: 0.5, threshold: 0.15 };
+let bloom = { strength: 0.2, radius: 0.4, threshold: 0.98 };
+
+// ---------- Mock app screens drawn on canvases ----------
+const PINK = '#d81b60', INK = '#0f172a', MUTED = '#94a3b8', PAGE = '#eef2f7';
+function screen(draw, w = 4, h = 2.5, { dim = 0, glow = PINK } = {}) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round(1024 * h / w);
+  const g = c.getContext('2d');
+  g.fillStyle = PAGE; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, 64);
+  g.fillStyle = PINK; g.font = 'bold 30px Segoe UI, Arial'; g.fillText('ERM', 28, 43);
+  g.fillStyle = MUTED; g.font = '22px Segoe UI, Arial'; g.fillText('Programme X · Q3 2026', 110, 42);
+  draw(g, c.width, c.height);
+  if (dim) { g.fillStyle = `rgba(15,23,42,${dim})`; g.fillRect(0, 0, c.width, c.height); }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: '#c9d0dc' })));
+  const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.12, h + 0.12), new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: dim ? 0.15 : 0.55 }));
+  frame.position.z = -0.01; group.add(frame);
+  return group;
+}
+const tabs = (g, active, names = ['Heat map', 'One-pager', 'Report table', 'Action tracker']) => {
+  g.font = '22px Segoe UI, Arial';
+  names.forEach((n, i) => {
+    const x = 28 + i * 200;
+    g.fillStyle = i === active ? INK : MUTED; g.fillText(n, x, 108);
+    if (i === active) { g.fillStyle = PINK; g.fillRect(x, 118, g.measureText(n).width, 4); }
+  });
+};
+const drawHeat = (g, w, h) => {
+  tabs(g, 0);
+  const size = Math.min((h - 170) / 4, 120), x0 = 60, y0 = 150;
+  for (let p = 0; p < 4; p++) for (let i = 0; i < 4; i++) {
+    g.fillStyle = level((4 - p) * (i + 1)); g.globalAlpha = 0.85;
+    g.fillRect(x0 + i * (size + 6), y0 + p * (size + 6), size, size); g.globalAlpha = 1;
+  }
+  [[0, 3, 3], [1, 2, 2], [0, 1, 4], [2, 2, 1], [1, 3, 2], [3, 0, 2], [2, 0, 1]].forEach(([p, i, n]) => {
+    for (let k = 0; k < n; k++) { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x0 + i * (size + 6) + 24 + k * 22, y0 + p * (size + 6) + size / 2, 8, 0, 7); g.fill(); }
+  });
+  const lx = x0 + 4 * (size + 6) + 40;
+  ['Top risks', 'Supplier capacity · 12', 'Cybersecurity · 6', 'Skills shortage · 16', 'Test campaign · 4'].forEach((t, k) => {
+    g.fillStyle = k ? INK : MUTED; g.font = (k ? '' : 'bold ') + '24px Segoe UI, Arial'; g.fillText(t, lx, y0 + 20 + k * 52);
+  });
+};
+const drawTable = (g, w, h, { resize = false, chips = false } = {}) => {
+  tabs(g, 2);
+  let y = 150;
+  if (chips) {
+    ['Criticality differs', 'Category', 'Impact category'].forEach((t, i) => {
+      g.font = '22px Segoe UI, Arial'; const tw = g.measureText(t).width + 40, x = 28 + [0, 260, 420][i];
+      g.fillStyle = i === 0 ? PINK : '#ffffff'; g.beginPath(); g.roundRect(x, y - 30, tw, 42, 21); g.fill();
+      g.fillStyle = i === 0 ? '#ffffff' : INK; g.fillText(t, x + 20, y - 2);
+    });
+    y += 40;
+  }
+  const cols = resize ? [90, 420, 140, 140, 180] : [90, 340, 160, 160, 200];
+  const heads = ['ID', 'Title', 'Score', 'Trend', 'Owner'];
+  const rows = [['R-2072', 'Skills shortage', '16', '▲', 'Operations'], ['R-2041', 'Supplier capacity', '12', '■', 'Procurement'], ['R-1003', 'Cybersecurity', '6', '▼', 'IT security'], ['R-2051', 'Test campaign slip', '4', '▼', 'Engineering'], ['R-2042', 'Raw material price', '3', '▼', 'Procurement'], ['R-2061', 'Legacy access model', '1', '▼', 'IT security']];
+  g.fillStyle = '#ffffff'; g.fillRect(28, y, w - 56, 50 + rows.length * 50);
+  let x = 40; g.font = 'bold 22px Segoe UI, Arial'; g.fillStyle = MUTED;
+  heads.forEach((t, i) => { g.fillText(t, x, y + 34); x += cols[i]; });
+  rows.forEach((r, k) => {
+    let cx = 40; const ry = y + 50 + k * 50;
+    g.fillStyle = '#e2e8f0'; g.fillRect(28, ry, w - 56, 2);
+    r.forEach((t, i) => { g.font = '22px Segoe UI, Arial'; g.fillStyle = i === 2 ? level(Number(t)) : INK; g.fillText(t, cx, ry + 34); cx += cols[i]; });
+  });
+  if (resize) { const hx = 40 + cols[0] + cols[1] - 12; g.fillStyle = PINK; g.fillRect(hx, y + 6, 6, 50 + rows.length * 50 - 12); }
+};
+const drawOnePager = (g, w, h, { layout4 = false } = {}) => {
+  tabs(g, 1);
+  const y = 150, x = 28, ww = w - 56, hh = h - y - 28;
+  const slots = layout4 ? [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.34, 0.5], [0.34, 0.5, 0.66, 0.5]] : [[0, 0, 0.55, 1], [0.55, 0, 0.45, 0.5], [0.55, 0.5, 0.45, 0.5]];
+  const names = layout4 ? ['Heat map', 'Key messages', 'Waterfall', 'Top risks'] : ['Heat map', 'Key messages', 'Top risks'];
+  slots.forEach(([a, b, c, d], i) => {
+    g.fillStyle = '#ffffff'; g.fillRect(x + a * ww + 6, y + b * hh + 6, c * ww - 12, d * hh - 12);
+    g.fillStyle = MUTED; g.font = 'bold 22px Segoe UI, Arial'; g.fillText(names[i], x + a * ww + 24, y + b * hh + 40);
+    if (layout4) { g.strokeStyle = PINK; g.lineWidth = 3; g.setLineDash([10, 8]); g.strokeRect(x + a * ww + 6, y + b * hh + 6, c * ww - 12, d * hh - 12); g.setLineDash([]); }
+  });
+};
+const drawTracker = (g, w, h) => {
+  tabs(g, 3);
+  [['Qualify second source', 'Done', '#22c55e'], ['Buffer stock', 'Done', '#22c55e'], ['Capacity audit', 'Overdue', '#ef4444'], ['Long-term agreement', 'Planned', '#94a3b8']].forEach(([t, s, c], k) => {
+    const y = 160 + k * 70;
+    g.fillStyle = '#ffffff'; g.fillRect(28, y, w - 56, 58);
+    g.fillStyle = INK; g.font = '24px Segoe UI, Arial'; g.fillText(t, 50, y + 38);
+    g.fillStyle = c; g.beginPath(); g.roundRect(w - 220, y + 12, 160, 34, 17); g.fill();
+    g.fillStyle = '#ffffff'; g.font = 'bold 20px Segoe UI, Arial'; g.fillText(s, w - 200, y + 36);
+  });
+};
+const drawSearch = (g, w, h) => {
+  tabs(g, 0);
+  g.fillStyle = 'rgba(15,23,42,0.35)'; g.fillRect(0, 64, w, h);
+  const bx = 120, bw = w - 240;
+  g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(bx, 120, bw, 420, 18); g.fill();
+  g.strokeStyle = PINK; g.lineWidth = 3; g.beginPath(); g.roundRect(bx + 24, 144, bw - 48, 64, 12); g.stroke();
+  g.fillStyle = INK; g.font = '30px Segoe UI, Arial'; g.fillText('Search dashboards:  Hamb', bx + 46, 188);
+  ['Hamburg · Operations risks', 'Hamburg · Cabin programme', 'Hamburg · Supply chain board', 'Hamburg · Quarterly review Q3'].forEach((t, k) => {
+    const y = 236 + k * 72;
+    if (k === 0) { g.fillStyle = '#fce7f3'; g.fillRect(bx + 24, y, bw - 48, 62); }
+    g.fillStyle = INK; g.font = '26px Segoe UI, Arial'; g.fillText(t, bx + 48, y + 40);
+  });
+};
+const drawShare = (g, w, h) => {
+  drawOnePager(g, w, h);
+  g.fillStyle = INK; g.beginPath(); g.roundRect(w - 330, 76, 300, 52, 10); g.fill();
+  g.fillStyle = '#ffffff'; g.font = 'bold 22px Segoe UI, Arial'; g.fillText('Link to this tab copied', w - 300, 110);
+};
+const drawSlide = (g, w, h) => {
+  g.fillStyle = '#0b1324'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ffffff'; g.font = 'bold 40px Segoe UI, Arial'; g.fillText('Q3 2026 review · Programme X', 60, 90);
+  const size = 110;
+  for (let p = 0; p < 4; p++) for (let i = 0; i < 4; i++) { g.fillStyle = level((4 - p) * (i + 1)); g.fillRect(60 + i * (size + 8), 130 + p * (size + 8), size, size); }
+  ['Key messages', '• Supplier capacity still critical', '• Cybersecurity on target', '• Two mitigations due in Q4'].forEach((t, k) => {
+    g.fillStyle = k ? '#e2e8f0' : '#f9a8d4'; g.font = (k ? '' : 'bold ') + '30px Segoe UI, Arial'; g.fillText(t, 600, 170 + k * 60);
+  });
+  g.fillStyle = MUTED; g.font = '22px Segoe UI, Arial'; g.fillText('3 / 12   ▶', w - 170, h - 30);
+};
+
+// ---------- Shots ----------
+const variety = [drawHeat, drawTable, drawOnePager, drawTracker];
+function wall(dim) {
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
+    const s = screen(variety[(r * 5 + c) % 4], 3.2, 2, { dim, glow: dim ? '#334155' : PINK });
+    const a = (c - 2) * 0.32;
+    s.position.set(Math.sin(a) * 11, (1 - r) * 2.4, -Math.cos(a) * 11 + 11);
+    s.rotation.y = -a; scene.add(s);
+  }
+}
+const stars = (n, color, size) => {
+  const g = new THREE.BufferGeometry(), arr = [];
+  for (let i = 0; i < n; i++) arr.push((rnd() - 0.5) * 40, (rnd() - 0.5) * 22, -rnd() * 30);
+  g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color, size })));
+};
+const rings = () => {
+  const r1 = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.06, 16, 160), new THREE.MeshBasicMaterial({ color: '#ec4f8f' }));
+  r1.rotation.set(1.35, 0.15, 0); r1.scale.set(1.25, 1.25, 1); scene.add(r1);
+  const r2 = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.03, 16, 160), new THREE.MeshBasicMaterial({ color: '#6366f1' }));
+  r2.rotation.set(1.45, -0.2, 0.25); r2.scale.set(1.2, 1.2, 1); scene.add(r2);
+};
 
 if (S === 1) {
-  // The tangle: the legacy app as a knot of widgets, events and variables.
-  const nodes = [];
-  for (let i = 0; i < 70; i++) {
-    const v = new THREE.Vector3((rnd() - 0.5) * 14, (rnd() - 0.5) * 7, (rnd() - 0.5) * 8);
-    nodes.push(v);
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 + rnd() * 0.18, 0), emissive(rnd() > 0.5 ? '#f97316' : '#ef4444', 1.4));
-    m.position.copy(v); scene.add(m);
-  }
-  for (let i = 0; i < 150; i++) {
-    const a = nodes[Math.floor(rnd() * nodes.length)], b = nodes[Math.floor(rnd() * nodes.length)];
-    const mid = a.clone().lerp(b, 0.5).add(new THREE.Vector3((rnd() - 0.5) * 4, (rnd() - 0.5) * 4, (rnd() - 0.5) * 4));
-    const c = new THREE.QuadraticBezierCurve3(a, mid, b);
-    scene.add(new THREE.Mesh(new THREE.TubeGeometry(c, 24, 0.012 + rnd() * 0.02, 5), new THREE.MeshBasicMaterial({ color: rnd() > 0.7 ? '#fb923c' : '#7f1d1d', transparent: true, opacity: 0.75 })));
-  }
-  camera.position.set(2, 1.5, 11); camera.lookAt(0, 0, 0);
-  caption('8 exports. 25 MB of configuration. No documentation.', 'The legacy app');
+  wall(0);
+  camera.position.set(0, 0.3, 9.5); camera.lookAt(0, 0, -1);
+  caption('Your risks. Your dashboards. Every quarter.', 'ERM');
 }
-
 if (S === 2) {
-  // The breakdown: one shell, seven modules lifting out of it.
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(12, 0.5, 4), new THREE.MeshStandardMaterial({ color: '#1e293b', emissive: '#1d4ed8', emissiveIntensity: 0.35 }));
-  shell.position.set(0, -2.2, 0); scene.add(shell);
-  label('Slate shell', 'lbl', new THREE.Vector3(0, -2.2, 2.3));
-  const mods = ['Full Search', 'Heat map', 'One-pager', 'Waterfall', 'Action tracker', 'Report table', 'Print'];
-  mods.forEach((m, i) => {
-    const t = (i - 3) / 3, x = t * 5.4, y = 1.2 + (1 - t * t) * 1.6;
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 1.4), emissive('#38bdf8', 0.6));
-    box.position.set(x, y, 0); box.rotation.y = t * 0.4; scene.add(box);
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, y + 2), new THREE.MeshBasicMaterial({ color: '#60a5fa', transparent: true, opacity: 0.6 }));
-    beam.position.set(x, (y - 2.2) / 2, 0); scene.add(beam);
-    label(m, 'lbl', new THREE.Vector3(x, y + 0.9, 0));
-  });
-  camera.position.set(0, 1.5, 14); camera.lookAt(0, 0.3, 0);
-  caption('One shell. Seven modules. Every feature hidden inside.', 'Breaking it down');
+  wall(0.6);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.08, 16, 100, Math.PI * 1.4), new THREE.MeshBasicMaterial({ color: '#94a3b8' }));
+  ring.position.set(0, 0, 3); ring.rotation.z = 0.6; scene.add(ring);
+  camera.position.set(0, 0.3, 9.5); camera.lookAt(0, 0, -1);
+  bloom = { strength: 0.3, radius: 0.4, threshold: 0.7 };
+  caption('Waiting for tabs to load. Hunting for the right dashboard.', 'Until now');
 }
-
 if (S === 3) {
-  // AI reads every export: 105 features light up behind a scan beam, 31 gaps in red.
-  const cols = 15, rows = 7, gaps = new Set();
-  while (gaps.size < 31) gaps.add(Math.floor(rnd() * cols * rows));
-  const scanX = 1.2;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const idx = r * cols + c, x = (c - 7) * 0.95, y = (3 - r) * 0.95;
-    const lit = x < scanX, gap = gaps.has(idx);
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 12),
-      lit ? emissive(gap ? '#ef4444' : '#22d3ee', gap ? 1.6 : 1.0) : new THREE.MeshStandardMaterial({ color: '#1e293b', emissive: '#0f172a' }));
-    m.position.set(x, y, 0); scene.add(m);
-  }
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.08, 8, 0.6), new THREE.MeshBasicMaterial({ color: '#e0f2fe' }));
-  beam.position.set(scanX, 0, 0.2); scene.add(beam);
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 8), new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.18 }));
-  glow.position.set(scanX - 0.8, 0, 0.25); scene.add(glow);
-  label('105 features', 'lbl', new THREE.Vector3(-7.6, 4.3, 0));
-  label('<span style="color:#f87171">31 gaps</span>', 'lbl', new THREE.Vector3(-4.6, 4.3, 0));
-  camera.position.set(-2.5, 0.5, 11.5); camera.lookAt(0.3, 0, 0);
-  caption('AI read every export. 105 features. 31 gaps found.', 'The method');
-}
-
-if (S === 4) {
-  // ERM 2.0: risk trajectories climbing over the heat map.
-  const CELL = 2.2, cx = i => (i - 2.5) * CELL, cz = p => (2.5 - p) * CELL;
-  for (let p = 1; p <= 4; p++) for (let i = 1; i <= 4; i++) {
-    const c = new THREE.Color(level(p * i));
-    const t = new THREE.Mesh(new THREE.BoxGeometry(CELL - 0.1, 0.1, CELL - 0.1), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35, transparent: true, opacity: 0.6 }));
-    t.position.set(cx(i), 0, cz(p)); scene.add(t);
-  }
-  const paths = [[[1,2],[2,2],[2,3],[3,3],[3,4],[4,4]], [[4,4],[4,4],[3,4],[3,3],[2,3],[2,3]], [[3,4],[3,4],[3,3],[2,3],[2,2],[2,2]], [[4,2],[3,2],[3,2],[2,2],[2,1],[1,1]], [[2,4],[2,4],[2,3],[2,3],[1,3],[1,3]], [[3,3],[4,3],[4,3],[4,3],[4,3],[4,3]]];
-  paths.forEach((path, n) => {
-    const j = [(n % 3 - 1) * 0.3, (Math.floor(n / 3) - 0.5) * 0.4];
-    const pts = path.map(([p, i], k) => new THREE.Vector3(cx(i) + j[0], 0.4 + k * 1.2, cz(p) + j[1]));
-    for (let k = 1; k < pts.length; k++) {
-      const s = path[k][0] * path[k][1];
-      scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(pts[k - 1], pts[k]), 4, 0.07, 8), emissive(level(s), 0.9)));
-    }
-    const end = pts.at(-1), s = path.at(-1)[0] * path.at(-1)[1];
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 16), emissive(level(s), 1.3)); ball.position.copy(end); scene.add(ball);
-  });
-  camera.position.set(11, 9, 14); camera.lookAt(0, 3, 0);
-  caption('See where every risk is heading.', 'ERM 2.0');
-}
-
-if (S === 5) {
-  // Mitigation staircase: criticality stepping down action by action.
-  const steps = [[0, 14], [3, 12], [6, 9], [9, 6], [12, 4]];
-  steps.forEach(([x, s], i) => {
-    const w = 3, h = s * 0.35, box = new THREE.Mesh(new THREE.BoxGeometry(w - 0.05, h, 2.2), emissive(level(s), 0.12));
-    box.position.set(x - 6 + w / 2, h / 2, 0); scene.add(box);
-    if (i > 0) label(['', '✓ Second source', '✓ Buffer stock', '✓ Capacity audit', '✓ Long-term agreement'][i], 'lbl', new THREE.Vector3(x - 6, h + 0.6, 1.2));
-  });
-  const target = new THREE.Mesh(new THREE.BoxGeometry(16, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: '#4ade80' }));
-  target.position.set(1.5, 4 * 0.35, 1.15); scene.add(target);
-  label('<span style="color:#86efac">Target</span>', 'lbl', new THREE.Vector3(-7.4, 4 * 0.35 + 0.45, 1.15));
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: '#0b1324' }));
-  floor.rotation.x = -Math.PI / 2; scene.add(floor);
-  camera.position.set(-12, 3.4, 13); camera.lookAt(1.5, 1.4, 0);
-  caption('Mitigations you can measure.', 'Plan versus actual');
-  bloom = { strength: 0.45, radius: 0.4, threshold: 0.6 };
-}
-
-if (S === 6) {
-  // The numbers: three pillars rising.
-  const kpis = [['1 PI', 'whole migration', 3.2, '#38bdf8'], ['2', 'developers', 2.4, '#a78bfa'], ['76%', 'less effort', 4.6, '#ec4f8f']];
-  kpis.forEach(([n, l, h, c], i) => {
-    const x = (i - 1) * 4.2;
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, h, 48), emissive(c, 0.7));
-    p.position.set(x, h / 2 - 2.5, 0); scene.add(p);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.03, 12, 80), new THREE.MeshBasicMaterial({ color: c }));
-    ring.rotation.x = Math.PI / 2; ring.position.set(x, -2.45, 0); scene.add(ring);
-    label(`${n}<small>${l}</small>`, 'kpi', new THREE.Vector3(x, h - 2.5 + 1.2, 0));
-  });
-  camera.position.set(0, 1, 13); camera.lookAt(0, 0.4, 0);
-  caption('One PI. Two developers. 76% less effort.', 'The result');
-}
-
-if (S === 7) {
-  // Logo end card.
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.06, 16, 160), new THREE.MeshBasicMaterial({ color: '#ec4f8f' }));
-  ring.rotation.set(1.35, 0.15, 0); ring.scale.set(1.25, 1.25, 1); scene.add(ring);
-  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.03, 16, 160), new THREE.MeshBasicMaterial({ color: '#6366f1' }));
-  ring2.rotation.set(1.45, -0.2, 0.25); ring2.scale.set(1.2, 1.2, 1); scene.add(ring2);
-  const g = new THREE.BufferGeometry(), arr = [];
-  for (let i = 0; i < 1400; i++) arr.push((rnd() - 0.5) * 40, (rnd() - 0.5) * 22, -rnd() * 30);
-  g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: '#94a3b8', size: 0.06 })));
+  rings(); stars(1600, '#cbd5e1', 0.05);
   camera.position.set(0, 0, 14); camera.lookAt(0, 0, 0);
-  overlay('logo', 'ERM <span>2.0</span>');
-  overlay('tag', 'React + OSDK · Built for DevX · Ready to leave Slate');
   bloom = { strength: 1.2, radius: 0.6, threshold: 0.1 };
+  overlay('intro', 'Introducing');
+  overlay('logo', 'ERM <span>2.0</span>');
+}
+if (S === 4) {
+  [[drawHeat, 'Heat map'], [drawOnePager, 'One-pager'], [drawTable, 'Report table'], [drawTracker, 'Action tracker']].forEach(([d, n], i) => {
+    const s = screen(d, 3.4, 2.1), x = (i - 1.5) * 3.75, z = -Math.abs(i - 1.5) * 0.8;
+    s.position.set(x, 0.4, z); s.rotation.y = -(i - 1.5) * 0.12; scene.add(s);
+    label(n, new THREE.Vector3(x, -1.05, z));
+  });
+  for (let k = 0; k < 18; k++) {
+    const streak = new THREE.Mesh(new THREE.PlaneGeometry(2 + rnd() * 4, 0.025), new THREE.MeshBasicMaterial({ color: k % 2 ? '#ec4f8f' : '#38bdf8', transparent: true, opacity: 0.7 }));
+    streak.position.set((rnd() - 0.5) * 18, (rnd() - 0.5) * 6, -2 - rnd() * 3); scene.add(streak);
+  }
+  camera.position.set(0, 0.5, 11); camera.lookAt(0, 0.2, 0);
+  caption('Everything you rely on, carried over. Now faster.', 'ERM 2.0');
+}
+if (S === 5) {
+  const s = screen(drawSearch, 7.2, 4.4); s.rotation.y = 0.18; s.position.set(0.3, 0.3, 0); scene.add(s);
+  camera.position.set(-1.2, 0.6, 8.6); camera.lookAt(0.2, 0.2, 0);
+  caption('Find any dashboard in seconds.', 'New · Dashboard switcher');
+}
+if (S === 6) {
+  const a = screen(drawShare, 4.6, 2.9); a.position.set(-3.2, 0.5, 0.6); a.rotation.y = 0.28; scene.add(a);
+  const b = screen(drawSlide, 6, 3.4, { glow: '#6366f1' }); b.position.set(2.6, 0.4, -1.4); b.rotation.y = -0.2; scene.add(b);
+  label('Link to any tab', new THREE.Vector3(-3.2, -1.3, 0.6));
+  label('Slideshow mode', new THREE.Vector3(2.6, -1.6, -1.4));
+  camera.position.set(0, 0.6, 10); camera.lookAt(0, 0.2, 0);
+  caption('Share a link to any tab. Present in slideshow mode.', 'New');
+}
+if (S === 7) {
+  const a = screen((g, w, h) => drawTable(g, w, h, { resize: true, chips: true }), 5.2, 3.1); a.position.set(-2.8, 0.4, 0); a.rotation.y = 0.22; scene.add(a);
+  const b = screen((g, w, h) => drawOnePager(g, w, h, { layout4: true }), 4.4, 2.75); b.position.set(3.0, 0.2, -0.8); b.rotation.y = -0.22; scene.add(b);
+  label('New filters · columns remember your width', new THREE.Vector3(-2.8, -1.45, 0));
+  label('New one-pager layout', new THREE.Vector3(3.0, -1.4, -0.8));
+  camera.position.set(0, 0.5, 10); camera.lookAt(0, 0.2, 0);
+  caption('Made to fit the way you work.', 'New');
+}
+if (S === 8) {
+  stars(1200, '#64748b', 0.05);
+  camera.position.set(0, 0, 14); camera.lookAt(0, 0, 0);
+  overlay('quote', '“User interface and performance have significantly improved.”');
+  overlay('who', 'ERM Centre of Competence');
+}
+if (S === 9) {
+  rings(); stars(1400, '#94a3b8', 0.06);
+  camera.position.set(0, 0, 14); camera.lookAt(0, 0, 0);
+  bloom = { strength: 1.2, radius: 0.6, threshold: 0.1 };
+  overlay('logo', 'ERM <span>2.0</span>');
+  overlay('tag', 'Everything you rely on. Faster and easier.');
+  overlay('soon', 'Coming soon');
 }
 
 const composer = new EffectComposer(renderer);
