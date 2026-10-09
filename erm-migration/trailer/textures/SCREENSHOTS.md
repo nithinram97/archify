@@ -1,5 +1,9 @@
 # Screenshots for the ERM 2.0 trailer
 
+The `react_*.png` files here are real screenshots of the ERM React app, rendered with invented sample
+data by `../react-mock` (no Foundry, no real risks or people). Retake them from the live app if you prefer.
+The Slate ones still need capturing by hand.
+
 Drop real screenshots into this folder with the names below. The Blender script uses them instead of the
 mock-ups automatically. Any missing file falls back to the mock-up of the same name.
 
