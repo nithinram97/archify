@@ -29,7 +29,7 @@ Run
   Quick low-res preview render:         blender -b -P erm2_trailer.py -- --render --preview
   Options after "--":
     --assets DIR    textures folder (default: textures/ next to this script)
-    --music FILE    licensed music track, added to the timeline
+    --music FILE    soundtrack (default: audio/erm2_trailer_mix.wav, the original score; --no-music for none)
     --font FILE     .ttf/.otf for titles and captions (default: Blender's built-in font)
     --out PATH      output file (default: render/erm2_trailer.mp4 next to this script)
     --save FILE     also save the built scene as a .blend
@@ -110,7 +110,9 @@ if not os.path.isdir(HERE):  # run from Blender's text editor
     HERE = bpy.path.abspath('//') or os.getcwd()
 ASSETS = arg('--assets', os.path.join(HERE, 'textures'))
 DATA = os.path.join(HERE, 'data')
-MUSIC = arg('--music')
+MUSIC = arg('--music', os.path.join(HERE, 'audio', 'erm2_trailer_mix.wav'))
+if '--no-music' in argv:
+    MUSIC = None
 FONT_PATH = arg('--font')
 MICHROMA_PATH = os.path.join(HERE, 'fonts', 'Michroma-Regular.ttf')
 OUT = arg('--out', os.path.join(HERE, 'render', 'erm2_trailer.mp4'))
@@ -740,10 +742,10 @@ def shot_siglums(globe):
                 kf(p, 'location', F(t), b, 'CONSTANT' if f > 0.9 else 'LINEAR')
                 t += 0.2
         tag_m = Mat('tag', WHITE, 1.5, 0.0)
-        text(f'SIGLUM {nd["name"]}   {nd["users"]}', 0.2, tag_m, c, nd['pos'] + Vector((0, -0.2, nd['r'] + 0.38)))
+        text(f'{nd["name"]}   {nd["users"]}', 0.2, tag_m, c, nd['pos'] + Vector((0, -0.2, nd['r'] + 0.38)))
         fade(tag_m.alpha, F(t0 + 0.15), F(16.3), 8)
     more_m = Mat('more', '#cbd5e1', 1.2, 0.0)
-    text('+ 12 more siglums', 0.2, more_m, c, G + anim(4.2, -3.5, -1.2))
+    text('+ 12 more', 0.2, more_m, c, G + anim(4.2, -3.5, -1.2))
     fade(more_m.alpha, F(13.0), F(16.3), 8)
     caption('Every organisation reports its risks in ERM.', 'Across every siglum', F(11.6), F(16.15))
 
@@ -969,37 +971,42 @@ def place(p, f, x=0.0, z=0.0, yaw=0.0, scale=1.0, interp='BEZIER'):
     kf(p, 'scale', f, Vector((scale,) * 3), interp)
 
 
-def whip_screen(p, t0, t1, focus=(0.5, 0.5), zoom=0.1, kb=0.5, yaw=0.0, whip_in=True):
-    """Whip in from the right, ease towards `focus` (Ken Burns), whip out to the left."""
-    W = 9.0 * K
+PUSH, SLIDE = 0.45, 6.4  # screens change with a push: the next slides in while the current slides out
+
+
+def hide(p, f):
+    kf(p, 'scale', f, Vector((0.001,) * 3), 'CONSTANT')
+
+
+def push_screen(p, t0, t1, focus=(0.5, 0.5), zoom=0.1, kb=0.5, yaw=0.0, push_in=True, push_out=True):
+    """Push in from the right (overlapping the previous screen), ease towards `focus` (Ken Burns), push out left."""
     fx, fz = (focus[0] - 0.5) * AW, (0.5 - focus[1]) * AH
     sc = 1 + zoom
-    place(p, 1, W, 0, -0.5, 1.0, 'CONSTANT')
-    if whip_in:
-        place(p, F(t0), W, 0, yaw - 0.5)
-    place(p, F(t0 + 0.35), 0, 0, yaw)
-    place(p, F(t1 - 0.35), -fx * sc * kb, -fz * sc * kb, yaw, sc)
-    place(p, F(t1), -W, 0, yaw + 0.5, sc)
-    streaks(t0 if whip_in else None)
-    streaks(t1 - 0.35)
+    hide(p, 1)
+    if push_in:
+        place(p, F(t0 - PUSH), SLIDE, 0, yaw - 0.25)
+        streaks(t0 - PUSH)
+    place(p, F(t0), 0, 0, yaw)
+    if push_out:
+        place(p, F(t1 - PUSH), -fx * sc * kb, -fz * sc * kb, yaw, sc)
+        place(p, F(t1), -fx * sc * kb - SLIDE, -fz * sc * kb, yaw + 0.25, sc)
+        hide(p, F(t1) + 1)
 
 
 C_APP = None
 
 
 def streaks(t):
-    """Thin white motion streaks across the frame during a whip."""
-    if t is None:
-        return
+    """A few faint motion streaks during a push."""
     rnd = random.Random(int(t * 10))
-    for _ in range(8):
-        m = Mat('streak', WHITE, 3.0, 0.0)
-        s = plane('streak', rnd.uniform(2, 7), 0.012, C_APP, m)
-        s.location = A + Vector((rnd.uniform(-3, 3), -0.6, rnd.uniform(-2.1, 2.1)))
+    for _ in range(4):
+        m = Mat('streak', WHITE, 2.0, 0.0)
+        s = plane('streak', rnd.uniform(2, 5), 0.01, C_APP, m)
+        s.location = A + Vector((rnd.uniform(-3, 3), -0.6, rnd.uniform(-1.8, 1.8)))
         s.rotation_euler = (math.radians(90), 0, 0)
         kf(m.alpha, 'default_value', F(t), 0.0)
-        kf(m.alpha, 'default_value', F(t + 0.17), 0.8)
-        kf(m.alpha, 'default_value', F(t + 0.35), 0.0)
+        kf(m.alpha, 'default_value', F(t + PUSH / 2), 0.35)
+        kf(m.alpha, 'default_value', F(t + PUSH), 0.0)
 
 
 def badge(parent, label, x, z, f_in, f_out=None, color=PINK, w=0.62):
@@ -1030,7 +1037,7 @@ def tab_bar():
     fade(im.alpha, f_on, f_off, 10)
     for k in range(6):
         t1 = 41 + 4 * k + 4
-        kf(ind, 'location', F(t1 - 0.35), Vector((xs[k], y, -HUD_D - 0.004)))
+        kf(ind, 'location', F(t1 - PUSH), Vector((xs[k], y, -HUD_D - 0.004)))
         if k < 5:
             kf(ind, 'location', F(t1), Vector((xs[k + 1], y, -HUD_D - 0.004)))
 
@@ -1042,7 +1049,7 @@ def shot_app():
     for k, (key, name, line, focus) in enumerate(TABS):
         t0 = 41 + 4 * k
         p, _, _ = app_screen(c, key, 'tab ' + name)
-        whip_screen(p, t0, t0 + 4, focus, whip_in=k > 0)
+        push_screen(p, t0, t0 + 4, focus, push_in=k > 0)
         if k == 0:
             place(p, F(41), 0, 0, 0, 0.96)  # lands from the gate shot and settles
             place(p, F(41.35), 0, 0, 0, 1.0)
@@ -1050,7 +1057,7 @@ def shot_app():
     tab_bar()
     # Shot 8 · custom one-pager layout
     p, _, _ = app_screen(c, 'onepager_pick', 'one-pager layout')
-    whip_screen(p, 65, 71, (0.79, 0.46), zoom=0.38, kb=0.65, yaw=-0.06)
+    push_screen(p, 65, 71, (0.79, 0.46), zoom=0.38, kb=0.65, yaw=-0.06)
     u0, u1, v0, v1 = 0.701, 0.886, 0.338, 0.585  # Layout 4 (Custom) on the screenshot
     x0, x1, z0, z1 = (u0 - 0.5) * AW, (u1 - 0.5) * AW, (0.5 - v0) * AH, (0.5 - v1) * AH
     hm = Mat('layout highlight', '#ff4fa0', 3.0, 0.0)
@@ -1069,13 +1076,11 @@ def shot_app():
     caption('Build your own one-pager layout.', 'New', F(65.6), F(70.6))
     # Shot 9 · slideshow mode: the slide turns flat and grows to fill the frame
     p, _, fm = app_screen(c, 'slide', 'slideshow')
-    W = 9.0 * K
-    place(p, 1, W, 0.1, -0.72, 0.95, 'CONSTANT')
-    place(p, F(71), W, 0.1, -0.72, 0.95)
-    place(p, F(71.35), 0, 0.1, -0.22, 0.95)
+    hide(p, 1)
+    place(p, F(71 - PUSH), SLIDE, 0.1, -0.47, 0.95)
+    place(p, F(71), 0, 0.1, -0.22, 0.95)
     place(p, F(72.3), 0, 0.1, -0.22, 0.95)
     place(p, F(73.5), 0, 0, 0, 1.3)
-    streaks(71)
     fade_out(fm.alpha, F(72.3), F(73.5), 0.55)  # the frame fades as the slide fills the screen
     badge(p, 'NEW', -AW / 2 + 0.45, AH / 2 + 0.24, F(71.5), F(72.7))
     badge(p, 'SLIDESHOW', -AW / 2 + 1.45, AH / 2 + 0.24, F(71.6), F(72.7), '#0f172a', 1.2)
