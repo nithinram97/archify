@@ -25,7 +25,7 @@
   .eleven { top: 300px; font-size: 200px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 50px rgba(236,79,143,0.8); }
   .eleven small { display: block; font-size: 34px; font-weight: 500; letter-spacing: 8px; color: #f9a8d4; text-transform: uppercase; text-shadow: none; margin-top: 10px; }
   .credit { top: 96px; font-size: 15px; letter-spacing: 6px; color: #94a3b8; text-transform: uppercase; }
-  .team { position: absolute; top: 151px; height: 62px; width: 360px; display: flex; align-items: center; justify-content: center; transform: translateX(-50%); }
+  .team { position: absolute; top: 138px; height: 88px; width: 360px; display: flex; align-items: center; justify-content: center; transform: translateX(-50%); }
   .team img { max-height: 62px; max-width: 360px; }
   .team b { white-space: nowrap; font-size: 26px; font-weight: 600; letter-spacing: 7px; color: #f8fafc; }
   .times { top: 162px; font-size: 30px; color: #94a3b8; }
@@ -399,9 +399,10 @@ if (S === 16) {
   // Team credit, same layout as the Blender end card. Logo files win; the team name shows until they exist.
   overlay('credit', 'Brought to you by');
   overlay('times', '×');
-  [['logo_skywise', 'Skywise', 535], ['logo_clairvoyant', 'Clairvoyant team', 1065]].forEach(([file, name, x]) => {
+  // Clairvoyant's lockup is mostly the tall C mark, so it gets 1.4x the height to balance the Skywise wordmark.
+  [['logo_skywise', 'Skywise', 535, 62], ['logo_clairvoyant', 'Clairvoyant team', 1065, 87]].forEach(([file, name, x, h]) => {
     const d = document.createElement('div'); d.className = 'team'; d.style.left = x + 'px';
-    const img = new Image(); img.alt = name;
+    const img = new Image(); img.alt = name; img.style.maxHeight = h + 'px';
     img.onerror = () => { d.innerHTML = '<b>' + name.toUpperCase() + '</b>'; };
     img.src = TEXDIR + file + '.png';
     d.appendChild(img); wrap.appendChild(d);

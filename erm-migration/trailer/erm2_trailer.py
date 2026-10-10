@@ -9,8 +9,7 @@ Requirements
   The textures/ folder next to this script (mock app screens). Real screenshots take priority when present:
     slate_<name>.png  for the wall in shots 2 and 3 (heat, table, onepager, tracker)
     react_<name>.png  for the feature cards (search, share, slide, filters, onepager_pick, report, locked, toast)
-    logo_skywise.png, logo_clairvoyant.png  team logos on the end card (transparent PNG; names show until added)
-                      logo_skywise.png is in place, rendered from logos/skywise.svg (Blender can't load SVG as a texture)
+    logo_skywise.png, logo_clairvoyant.png  team logos on the end card (transparent PNGs, both in place; sources in logos/)
   See textures/SCREENSHOTS.md for what to capture. Use sample or test data only.
 
 Run
@@ -777,7 +776,7 @@ def shot_16():
     hud('BROUGHT TO YOU BY', 0.05, 1.1, MUTED, a + 84, END - 6, spacing=1.8)
     hud_logo(('logo_skywise',), 'SKYWISE', LOGO_H, -0.85, 0.86, a + 92, END - 6, LOGO_PLATE)
     hud('×', 0.08, 0.83, MUTED, a + 98, END - 6)
-    hud_logo(('logo_clairvoyant',), 'CLAIRVOYANT TEAM', LOGO_H, 0.85, 0.86, a + 104, END - 6, LOGO_PLATE)
+    hud_logo(('logo_clairvoyant',), 'CLAIRVOYANT TEAM', LOGO_H * 1.4, 0.85, 0.86, a + 104, END - 6, LOGO_PLATE)  # tall C mark: scaled up to balance
 
 
 # ----------------------------------------------------------------------------------------------

@@ -41,6 +41,6 @@ Optional: `react_heat.png`, `react_table.png`, `react_onepager.png`, `react_trac
 | File | What |
 |---|---|
 | `logo_skywise.png` | Official Skywise logo (in place: rendered from `../logos/skywise.svg` at 2048 px) |
-| `logo_clairvoyant.png` | Clairvoyant team logo, transparent background, at least 600 px wide |
+| `logo_clairvoyant.png` | Clairvoyant horizontal lockup for dark backgrounds, cropped to the logo (in place: from the Clairvoyant brand kit, `../logos/clairvoyant-lockup-horizontal-dark.svg`) |
 
 Use the official files from brand or comms; don't redraw them. Until the files are in place, the end card shows the team names as text. If a logo is dark, set `LOGO_PLATE = '#f8fafc'` in `erm2_trailer.py` to put a light card behind it.
