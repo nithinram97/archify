@@ -24,6 +24,11 @@
   .count { top: 72px; font-size: 64px; font-weight: 800; color: #86efac; letter-spacing: 4px; text-shadow: 0 0 30px rgba(34,197,94,0.7); }
   .eleven { top: 300px; font-size: 200px; font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 0 50px rgba(236,79,143,0.8); }
   .eleven small { display: block; font-size: 34px; font-weight: 500; letter-spacing: 8px; color: #f9a8d4; text-transform: uppercase; text-shadow: none; margin-top: 10px; }
+  .credit { top: 96px; font-size: 15px; letter-spacing: 6px; color: #94a3b8; text-transform: uppercase; }
+  .team { position: absolute; top: 151px; height: 62px; width: 360px; display: flex; align-items: center; justify-content: center; transform: translateX(-50%); }
+  .team img { max-height: 62px; max-width: 360px; }
+  .team b { white-space: nowrap; font-size: 26px; font-weight: 600; letter-spacing: 7px; color: #f8fafc; }
+  .times { top: 162px; font-size: 30px; color: #94a3b8; }
   .quote.q1 { top: 170px; font-size: 44px; } .who.w1 { top: 300px; }
   .quote.q2 { top: 420px; font-size: 44px; } .who.w2 { top: 600px; }
 </style>
@@ -366,6 +371,16 @@ if (S === 16) {
   overlay('logo', 'ERM <span>2.0</span>');
   overlay('tag', 'Everything you rely on. Faster and easier.');
   overlay('soon', 'Coming soon');
+  // Team credit, same layout as the Blender end card. Logo files win; the team name shows until they exist.
+  overlay('credit', 'Brought to you by');
+  overlay('times', '×');
+  [['logo_skywise', 'Skywise', 535], ['logo_clairvoyant', 'Clairvoyant team', 1065]].forEach(([file, name, x]) => {
+    const d = document.createElement('div'); d.className = 'team'; d.style.left = x + 'px';
+    const img = new Image(); img.alt = name;
+    img.onerror = () => { d.innerHTML = '<b>' + name.toUpperCase() + '</b>'; };
+    img.src = '../trailer/textures/' + file + '.png';
+    d.appendChild(img); wrap.appendChild(d);
+  });
 }
 
 const composer = new EffectComposer(renderer);
