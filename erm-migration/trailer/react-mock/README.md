@@ -8,7 +8,7 @@ What is replaced
 - `mock/client.ts`, `mock/oauth.ts`, `mock/admin.ts`: OSDK client, sign-in and current user
 - `mock/fakeData.ts`: sample dashboards, risks, mitigations and users (all invented)
 - `mock/tinymce.tsx`: the rich-text editor
-- `src/assets/`: neutral placeholder logos
+- `src/assets/`: the official Skywise logo (`skywise.svg`, white with the pink dot, for the dark header) and a neutral placeholder for the company logo
 - `@/`: the standard shadcn UI components the app imports
 
 The app's own `src/` is not in this folder. Copy it in from the ERM repository first.

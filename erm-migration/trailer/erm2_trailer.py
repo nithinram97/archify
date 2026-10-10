@@ -10,6 +10,7 @@ Requirements
     slate_<name>.png  for the wall in shots 2 and 3 (heat, table, onepager, tracker)
     react_<name>.png  for the feature cards (search, share, slide, filters, onepager_pick, report, locked, toast)
     logo_skywise.png, logo_clairvoyant.png  team logos on the end card (transparent PNG; names show until added)
+                      logo_skywise.png is in place, rendered from logos/skywise.svg (Blender can't load SVG as a texture)
   See textures/SCREENSHOTS.md for what to capture. Use sample or test data only.
 
 Run
