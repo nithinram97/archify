@@ -69,9 +69,31 @@ const label = (html, pos) => { const d = document.createElement('div'); d.classN
 const level = s => s >= 12 ? '#ef4444' : s >= 8 ? '#f59e0b' : s >= 4 ? '#eab308' : '#22c55e';
 let bloom = { strength: 0.2, radius: 0.4, threshold: 0.98 };
 
+// ---------- Real app screens (?real=1): React screenshots from the trailer textures, sample data only ----------
+const Q = new URLSearchParams(location.search);
+const TEXDIR = Q.get('texdir') || '../trailer/textures/';
+const REAL = {};
+if (Q.has('real')) {
+  const names = ['search', 'share', 'slide', 'filters', 'onepager_pick', 'report', 'locked', 'toast'];
+  await Promise.all(names.map(n => new Promise(res => {
+    const img = new Image();
+    img.onload = () => { REAL[n] = img; res(); };
+    img.onerror = () => res();  // missing screenshot: keep the mock-up
+    img.src = TEXDIR + 'react_' + n + '.png';
+  })));
+}
+
 // ---------- Mock app screens drawn on canvases ----------
 const PINK = '#d81b60', INK = '#0f172a', MUTED = '#94a3b8', PAGE = '#eef2f7';
-function screen(draw, w = 4, h = 2.5, { dim = 0, glow = PINK } = {}) {
+function screen(draw, w = 4, h = 2.5, { dim = 0, glow = PINK, real = null } = {}) {
+  const img = real && REAL[real];
+  if (img) {
+    const aspect = img.width / img.height;  // fit inside w × h, keeping the screenshot's own aspect
+    if (w / h > aspect) w = h * aspect; else h = w / aspect;
+    const tex = new THREE.Texture(img); tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    return framed(tex, w, h, dim, glow, '#e2e8f0');
+  }
   const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round(1024 * h / w);
   const g = c.getContext('2d');
   g.fillStyle = PAGE; g.fillRect(0, 0, c.width, c.height);
@@ -81,8 +103,11 @@ function screen(draw, w = 4, h = 2.5, { dim = 0, glow = PINK } = {}) {
   draw(g, c.width, c.height);
   if (dim) { g.fillStyle = `rgba(15,23,42,${dim})`; g.fillRect(0, 0, c.width, c.height); }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  return framed(tex, w, h, dim, glow);
+}
+function framed(tex, w, h, dim, glow, tint = '#c9d0dc') {
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: '#c9d0dc' })));
+  group.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: tint })));
   const frame = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.12, h + 0.12), new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: dim ? 0.15 : 0.55 }));
   frame.position.z = -0.01; group.add(frame);
   return group;
@@ -272,8 +297,8 @@ const rings = () => {
   const r2 = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.03, 16, 160), new THREE.MeshBasicMaterial({ color: '#6366f1' }));
   r2.rotation.set(1.45, -0.2, 0.25); r2.scale.set(1.2, 1.2, 1); scene.add(r2);
 };
-const single = (draw, w, h, cap, sub, ry = 0.16) => {
-  const s = screen(draw, w, h); s.rotation.y = ry; s.position.set(0.3, 0.35, 0); scene.add(s);
+const single = (draw, w, h, cap, sub, ry = 0.16, real = null) => {
+  const s = screen(draw, w, h, { real }); s.rotation.y = ry; s.position.set(0.3, real && REAL[real] ? 0.6 : 0.35, 0); scene.add(s);
   camera.position.set(-1.0, 0.6, 8.8); camera.lookAt(0.2, 0.25, 0);
   caption(cap, sub);
 };
@@ -342,20 +367,20 @@ if (S === 7) {
   bloom = { strength: 0.8, radius: 0.5, threshold: 0.2 };
   overlay('eleven', '11<small>new features</small>');
 }
-if (S === 8) single(drawSearch, 7.2, 4.4, 'Find any dashboard in seconds.', 'New · Dashboard switcher');
+if (S === 8) single(drawSearch, 7.2, 4.4, 'Find any dashboard in seconds.', 'New · Dashboard switcher', 0.16, 'search');
 if (S === 9) {
-  const a = screen(drawShare, 4.6, 2.9); a.position.set(-3.2, 0.5, 0.6); a.rotation.y = 0.28; scene.add(a);
-  const b = screen(drawSlide, 6, 3.4, { glow: '#6366f1' }); b.position.set(2.6, 0.4, -1.4); b.rotation.y = -0.2; scene.add(b);
+  const a = screen(drawShare, 4.6, 2.9, { real: 'share' }); a.position.set(-3.2, 0.5, 0.6); a.rotation.y = 0.28; scene.add(a);
+  const b = screen(drawSlide, 6, 3.4, { glow: '#6366f1', real: 'slide' }); b.position.set(2.6, 0.4, -1.4); b.rotation.y = -0.2; scene.add(b);
   label('Link to any tab', new THREE.Vector3(-3.2, -1.3, 0.6));
   label('Slideshow mode', new THREE.Vector3(2.6, -1.6, -1.4));
   camera.position.set(0, 0.6, 10); camera.lookAt(0, 0.2, 0);
   caption('Share a link to any tab. Present in slideshow mode.', 'New');
 }
-if (S === 10) single((g, w, h) => drawTable(g, w, h, { resize: true, chips: true }), 7.2, 4.3, 'Filter the way you think. Columns remember your width.', 'New · Filters and columns');
-if (S === 11) single(drawOnePagerPick, 7.2, 4.3, 'A new one-pager layout. Pick risks in one click.', 'New · One-pager', -0.16);
-if (S === 12) single(drawReport, 7.2, 4.3, 'Reports with classification and an optional cover page.', 'New · Reports');
-if (S === 13) single(drawLocked, 7.2, 4.3, 'Released dashboard? Update permissions without unlocking it.', 'New · Locked versions', -0.16);
-if (S === 14) single(drawToast, 7.2, 4.3, 'Every save confirmed. Every list up to date.', 'Better every day');
+if (S === 10) single((g, w, h) => drawTable(g, w, h, { resize: true, chips: true }), 7.2, 4.3, 'Filter the way you think. Columns remember your width.', 'New · Filters and columns', 0.16, 'filters');
+if (S === 11) single(drawOnePagerPick, 7.2, 4.3, 'A new one-pager layout. Pick risks in one click.', 'New · One-pager', -0.16, 'onepager_pick');
+if (S === 12) single(drawReport, 7.2, 4.3, 'Reports with classification and an optional cover page.', 'New · Reports', 0.16, 'report');
+if (S === 13) single(drawLocked, 7.2, 4.3, 'Released dashboard? Update permissions without unlocking it.', 'New · Locked versions', -0.16, 'locked');
+if (S === 14) single(drawToast, 7.2, 4.3, 'Every save confirmed. Every list up to date.', 'Better every day', 0.16, 'toast');
 if (S === 15) {
   stars(1200, '#64748b', 0.05);
   camera.position.set(0, 0, 14); camera.lookAt(0, 0, 0);
@@ -378,7 +403,7 @@ if (S === 16) {
     const d = document.createElement('div'); d.className = 'team'; d.style.left = x + 'px';
     const img = new Image(); img.alt = name;
     img.onerror = () => { d.innerHTML = '<b>' + name.toUpperCase() + '</b>'; };
-    img.src = '../trailer/textures/' + file + '.png';
+    img.src = TEXDIR + file + '.png';
     d.appendChild(img); wrap.appendChild(d);
   });
 }
