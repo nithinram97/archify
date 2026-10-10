@@ -142,20 +142,43 @@ async function gzipBase64(value: unknown): Promise<string> {
   return btoa(s);
 }
 
+const SEARCH_ROWS: [number, string, string, string, number, string, string][] = [
+  [2041, 'Supplier capacity for castings', 'Two castings suppliers below committed rate.', 'P', 12, 'Active', 'Airbus > Programme X > Supply chain'],
+  [3101, 'Castings delivery delay', 'Late castings delay structure assembly.', 'P', 9, 'Active', 'Airbus > Programme X > Supply chain'],
+  [4410, 'Single-source supplier for harnesses', 'One supplier for all wiring harnesses.', 'B', 8, 'Active', 'Airbus > Programme Y > Supply chain'],
+  [4422, 'Supplier quality escapes', 'Defects found at final inspection.', 'A', 6, 'Active', 'Airbus > Programme Y > Quality'],
+  [2072, 'Skills shortage in final assembly', 'Not enough trained mechanics for the ramp-up.', 'B', 16, 'Active', 'Airbus > Programme X > People'],
+  [1003, 'Cybersecurity of shop-floor tools', 'Outdated tools on the shop-floor network.', 'O', 6, 'Active', 'Airbus > Operations > IT security'],
+  [5120, 'Raw material price increase', 'Titanium and aluminium price volatility.', 'L', 9, 'Active', 'Airbus > Operations > Finance'],
+  [5133, 'Energy cost at plants', 'Higher energy contracts from next year.', 'S', 6, 'Draft', 'Airbus > Operations > Finance'],
+  [2051, 'Test campaign slip', 'Flight test campaign one week late.', 'K', 4, 'Active', 'Airbus > Programme X > Engineering'],
+  [6201, 'Tooling availability in Getafe', 'Shared jigs booked by two programmes.', 'O', 8, 'Active', 'Airbus > Programme Z > Industrial'],
+  [6230, 'Logistics bottleneck in hub', 'Parts waiting at the logistics hub.', 'A', 3, 'Active', 'Airbus > Programme Z > Industrial'],
+  [7004, 'Digital twin data quality', 'Gaps in configuration data for the twin.', 'L', 4, 'Draft', 'Airbus > Programme Y > Engineering'],
+];
+const SEARCH = SEARCH_ROWS.map(([id, title, desc, sig, score, status, path]) => ({
+  pk_impact_id: id, risk_id: 'R-' + id, risk_title: title, risk_description: desc + ' Sample data.', current_criticality: score,
+  risk_status: status, last_siglum: sig, risk_type: 'Risk', full_item_path: path, isCurrentTopRisk: score >= 9,
+}));
+
 export const QUERIES: Record<string, (args: any) => unknown> = {
   ermGetDashboardList: () => gzipBase64(DASHBOARDS),
   generateArmRoPayload: (args) => payload(args?.dashboardId ?? DASHBOARDS[0].dashboardId),
   ermGetSummaryTabData: () => JSON.stringify({
     canEdit: true,
-    execSummaryHtml: '<p>Supplier capacity remains the main concern; cybersecurity is back on target.</p>',
+    execSummaryHtml: '<h3>Quarter at a glance</h3><p>Supplier capacity remains the main concern for the programme; two castings suppliers are on recovery plans and weekly reviews continue until deliveries are back on schedule.</p><ul><li><b>Supply chain:</b> castings delivery delay contained; second source qualified for Q1.</li><li><b>People:</b> skills shortage in final assembly; 40 hires planned, training cell opened in Hamburg.</li><li><b>IT security:</b> shop-floor tools back on target after the patch campaign.</li><li><b>Engineering:</b> test campaign slip recovered to one week.</li></ul><h3>Decisions needed</h3><p>Confirm budget for the second castings source and the extended training cell.</p><p><i>Sample data for illustration.</i></p>',
     assumptionHtml: '<p>Figures as of the Q3 2026 review.</p>',
     heatmapCommentsRisksHtml: '<p>Two critical risks, both with mitigations under way.</p>',
     heatmapCommentsOpportunitiesHtml: '<p>Automation opportunity confirmed for Q4.</p>', link: '',
   }),
   ermGetRisksShared: () => JSON.stringify([]),
-  ermFullSearchRiskList: () => JSON.stringify([]),
-  ermSearchAggPaths: () => JSON.stringify([]),
-  ermSearchCategories: () => JSON.stringify(['People', 'Supply chain', 'IT security', 'Engineering', 'Finance', 'Quality', 'Industrial']),
+  ermFullSearchRiskList: (args) => {
+    const t = String((args?.text_or ?? args?.text_and ?? [''])[0] ?? '').toLowerCase();
+    const path = String(args?.folderPath ?? 'Airbus');
+    return JSON.stringify(SEARCH.filter(r => (!t || (r.risk_title + ' ' + r.risk_description).toLowerCase().includes(t)) && r.full_item_path.startsWith(path === 'Airbus' ? '' : path)));
+  },
+  ermSearchAggPaths: () => JSON.stringify(SEARCH.reduce((m: Record<string, number>, r) => { m[r.full_item_path] = (m[r.full_item_path] ?? 0) + 1; return m; }, {})),
+  ermSearchCategories: () => JSON.stringify({ categories: ['People', 'Supply chain', 'IT security', 'Engineering', 'Finance', 'Quality', 'Industrial'], all_impact_labels: ['Cost', 'Schedule', 'Quality', 'Safety', 'Reputation'] }),
 };
 
 export const OBJECTS: Record<string, () => unknown[]> = {
