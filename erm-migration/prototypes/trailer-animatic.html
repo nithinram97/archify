@@ -1,0 +1,700 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ERM 2.0 trailer animatic</title>
+<!--
+  ERM 2.0 trailer, animatic v2 (about 1:34). Time-driven: renderAt(t) draws the frame at t seconds, so the same
+  file gives the storyboard key frames and the motion preview. Screens are the React app with sample data.
+  Query: ?t=12.5 renders one frame; ?root=../trailer/ points at textures/, fonts/ and data/.
+-->
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+  #wrap { position: relative; width: 1280px; height: 720px; overflow: hidden; background: #070b16; }
+  #wrap canvas { display: block; }
+  .bar { position: absolute; left: 0; right: 0; height: 48px; background: #000; z-index: 30; }
+  #ov, #lab { position: absolute; inset: 0; pointer-events: none; }
+  #lab { z-index: 8; } #ov { z-index: 10; }
+  #flash { position: absolute; inset: 0; background: #fff; z-index: 20; opacity: 0; }
+  #fade { position: absolute; inset: 0; background: #000; z-index: 25; opacity: 0; }
+  .t { position: absolute; left: 0; right: 0; text-align: center; color: #f1f5f9; }
+  .cap { bottom: 64px; font-size: 31px; font-weight: 600; text-shadow: 0 2px 16px rgba(0,0,0,.9); }
+  .eye { bottom: 34px; font-size: 14px; color: #f9a8d4; letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+  .big { top: 78px; font-size: 38px; font-weight: 700; color: #fff; text-shadow: 0 0 26px rgba(236,79,143,.6); }
+  .big i { font-style: normal; font-weight: 400; font-size: 23px; color: #cbd5e1; margin: 0 5px; }
+  .statement { top: 262px; font-size: 62px; font-weight: 700; line-height: 1.18; color: #fff; }
+  .statement span { color: #ec4f8f; }
+  .logo { top: 240px; font-size: 128px; font-weight: 800; letter-spacing: 5px; color: #fff; text-shadow: 0 0 32px rgba(236,79,143,.75), 0 0 72px rgba(99,102,241,.5); }
+  .logo span { color: #ec4f8f; }
+  .tag { top: 512px; font-size: 24px; color: #e2e8f0; }
+  .soon { top: 564px; font-size: 16px; letter-spacing: 5px; color: #f9a8d4; text-transform: uppercase; }
+  .credit { color: #94a3b8; text-transform: uppercase; }
+  .gl { color: #fff; background: rgba(7,11,22,.72); border: 1px solid rgba(236,79,143,.55); border-radius: 8px; padding: 5px 11px; text-align: left; white-space: nowrap; transform: translate(50%, -30%); }
+  .gl b { display: block; font-size: 17px; } .gl span { font-size: 13px; color: #f9a8d4; } .gl i { font-style: normal; font-size: 11px; color: #94a3b8; margin-left: 6px; }
+  .gl.dim { border-color: rgba(148,163,184,.35); transform: translate(50%, -30%) scale(.78); }
+  .sg { color: #fff; font-size: 15px; font-weight: 600; white-space: nowrap; background: rgba(7,11,22,.7); border: 1px solid rgba(125,211,252,.45); border-radius: 999px; padding: 3px 10px; }
+  .sg b { color: #f9a8d4; margin-right: 6px; } .sg i { font-style: normal; font-size: 11px; color: #94a3b8; margin-right: 6px; letter-spacing: 1px; }
+  .hub { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 14px #ec4f8f; }
+  .tabs { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  .tabs div { width: 126px; height: 30px; line-height: 30px; text-align: center; border-radius: 999px; font-size: 14px; font-weight: 600; color: #cbd5e1; background: rgba(15,23,42,.72); border: 1px solid rgba(148,163,184,.3); position: relative; z-index: 1; }
+  .tabs .on { color: #fff; }
+  .tabs .ind { position: absolute; top: 0; height: 30px; width: 126px; border-radius: 999px; background: #ec4f8f; box-shadow: 0 0 18px rgba(236,79,143,.8); z-index: 0; border: 0; }
+  .new { display: inline-block; background: #ec4f8f; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: 2px; padding: 4px 12px; border-radius: 6px; box-shadow: 0 0 18px rgba(236,79,143,.8); }
+  .pill { display: inline-block; background: rgba(15,23,42,.85); color: #fff; font-weight: 600; font-size: 14px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(148,163,184,.5); margin-left: 8px; }
+  .abs { position: absolute; }
+  .mich { font-family: 'Michroma', sans-serif; letter-spacing: .07em; color: #fff; white-space: nowrap; }
+  .caret { display: inline-block; width: .08em; height: .9em; background: #fff; margin-left: .06em; vertical-align: -0.08em; }
+</style>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="wrap">
+  <div id="lab"></div><div id="ov"></div><div id="flash"></div><div id="fade"></div>
+  <div class="bar" style="top:0"></div><div class="bar" style="bottom:0"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const Q = new URLSearchParams(location.search);
+const ROOT = Q.get('root') || '../trailer/';
+const W = 1280, H = 720, D2R = Math.PI / 180;
+const wrap = document.getElementById('wrap'), ov = document.getElementById('ov'), lab = document.getElementById('lab');
+const flashEl = document.getElementById('flash'), fadeEl = document.getElementById('fade');
+
+// ---------- Timeline (seconds) ----------
+const SHOTS = [
+  ['globe', 0, 10], ['siglums', 10, 17], ['wall', 17, 23], ['wait', 23, 29], ['turn', 29, 33], ['gate', 33, 41],
+  ['tabs', 41, 65], ['layout', 65, 71], ['slideshow', 71, 77], ['credits', 77, 84], ['end', 84, 94],
+];
+const END = 94;
+window.TIMELINE = { SHOTS, END };
+
+// ---------- Helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ss = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const lin = (a, b, x) => clamp((x - a) / (b - a));
+const eob = (t) => { t = clamp(t); const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const win = (u, a, b, r = 0.45) => Math.min(ss(a, a + r, u), 1 - ss(b - r, b, u));
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const col = (h) => new THREE.Color(h);
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---------- Renderer ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.localClippingEnabled = true;
+wrap.prepend(renderer.domElement);
+const labels = new CSS2DRenderer({ element: lab }); labels.setSize(W, H);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.05, 300);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.3, 0.4, 0.95);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const setBloom = (s, r, th) => { bloom.strength = s; bloom.radius = r; bloom.threshold = th; };
+
+// ---------- Assets ----------
+const IMG = {};
+const loadImg = (key, file) => new Promise((res) => { const i = new Image(); i.onload = () => { IMG[key] = i; res(); }; i.onerror = () => { console.warn('missing', file); res(); }; i.src = ROOT + file; });
+const SCREENS = ['heat', 'table', 'tracker', 'summary', 'report', 'fullsearch', 'onepager_pick', 'slide'];
+const font = new FontFace('Michroma', `url(${ROOT}fonts/michroma.woff2)`);
+const [dots] = await Promise.all([
+  fetch(ROOT + 'data/globe-dots.json').then((r) => r.json()),
+  ...SCREENS.map((k) => loadImg(k, `textures/react_${k}.png`)),
+  loadImg('skywise', 'textures/logo_skywise.png'), loadImg('cmark', 'textures/logo_clairvoyant_mark.png'),
+  font.load().then((f) => document.fonts.add(f)).catch(() => console.warn('Michroma not loaded')),
+]);
+const texCache = {};
+const imgTex = (k) => {
+  if (!texCache[k]) { const t = new THREE.Texture(IMG[k]); t.needsUpdate = true; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; texCache[k] = t; }
+  return texCache[k];
+};
+
+// Mock-ups of today's (Slate) screens for the wall and the left side of the gate.
+const PINK = '#d81b60', INK = '#0f172a', MUTED = '#94a3b8', PAGE = '#eef2f7';
+const level = s => s >= 12 ? '#ef4444' : s >= 8 ? '#f59e0b' : s >= 4 ? '#eab308' : '#22c55e';
+const tabs = (g, active, names = ['Heat map', 'One-pager', 'Report table', 'Action tracker']) => {
+  g.font = '22px Segoe UI, Arial';
+  names.forEach((n, i) => {
+    const x = 28 + i * 200;
+    g.fillStyle = i === active ? INK : MUTED; g.fillText(n, x, 108);
+    if (i === active) { g.fillStyle = PINK; g.fillRect(x, 118, g.measureText(n).width, 4); }
+  });
+};
+const drawHeat = (g, w, h) => {
+  tabs(g, 0);
+  const size = Math.min((h - 170) / 4, 120), x0 = 60, y0 = 150;
+  for (let p = 0; p < 4; p++) for (let i = 0; i < 4; i++) {
+    g.fillStyle = level((4 - p) * (i + 1)); g.globalAlpha = 0.85;
+    g.fillRect(x0 + i * (size + 6), y0 + p * (size + 6), size, size); g.globalAlpha = 1;
+  }
+  [[0, 3, 3], [1, 2, 2], [0, 1, 4], [2, 2, 1], [1, 3, 2], [3, 0, 2], [2, 0, 1]].forEach(([p, i, n]) => {
+    for (let k = 0; k < n; k++) { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x0 + i * (size + 6) + 24 + k * 22, y0 + p * (size + 6) + size / 2, 8, 0, 7); g.fill(); }
+  });
+  const lx = x0 + 4 * (size + 6) + 40;
+  ['Top risks', 'Supplier capacity · 12', 'Cybersecurity · 6', 'Skills shortage · 16', 'Test campaign · 4'].forEach((t, k) => {
+    g.fillStyle = k ? INK : MUTED; g.font = (k ? '' : 'bold ') + '24px Segoe UI, Arial'; g.fillText(t, lx, y0 + 20 + k * 52);
+  });
+};
+const drawTable = (g, w, h, { resize = false, chips = false } = {}) => {
+  tabs(g, 2);
+  let y = 150;
+  if (chips) {
+    ['Criticality differs', 'Category', 'Impact category'].forEach((t, i) => {
+      g.font = '22px Segoe UI, Arial'; const tw = g.measureText(t).width + 40, x = 28 + [0, 260, 420][i];
+      g.fillStyle = i === 0 ? PINK : '#ffffff'; g.beginPath(); g.roundRect(x, y - 30, tw, 42, 21); g.fill();
+      g.fillStyle = i === 0 ? '#ffffff' : INK; g.fillText(t, x + 20, y - 2);
+    });
+    y += 40;
+  }
+  const cols = resize ? [90, 420, 140, 140, 180] : [90, 340, 160, 160, 200];
+  const heads = ['ID', 'Title', 'Score', 'Trend', 'Owner'];
+  const rows = [['R-2072', 'Skills shortage', '16', '▲', 'Operations'], ['R-2041', 'Supplier capacity', '12', '■', 'Procurement'], ['R-1003', 'Cybersecurity', '6', '▼', 'IT security'], ['R-2051', 'Test campaign slip', '4', '▼', 'Engineering'], ['R-2042', 'Raw material price', '3', '▼', 'Procurement'], ['R-2061', 'Legacy access model', '1', '▼', 'IT security']];
+  g.fillStyle = '#ffffff'; g.fillRect(28, y, w - 56, 50 + rows.length * 50);
+  let x = 40; g.font = 'bold 22px Segoe UI, Arial'; g.fillStyle = MUTED;
+  heads.forEach((t, i) => { g.fillText(t, x, y + 34); x += cols[i]; });
+  rows.forEach((r, k) => {
+    let cx = 40; const ry = y + 50 + k * 50;
+    g.fillStyle = '#e2e8f0'; g.fillRect(28, ry, w - 56, 2);
+    r.forEach((t, i) => { g.font = '22px Segoe UI, Arial'; g.fillStyle = i === 2 ? level(Number(t)) : INK; g.fillText(t, cx, ry + 34); cx += cols[i]; });
+  });
+  if (resize) { const hx = 40 + cols[0] + cols[1] - 12; g.fillStyle = PINK; g.fillRect(hx, y + 6, 6, 50 + rows.length * 50 - 12); }
+};
+const drawOnePager = (g, w, h, { layout4 = false } = {}) => {
+  tabs(g, 1);
+  const y = 150, x = 28, ww = w - 56, hh = h - y - 28;
+  const slots = layout4 ? [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.34, 0.5], [0.34, 0.5, 0.66, 0.5]] : [[0, 0, 0.55, 1], [0.55, 0, 0.45, 0.5], [0.55, 0.5, 0.45, 0.5]];
+  const names = layout4 ? ['Heat map', 'Key messages', 'Waterfall', 'Top risks'] : ['Heat map', 'Key messages', 'Top risks'];
+  slots.forEach(([a, b, c, d], i) => {
+    g.fillStyle = '#ffffff'; g.fillRect(x + a * ww + 6, y + b * hh + 6, c * ww - 12, d * hh - 12);
+    g.fillStyle = MUTED; g.font = 'bold 22px Segoe UI, Arial'; g.fillText(names[i], x + a * ww + 24, y + b * hh + 40);
+    if (layout4) { g.strokeStyle = PINK; g.lineWidth = 3; g.setLineDash([10, 8]); g.strokeRect(x + a * ww + 6, y + b * hh + 6, c * ww - 12, d * hh - 12); g.setLineDash([]); }
+  });
+};
+const drawTracker = (g, w, h) => {
+  tabs(g, 3);
+  [['Qualify second source', 'Done', '#22c55e'], ['Buffer stock', 'Done', '#22c55e'], ['Capacity audit', 'Overdue', '#ef4444'], ['Long-term agreement', 'Planned', '#94a3b8']].forEach(([t, s, c], k) => {
+    const y = 160 + k * 70;
+    g.fillStyle = '#ffffff'; g.fillRect(28, y, w - 56, 58);
+    g.fillStyle = INK; g.font = '24px Segoe UI, Arial'; g.fillText(t, 50, y + 38);
+    g.fillStyle = c; g.beginPath(); g.roundRect(w - 220, y + 12, 160, 34, 17); g.fill();
+    g.fillStyle = '#ffffff'; g.font = 'bold 20px Segoe UI, Arial'; g.fillText(s, w - 200, y + 36);
+  });
+};
+const drawSearch = (g, w, h) => {
+  tabs(g, 0);
+  g.fillStyle = 'rgba(15,23,42,0.35)'; g.fillRect(0, 64, w, h);
+  const bx = 120, bw = w - 240;
+  g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect(bx, 120, bw, 420, 18); g.fill();
+  g.strokeStyle = PINK; g.lineWidth = 3; g.beginPath(); g.roundRect(bx + 24, 144, bw - 48, 64, 12); g.stroke();
+  g.fillStyle = INK; g.font = '30px Segoe UI, Arial'; g.fillText('Search dashboards:  Hamb', bx + 46, 188);
+  ['Hamburg · Operations risks', 'Hamburg · Cabin programme', 'Hamburg · Supply chain board', 'Hamburg · Quarterly review Q3'].forEach((t, k) => {
+    const y = 236 + k * 72;
+    if (k === 0) { g.fillStyle = '#fce7f3'; g.fillRect(bx + 24, y, bw - 48, 62); }
+    g.fillStyle = INK; g.font = '26px Segoe UI, Arial'; g.fillText(t, bx + 48, y + 40);
+  });
+};
+const drawShare = (g, w, h) => {
+  drawOnePager(g, w, h);
+  g.fillStyle = INK; g.beginPath(); g.roundRect(w - 330, 76, 300, 52, 10); g.fill();
+  g.fillStyle = '#ffffff'; g.font = 'bold 22px Segoe UI, Arial'; g.fillText('Link to this tab copied', w - 300, 110);
+};
+const drawSlide = (g, w, h) => {
+  g.fillStyle = '#0b1324'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ffffff'; g.font = 'bold 40px Segoe UI, Arial'; g.fillText('Q3 2026 review · Programme X', 60, 90);
+  const size = 110;
+  for (let p = 0; p < 4; p++) for (let i = 0; i < 4; i++) { g.fillStyle = level((4 - p) * (i + 1)); g.fillRect(60 + i * (size + 8), 130 + p * (size + 8), size, size); }
+  ['Key messages', '• Supplier capacity still critical', '• Cybersecurity on target', '• Two mitigations due in Q4'].forEach((t, k) => {
+    g.fillStyle = k ? '#e2e8f0' : '#f9a8d4'; g.font = (k ? '' : 'bold ') + '30px Segoe UI, Arial'; g.fillText(t, 600, 170 + k * 60);
+  });
+  g.fillStyle = MUTED; g.font = '22px Segoe UI, Arial'; g.fillText('3 / 12   ▶', w - 170, h - 30);
+};
+
+// ---------- Extra mock screens ----------
+const drawOnePagerPick = (g, w, h) => {
+  drawOnePager(g, w, h, { layout4: true });
+  [['Select top 5', true], ['Select all critical', false], ['Show: ID | Title', false]].forEach(([t, on], i) => {
+    g.font = 'bold 20px Segoe UI, Arial'; const tw = g.measureText(t).width + 36, x = w - 30 - [tw, tw + 250, tw + 470][i];
+    g.fillStyle = on ? PINK : INK; g.beginPath(); g.roundRect(x, 10, tw, 44, 22); g.fill();
+    g.fillStyle = '#ffffff'; g.fillText(t, x + 18, 39);
+  });
+};
+const drawReport = (g, w, h) => {
+  g.fillStyle = '#334155'; g.fillRect(0, 64, w, h);
+  const px = 120, pw = w - 240;
+  g.fillStyle = '#ffffff'; g.fillRect(px, 100, pw, h - 130);
+  g.fillStyle = PINK; g.fillRect(px, 100, pw, 46);
+  g.fillStyle = '#ffffff'; g.font = 'bold 22px Segoe UI, Arial'; g.fillText('CLASSIFICATION LABEL · shown on every page', px + 24, 131);
+  g.fillStyle = INK; g.font = 'bold 40px Segoe UI, Arial'; g.fillText('Programme X · Risk report', px + 40, 230);
+  g.fillStyle = MUTED; g.font = '26px Segoe UI, Arial'; g.fillText('Q3 2026 · Cover page', px + 40, 278);
+  g.fillStyle = '#e2e8f0'; for (let k = 0; k < 5; k++) g.fillRect(px + 40, 330 + k * 34, pw - 80 - (k % 2) * 160, 14);
+  g.fillStyle = INK; g.beginPath(); g.roundRect(w - 420, h - 110, 260, 56, 28); g.fill();
+  g.fillStyle = '#22c55e'; g.beginPath(); g.roundRect(w - 230, h - 100, 60, 36, 18); g.fill();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(w - 188, h - 82, 14, 0, 7); g.fill();
+  g.font = 'bold 22px Segoe UI, Arial'; g.fillText('Cover page', w - 400, h - 74);
+};
+
+const mockCache = {};
+const mockTex = (key, draw) => {
+  if (mockCache[key]) return mockCache[key];
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
+  const g = c.getContext('2d');
+  g.fillStyle = PAGE; g.fillRect(0, 0, 1024, 640);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 1024, 64);
+  g.fillStyle = PINK; g.font = 'bold 30px Segoe UI, Arial'; g.fillText('ERM', 28, 43);
+  g.fillStyle = MUTED; g.font = '22px Segoe UI, Arial'; g.fillText('Programme X · Q3 2026', 110, 42);
+  draw(g, 1024, 640);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return (mockCache[key] = t);
+};
+const MOCKS = { heat: drawHeat, table: drawTable, onepager: drawOnePager, tracker: drawTracker, report: drawReport, search: drawSearch };
+
+function screenObj(tex, w, h, { tint = '#e2e8f0', glow = '#ec4f8f', glowOp = 0.55, op = 1, clip = null } = {}) {
+  const g = new THREE.Group();
+  const planes = clip ? [clip] : [];
+  g.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, color: tint, transparent: op < 1, opacity: op, clippingPlanes: planes })));
+  if (glowOp > 0) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.12, h + 0.12), new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: glowOp * op, clippingPlanes: planes }));
+    f.position.z = -0.01; g.add(f);
+  }
+  return g;
+}
+const basic = (c, o = {}) => new THREE.MeshBasicMaterial({ color: c, ...o });
+const sphere = (r, c, o) => new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), basic(c, o));
+function tube(points, r, c, o = {}) {
+  if (points.length < 2) return new THREE.Object3D();
+  return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.max(8, points.length * 2), r, 6, false), basic(c, o));
+}
+function partialCurve(curve, prog, n = 40) { const p = []; const k = Math.max(2, Math.round(n * prog)); for (let i = 0; i < k; i++) p.push(curve.getPoint(prog * i / (k - 1))); return p; }
+function label(html, pos, cls, op = 1, parent = scene, style = '') {
+  if (op <= 0.01) return null;
+  const d = document.createElement('div'); d.className = cls; d.innerHTML = html; d.style.cssText = `opacity:${op};${style}`;
+  const o = new CSS2DObject(d); o.position.copy(pos); parent.add(o); return o;
+}
+function text(cls, html, op = 1, style = '') {
+  if (op <= 0.01) return null;
+  const d = document.createElement('div'); d.className = 't ' + cls; d.innerHTML = html; d.style.cssText = `opacity:${op};${style}`; ov.appendChild(d); return d;
+}
+function abs(html, cls, style) { const d = document.createElement('div'); d.className = 'abs ' + (cls || ''); d.innerHTML = html; d.style.cssText = style; ov.appendChild(d); return d; }
+function caption(main, eye, u, a, b) {
+  const dy = (1 - ss(a, a + 0.6, u)) * 12;
+  text('cap', main, win(u, a, b), `transform:translateY(${dy}px)`);
+  if (eye) text('eye', eye, win(u, a + 0.15, b));
+}
+function stars(n, color, size, spread = [40, 22, 30], s = 3) {
+  seed = s; const arr = [];
+  for (let i = 0; i < n; i++) arr.push((rnd() - 0.5) * spread[0], (rnd() - 0.5) * spread[1], -rnd() * spread[2]);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color, size })); scene.add(p); return p;
+}
+function look(pos, target) { camera.position.copy(pos); camera.up.set(0, 1, 0); camera.lookAt(target); }
+
+// ---------- Shot 1: globe ----------
+const R = 3;
+const ll = (lat, lon, r = R) => { const a = lat * D2R, o = lon * D2R; return V(r * Math.cos(a) * Math.sin(o), r * Math.sin(a), r * Math.cos(a) * Math.cos(o)); };
+// [dot code, country, users, site, lat, lon, arrival time]
+const COUNTRIES = [
+  [1, 'France', 314, 'Blagnac · Toulouse', 43.63, 1.36, 1.4], [2, 'Germany', 205, 'Hamburg', 53.55, 9.99, 3.0],
+  [3, 'United Kingdom', 58, 'Broughton', 53.17, -2.99, 4.4], [4, 'Spain', 25, 'Getafe', 40.31, -3.73, 5.6],
+  [5, 'Canada', 12, 'Mirabel', 45.68, -74.04, 7.0], [6, 'India', 7, 'Bangalore', 12.97, 77.59, 8.4],
+];
+// Globe orientation keys [t, lat, lon]: stop on each country, fast spins between (westward to India across the Pacific).
+const GK = [[0, 25, -35], [1.4, 46, 2], [2.4, 46, 2], [3.0, 51, 10], [3.8, 51, 10], [4.4, 54, -2], [5.0, 54, -2], [5.6, 40, -4], [6.2, 40, -4], [7.0, 46, -74], [7.6, 46, -74], [8.4, 15, -282.4], [8.9, 15, -282.4], [10.4, 32, -345]];
+const CZ = [[0, 13], [1.4, 10.5], [6.2, 10.5], [6.6, 11.9], [7.0, 10.5], [7.6, 10.5], [8.0, 12.3], [8.4, 10.5], [8.9, 10.5], [10, 14]];
+function keys(K, t, i) {
+  if (t <= K[0][0]) return K[0][i];
+  for (let k = 0; k < K.length - 1; k++) { const a = K[k], b = K[k + 1]; if (t <= b[0]) return lerp(a[i], b[i], ss(a[0], b[0], t)); }
+  return K[K.length - 1][i];
+}
+const globeEuler = (t) => new THREE.Euler(keys(GK, t, 1) * D2R, -keys(GK, t, 2) * D2R, 0, 'XYZ');
+const HALO = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(128, 128, 80, 128, 128, 128); gr.addColorStop(0, 'rgba(99,102,241,0.35)'); gr.addColorStop(0.6, 'rgba(99,102,241,0.12)'); gr.addColorStop(1, 'rgba(99,102,241,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const DOTPOS = dots.map(([la, lo]) => ll(la, lo));
+const BLAGNAC = ll(43.63, 1.36);
+
+function shotGlobe(u) {
+  setBloom(0.85, 0.5, 0.2);
+  scene.background = col('#060a14');
+  const g = new THREE.Group(); g.rotation.copy(globeEuler(u)); scene.add(g);
+  g.add(sphere(R * 0.992, '#0b1222'));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: HALO, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 }));
+  halo.scale.setScalar(R * 2.9); halo.renderOrder = -1; scene.add(halo);
+  let active = -1; COUNTRIES.forEach((c, k) => { if (u >= c[6] - 0.25) active = k; });
+  const overview = u > 8.9;
+  const pos = [], cols = [], cBase = col('#5d6f8f'), cAct = col('#ff4f9a'), cVis = col('#c46b9b');
+  dots.forEach(([, , c], i) => {
+    const p = DOTPOS[i]; pos.push(p.x, p.y, p.z);
+    let cc = cBase;
+    if (c) { const k = c - 1; if (k === active || (overview && k <= active)) cc = cAct; else if (k < active) cc = cVis; }
+    cols.push(cc.r, cc.g, cc.b);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.add(new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.05, vertexColors: true })));
+  g.updateMatrixWorld(true);
+  COUNTRIES.forEach((c, k) => {
+    const t0 = c[6] - 0.25; if (u < t0) return;
+    const grow = ss(t0, t0 + 0.45, u);
+    const base = ll(c[4], c[5]), tip = ll(c[4], c[5], R * (1 + 0.14 * grow));
+    g.add(tube([base, tip], 0.012, '#f9a8d4'));
+    const head = sphere(0.045, '#ff7ab6'); head.position.copy(tip); head.scale.setScalar(eob(lin(t0, t0 + 0.4, u)) + 0.001); g.add(head);
+    if (k > 0) {
+      const a = BLAGNAC, b = base, mid = a.clone().add(b).multiplyScalar(0.5).normalize().multiplyScalar(R * (1.12 + a.distanceTo(b) * 0.06));
+      const prog = ss(t0, t0 + 0.8, u);
+      if (prog > 0.02) g.add(tube(partialCurve(new THREE.QuadraticBezierCurve3(a, mid, b), prog), 0.01, '#f472b6'));
+    }
+    const wp = tip.clone().applyMatrix4(g.matrixWorld);
+    const facing = ss(0.6, 1.6, wp.z);
+    if (k !== active) return;
+    const op = facing * ss(t0, t0 + 0.35, u) * (1 - ss(8.9, 9.2, u));
+    label(`<b>${c[1]}</b><span>${c[2]} users</span><i>${c[3]}</i>`, wp, 'gl', op);
+  });
+  look(V(0, 0.2, keys(CZ, u, 1)), V(0, 0, 0));
+  text('big', '892 <i>users</i> · 6 <i>countries</i> · 1,600+ <i>dashboards</i>', ss(9.0, 9.5, u));
+  caption('Every day, users around the world manage risk in ERM.', 'ERM today', u, 1.0, 8.7);
+}
+
+// ---------- Shot 2: siglums (same idea as the countries: one dot per user, grouped by function) ----------
+const SIGS = [['B', 345], ['O', 120], ['P', 95], ['A', 60], ['L', 55], ['S', 55], ['K', 50]];
+const NODES = [];
+SIGS.forEach(([n, users], i) => {
+  const a = (180 - i * 360 / 7) * D2R;
+  NODES.push({ name: n, users, r: 0.1 + Math.sqrt(users) * 0.026, pos: V(Math.cos(a) * 4.7, Math.sin(a) * 2.45, -Math.sin(a) * 0.6), named: true, i });
+});
+for (let j = 0; j < 12; j++) {
+  const a = (180 - (j + 0.5) * 30 + 8) * D2R;
+  NODES.push({ name: '', users: j < 4 ? 10 : 9, r: 0.08, pos: V(Math.cos(a) * 6.9, Math.sin(a) * 3.35, -1.2), named: false, i: j });
+}
+seed = 21;
+const PEOPLE = [];
+NODES.forEach((nd) => {
+  for (let q = 0; q < nd.users; q++) {
+    const dir = V(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize();
+    const rad = nd.r * 1.2 + 0.12 + Math.pow(rnd(), 0.7) * (0.3 + nd.r * 1.4);
+    PEOPLE.push({ dst: nd.pos.clone().add(dir.multiplyScalar(rad)), delay: rnd() * 0.5, swirl: rnd() - 0.5 });
+  }
+});
+// Sources for the morph: the front-facing globe dots at the end of shot 1.
+const gm = new THREE.Matrix4().makeRotationFromEuler(globeEuler(10));
+const FRONT = DOTPOS.map((p) => p.clone().applyMatrix4(gm)).filter((p) => p.z > 0.3);
+PEOPLE.forEach((p, i) => { p.src = FRONT[Math.floor(i * FRONT.length / PEOPLE.length)]; });
+const PEOPLE_SET = new Set(PEOPLE.map((p) => p.src));
+const REST = FRONT.filter((p) => !PEOPLE_SET.has(p));
+const HUB = V(0, 0, 0.4);
+const popT = (nd) => nd.named ? 1.3 + nd.i * 0.22 : 2.6 + nd.i * 0.05;
+
+function shotSiglums(u) {
+  setBloom(0.6, 0.45, 0.3);
+  scene.background = col('#060a14');
+  // Globe dots leave (the ones not becoming people fade and drift outwards)
+  if (u < 0.9) {
+    const k = 1 + 0.35 * ss(0, 0.9, u), arr = [];
+    REST.forEach((p) => arr.push(p.x * k, p.y * k, p.z * k));
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 0.05, color: '#5d6f8f', transparent: true, opacity: 1 - ss(0, 0.8, u) })));
+  }
+  const arr = [], cols = [], c0 = col('#5d6f8f'), c1 = col('#7dd3fc');
+  PEOPLE.forEach((p) => {
+    const e = ss(p.delay, p.delay + 1.1, u), s = Math.sin(e * Math.PI);
+    arr.push(lerp(p.src.x, p.dst.x, e), lerp(p.src.y, p.dst.y, e) + s * p.swirl * 1.2, lerp(p.src.z, p.dst.z, e) + s * 1.4);
+    const c = c0.clone().lerp(c1, e); cols.push(c.r, c.g, c.b);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 0.055, vertexColors: true })));
+  // Hub
+  const hs = eob(lin(0.9, 1.4, u)) * (1 + 2.5 * ss(6.2, 7, u));
+  if (u > 0.9) { const h = sphere(0.3, '#ff4f9a'); h.position.copy(HUB); h.scale.setScalar(hs + 0.001); scene.add(h); label('ERM', HUB, 'hub', ss(1.1, 1.5, u) * (1 - ss(6.2, 6.6, u))); }
+  NODES.forEach((nd) => {
+    const t0 = popT(nd); if (u < t0) return;
+    const s = eob(lin(t0, t0 + 0.45, u));
+    const m = sphere(nd.r, nd.named ? '#d63a7c' : '#6d74e8'); m.position.copy(nd.pos); m.scale.setScalar(s + 0.001); scene.add(m);
+    const ctrl = nd.pos.clone().add(HUB).multiplyScalar(0.5).add(V(0, 0, 1.3));
+    const curve = new THREE.QuadraticBezierCurve3(nd.pos, ctrl, HUB);
+    const prog = ss(t0, t0 + 0.6, u);
+    scene.add(tube(partialCurve(curve, prog, 30), nd.named ? 0.012 : 0.006, nd.named ? '#f9a8d4' : '#6366f1', { transparent: true, opacity: 0.7 }));
+    if (nd.named) {
+      if (prog > 0.99) for (let q = 0; q < 2; q++) { const f = (u * 0.45 + nd.i * 0.17 + q * 0.5) % 1; const p = sphere(0.05, '#ffffff'); p.position.copy(curve.getPoint(f)); scene.add(p); }
+      label(`<b>${nd.name}</b>${nd.users}`, nd.pos.clone().add(V(0, nd.r + 0.42, 0)), 'sg', ss(t0 + 0.15, t0 + 0.45, u) * (1 - ss(6.1, 6.5, u)));
+    }
+  });
+  label('+ 12 more', V(4.2, -3.5, -1.2), 'sg', ss(3.0, 3.4, u) * (1 - ss(6.1, 6.5, u)));
+  // Camera: slow orbit, then a dive into the hub
+  const ang = lerp(-0.14, 0.14, clamp(u / 6.2));
+  const dist = lerp(lerp(14, 12.5, ss(0, 1.6, u)), 0.55, Math.pow(ss(6.15, 7.0, u), 1.6));
+  look(V(Math.sin(ang) * dist, 0.8 * dist / 12.5, Math.cos(ang) * dist + HUB.z), HUB);
+  caption('Every function reports its risks in ERM.', 'Across every function', u, 1.6, 6.15);
+  flashOp = ss(6.55, 7.0, u) * 0.95;
+}
+
+// ---------- Shots 3-4: the wall of today's dashboards, then the wait ----------
+function wall(dim) {
+  const variety = ['heat', 'table', 'onepager', 'tracker'];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
+    const k = variety[(r * 5 + c) % 4];
+    const tint = col('#c9d0dc').lerp(col('#3e4552'), dim).getStyle();
+    const s = screenObj(mockTex(k, MOCKS[k]), 3.2, 2, { tint, glow: col('#ec4f8f').lerp(col('#334155'), dim).getStyle(), glowOp: lerp(0.55, 0.15, dim) });
+    const a = (c - 2) * 0.32;
+    s.position.set(Math.sin(a) * 11, (1 - r) * 2.4, -Math.cos(a) * 11 + 11); s.rotation.y = -a; scene.add(s);
+  }
+}
+function shotWall(u) {
+  setBloom(0.25, 0.4, 0.95); scene.background = col('#070b16');
+  wall(0);
+  look(V(Math.sin(u * 0.2) * 0.4, 0.3, lerp(11, 9.6, ss(0, 6, u))), V(0, 0, -1));
+  caption('Every quarter, your risk reporting runs through ERM.', 'Your ERM', u, 0.5, 5.7);
+  flashOp = (1 - ss(0, 0.45, u)) * 0.95;
+}
+function shotWait(u) {
+  setBloom(0.25, 0.4, 0.95); scene.background = col('#05070d');
+  wall(ss(0, 1.6, u) * 0.8);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.07, 16, 100, Math.PI * 1.4), basic('#cbd5e1', { transparent: true, opacity: ss(0.6, 1.2, u) }));
+  ring.position.set(0, 0.1, 3.6); ring.rotation.z = -u * 5; scene.add(ring);
+  look(V(Math.sin(u * 0.9) * 0.6, 0.3, lerp(9.6, 9.2, ss(0, 6, u))), V(Math.sin(u * 0.9) * 0.3, 0, -1));
+  caption('Waiting for tabs to load. Hunting for the right dashboard.', 'Until now', u, 0.6, 5.4);
+  fadeOp = ss(5.5, 6.0, u);
+}
+
+// ---------- Shot 5: the turn ----------
+function shotTurn(u) {
+  setBloom(1.6, 0.6, 0.1); scene.background = col('#000000');
+  const o = 1 - ss(3.0, 3.4, u);
+  text('statement', `<div style="opacity:${ss(0.3, 0.9, u)};transform:translateY(${(1 - ss(0.3, 0.9, u)) * 14}px)">So we rebuilt it.</div><div style="opacity:${ss(1.3, 1.9, u)};transform:translateY(${(1 - ss(1.3, 1.9, u)) * 14}px)"><span>From the ground up.</span></div>`, o);
+  // A line of light draws across, then collapses to a point (it opens into the gate in the next shot)
+  const w = lerp(0, 9, ss(3.0, 3.6, u)) * (1 - ss(3.65, 4.0, u)) + 0.08 * ss(3.6, 3.9, u);
+  if (u > 3.0) { const l = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.025), basic('#ffe4f1')); l.scale.x = Math.max(w, 0.01); scene.add(l); }
+  look(V(0, 0, 8), V(0, 0, 0));
+}
+
+// ---------- Shot 6: through the gate, today's screens come out as ERM 2.0 ----------
+const CLIP_L = new THREE.Plane(V(-1, 0, 0), 0), CLIP_R = new THREE.Plane(V(1, 0, 0), 0);
+const GATE = [['table', 'table'], ['tracker', 'tracker'], ['summary', 'onepager'], ['report', 'report'], ['fullsearch', 'search'], ['heat', 'heat']];
+const SW = 3.4, SH = 2.125, SRY = -0.6, SPEED = 4.2, X_STOP = 2.4;
+const BOOST = 1.7; // screens speed up once through the gate
+const gateX = (k, u) => { let x = -9.5 + (u - 0.9 - k * 0.75) * SPEED; if (x > 0) x *= BOOST; return k === 5 ? Math.min(x, X_STOP) : x; };
+function shotGate(u) {
+  setBloom(0.8, 0.5, 0.93); scene.background = col('#060a14');
+  const gateOp = 1 - ss(7.0, 7.7, u);
+  stars(500, '#334155', 0.04, [40, 22, 30], 9);
+  const lineH = 5.4 * ss(0, 0.55, u);
+  let crossing = 0;
+  GATE.forEach(([real, mock], k) => {
+    const x = gateX(k, u); if (x < -14 || x > 16) return;
+    crossing = Math.max(crossing, 1 - clamp(Math.abs(x) / 1.6));
+    const y = Math.sin(k * 1.7) * 0.3, z = Math.cos(k * 2.3) * 0.35;
+    const fadeOthers = k === 5 ? 1 : 1 - ss(7.0, 7.6, u);
+    for (const [tex, clip, opts] of [[mockTex(mock, MOCKS[mock]), CLIP_L, { tint: '#7d848f', glow: '#475569', glowOp: 0.35 }], [imgTex(real), CLIP_R, {}]]) {
+      const s = screenObj(tex, SW, SH, { ...opts, clip, op: fadeOthers });
+      s.position.set(x, y, z); s.rotation.y = SRY; scene.add(s);
+    }
+  });
+  if (u > 0.05 && gateOp > 0.01) {
+    // Core line + soft additive layers (a glow that does not depend on bloom, so the screens stay crisp)
+    [[0.02, '#ffffff', 1], [0.07, '#ff9cc8', 0.35], [0.18, '#ec4f8f', 0.12]].forEach(([r, c, o]) => {
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 12), basic(c, { transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false }));
+      l.scale.set(1 + crossing * 2.5, Math.max(lineH, 0.01), 1 + crossing * 2.5); scene.add(l);
+    });
+    [[0.045, '#ff7ab6', 1], [0.14, '#ec4f8f', 0.22]].forEach(([tb, c, o]) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.75, tb, 12, 160), basic(c, { transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.rotation.y = Math.PI / 2; ring.scale.set(0.62 * ss(0.4, 1.1, u) + 0.001, ss(0.15, 0.7, u) + 0.001, 1); scene.add(ring);
+    });
+  }
+  // Camera: three-quarter view of the gate, then lands square on the Maps screen (it becomes shot 7)
+  const ph = V(gateX(5, u), Math.sin(5 * 1.7) * 0.3, Math.cos(5 * 2.3) * 0.35);
+  const n = V(Math.sin(SRY), 0, Math.cos(SRY));
+  const e = ss(7.0, 8.0, u);
+  look(V(-6.2 + u * 0.12, 0.9, 7.6).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
+  caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', u, 1.4, 6.7);
+}
+
+// ---------- Shots 7-9: inside the app ----------
+const TABS = [
+  ['heat', 'Maps', 'Your risks and opportunities on one heat map.', [0.72, 0.3]],
+  ['table', 'Table', 'Every risk, sorted and filtered your way.', [0.45, 0.28]],
+  ['tracker', 'Action Tracker', 'Every action followed through to the finish.', [0.5, 0.32]],
+  ['summary', 'Summary', 'The story of the quarter, in one place.', [0.25, 0.2]],
+  ['report', 'Report', 'Ready-to-share reports, straight to PDF.', [0.62, 0.42]],
+  ['fullsearch', 'Full Search', 'Find any risk, across every dashboard.', [0.6, 0.16]],
+];
+const AW = 5.4, AH = 3.375;
+// Screens change with a push: the next one slides in from the right while the current one slides out,
+// so the frame is never empty. `off` is the push offset applied on top of each screen's own motion.
+const PUSH = 0.45, SLIDE = 6.4;
+function appScreen(key, v, dur, { focus = [0.5, 0.5], zoom = 0.1, kb = 0.5, ry = 0, extra = null, off = { x: 0, yaw: 0 } } = {}) {
+  const s = screenObj(imgTex(key), AW, AH);
+  const p = ss(0.4, dur, v), sc = 1 + zoom * p;
+  const fx = (focus[0] - 0.5) * AW, fy = (0.5 - focus[1]) * AH;
+  s.scale.setScalar(sc);
+  s.position.set(-fx * sc * p * kb + off.x, -fy * sc * p * kb, 0);
+  s.rotation.y = ry + off.yaw;
+  if (extra) extra(s, p);
+  loadBar(s, v);
+  scene.add(s);
+  return s;
+}
+// A pink load bar on the screen's top edge that fills almost instantly as the screen arrives.
+function loadBar(s, v) {
+  const fill = ss(-0.15, 0.12, v), op = 1 - ss(0.25, 0.7, v);
+  if (fill <= 0.01 || op <= 0.01) return;
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(AW * fill, 0.05), basic('#ff4fa0', { transparent: true, opacity: op }));
+  b.position.set(-AW / 2 + AW * fill / 2, AH / 2 + 0.03, 0.02); s.add(b);
+}
+function streaks(e) {
+  const o = Math.sin(e * Math.PI) * 0.35; if (o < 0.02) return;
+  seed = 5; for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(lerp(2, 5, rnd()), 0.01), basic('#ffffff', { transparent: true, opacity: o })); m.position.set((rnd() - 0.5) * 6, (rnd() - 0.5) * 3.6, 0.6); scene.add(m); }
+}
+function segLayout(u, off) {
+  appScreen('onepager_pick', u, 6, { focus: [0.79, 0.46], zoom: 0.38, kb: 0.65, ry: -0.06, off, extra: (s) => {
+    // Pulsing frame on "Layout 4 (Custom)"
+    const [u0, u1, v0, v1] = [0.701, 0.886, 0.338, 0.585];
+    const x0 = (u0 - 0.5) * AW, x1 = (u1 - 0.5) * AW, y0 = (0.5 - v0) * AH, y1 = (0.5 - v1) * AH;
+    const op = ss(1.0, 1.5, u) * (0.55 + 0.45 * Math.sin(u * 6));
+    const m = basic('#ff4fa0', { transparent: true, opacity: op });
+    for (const [cx, cy, w, h] of [[(x0 + x1) / 2, y0, x1 - x0, 0.035], [(x0 + x1) / 2, y1, x1 - x0, 0.035], [x0, (y0 + y1) / 2, 0.035, y0 - y1], [x1, (y0 + y1) / 2, 0.035, y0 - y1]]) {
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); b.position.set(cx, cy, 0.02); s.add(b);
+    }
+    if (u > 0.4) label(`<span class="new" style="transform:scale(${eob(lin(0.5, 0.95, u))})">NEW</span>`, V(-AW / 2 + 0.55, AH / 2 + 0.28, 0.05), '', 1, s);
+  } });
+}
+function segSlide(u, off) {
+  const p = ss(1.3, 2.5, u);
+  const s = screenObj(imgTex('slide'), AW, AH, { glowOp: 0.55 * (1 - p) });
+  s.scale.setScalar(lerp(0.95, 1.3, p)); s.rotation.y = lerp(-0.22, 0, p) + off.yaw;
+  s.position.set(off.x, lerp(0.1, 0, p), 0); scene.add(s);
+  const bo = eob(lin(0.5, 0.95, u)) * (1 - ss(1.3, 1.7, u));
+  if (u > 0.4) label(`<span class="new" style="transform:scale(${bo})">NEW</span><span class="pill" style="transform:scale(${bo})">▶ Slideshow</span>`, V(-AW / 2 + 1.2, AH / 2 + 0.3, 0.05), '', bo > 0.01 ? 1 : 0, s);
+}
+const SEGS = [
+  ...[0, 1, 2, 3, 4, 5].map((k) => [41 + 4 * k, 45 + 4 * k, (v, off) => appScreen(TABS[k][0], v, 4, { focus: TABS[k][3], off })]),
+  [65, 71, segLayout], [71, 77, segSlide],
+];
+function drawApp(t) {
+  const i = Math.max(0, SEGS.findIndex((s) => t < s[1]));
+  const [t0, t1, fn] = SEGS[i];
+  const e = i < SEGS.length - 1 ? ss(t1 - PUSH, t1, t) : 0;
+  fn(t - t0, { x: -SLIDE * e, yaw: 0.25 * e });
+  if (e > 0) { const [n0, , nfn] = SEGS[i + 1]; nfn(t - n0, { x: SLIDE * (1 - e), yaw: -0.25 * (1 - e) }); streaks(e); }
+}
+function appCam(t) { look(V(Math.sin(t * 0.3) * 0.5, 0.15, 7.4), V(0, 0, 0)); }
+function tabBar(active, slide, op) {
+  if (op <= 0.01) return;
+  const bar = abs('', 'tabs', `opacity:${op}`); bar.className = 'tabs';
+  const x = lerp(active, Math.min(active + 1, 5), slide) * 134;
+  bar.innerHTML = `<div class="ind" style="left:${x}px"></div>` + TABS.map((t, i) => `<div class="${i === Math.round(active + slide) ? 'on' : ''}" style="background:${i === Math.round(active + slide) ? 'transparent' : ''}">${t[1]}</div>`).join('');
+}
+function shotTabs(u) {
+  setBloom(0.25, 0.4, 0.95); scene.background = col('#070b16');
+  stars(500, '#334155', 0.04, [40, 22, 30], 9);
+  const k = Math.min(5, Math.floor(u / 4)), v = u - k * 4;
+  const [, name, line] = TABS[k];
+  drawApp(41 + u);
+  const fo = win(u, 0.5, 3.4, 0.35);  // the one performance note, on the first tab
+  if (fo > 0.01) abs('<span class="new" style="background:#0f172a;border:1px solid #ec4f8f;box-shadow:0 0 16px rgba(236,79,143,.6)">⚡ Loads in a blink</span>', '', `right:265px;top:100px;opacity:${fo};transform:translateY(${(1 - ss(0.5, 0.9, u)) * 8}px)`);
+  appCam(41 + u);
+  tabBar(k, k < 5 ? ss(4 - PUSH, 4.0, v) : 0, ss(0.1, 0.5, u) * (1 - ss(24 - PUSH, 24, u)));
+  caption(line, name, v, 0.4, 3.6);
+}
+function shotLayout(u) {
+  setBloom(0.35, 0.4, 0.9); scene.background = col('#070b16');
+  stars(500, '#334155', 0.04, [40, 22, 30], 9);
+  drawApp(65 + u);
+  appCam(65 + u);
+  caption('Build your own one-pager layout.', 'New', u, 0.6, 5.6);
+}
+function shotSlideshow(u) {
+  setBloom(0.3, 0.4, 0.92); scene.background = col('#070b16');
+  stars(500, '#334155', 0.04, [40, 22, 30], 9);
+  drawApp(71 + u);
+  appCam(71 + u);
+  caption('Present straight from ERM, in slideshow mode.', 'New', u, 2.6, 5.4);
+  fadeOp = ss(5.45, 6.0, u);
+}
+
+// ---------- Shots 10-11: brought to you by, then the end card ----------
+const SKY_A = 772 / 193.2, MARK_A = (IMG.cmark ? IMG.cmark.width / IMG.cmark.height : 0.807);
+const meas = document.createElement('span'); meas.className = 'mich'; meas.style.cssText = 'position:absolute;visibility:hidden;font-size:100px'; meas.textContent = 'CLAIRVOYANT'; document.body.appendChild(meas);
+const MICH_W = meas.getBoundingClientRect().width / 100; meas.remove();
+// Clairvoyant lockup proportions (brand kit): wordmark 52/272 of the mark height, gap 64/272.
+const cvWidth = (mh) => mh * MARK_A + mh * 64 / 272 + MICH_W * mh * 52 / 272;
+function creditLayout(p) {
+  const A = (() => { const sh = 66, mh = 118, sw = sh * SKY_A, cw = cvWidth(mh), gap = 64, xw = 26;
+    const total = sw + gap + xw + gap + cw, x0 = 640 - total / 2;
+    return { hy: 236, hs: 16, hl: 6, sh, sx: x0 + sw / 2, sy: 352, xx: x0 + sw + gap + xw / 2, xy: 350, xs: 30, mh, cl: x0 + sw + gap + xw + gap, cy: 352 }; })();
+  const B = { hy: 84, hs: 12, hl: 4.8, sh: 50, sx: 428, sy: 146, xx: 640, xy: 143, xs: 24, mh: 70, cl: 852 - cvWidth(70) / 2, cy: 146 };
+  const o = {}; for (const k in A) o[k] = lerp(A[k], B[k], p); return o;
+}
+function credits(L, { head = 1, sky = 1, x = 1, mark = 1, chars = 11, caret = false }) {
+  abs('Brought to you by', 'credit', `left:0;right:0;text-align:center;top:${L.hy}px;transform:translateY(-50%);font-size:${L.hs}px;letter-spacing:${L.hl}px;opacity:${head}`);
+  if (IMG.skywise) abs(`<img src="${IMG.skywise.src}" style="height:${L.sh}px;display:block">`, '', `left:${L.sx}px;top:${L.sy}px;transform:translate(-50%,-50%) scale(${lerp(0.92, 1, sky)});opacity:${sky}`);
+  abs('×', '', `left:${L.xx}px;top:${L.xy}px;transform:translate(-50%,-50%);font-size:${L.xs}px;color:#94a3b8;opacity:${x}`);
+  const fs = L.mh * 52 / 272, gap = L.mh * 64 / 272;
+  const word = 'CLAIRVOYANT'.slice(0, chars);
+  abs(`<img src="${IMG.cmark ? IMG.cmark.src : ''}" style="height:${L.mh}px;display:block;opacity:${mark};transform:scale(${lerp(0.6, 1, eob(mark))})">` +
+      `<span class="mich" style="font-size:${fs}px;margin-left:${gap}px">${word}${caret ? '<span class="caret"></span>' : ''}</span>`,
+      '', `left:${L.cl}px;top:${L.cy}px;transform:translateY(-50%);display:flex;align-items:center`);
+}
+const E0 = 77 + 5.8; // end card elements start (global time)
+function endCard(t) {
+  const e = t - E0; if (e < -0.05) return;
+  const rings = [[4.6, 0.06, '#ec4f8f', [1.35, 0.15, 0], 1.25], [5.4, 0.03, '#6366f1', [1.45, -0.2, 0.25], 1.2]];
+  rings.forEach(([r, tb, c, rot, sc], i) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(r, tb, 16, 160), basic(c));
+    const s = eob(lin(0.0 + i * 0.12, 1.0 + i * 0.12, e)) * sc;
+    m.rotation.set(rot[0] - (1 - clamp(e)) * 0.6, rot[1] + e * 0.02, rot[2] + e * 0.015 * (i ? -1 : 1)); m.scale.set(s + 0.001, s + 0.001, 1); scene.add(m);
+  });
+  const lo = ss(0.5, 1.0, e);
+  text('logo', 'ERM <span>2.0</span>', lo, `transform:scale(${lerp(0.9, 1, lo)})`);
+  text('tag', 'Everything you rely on. Faster and easier.', ss(1.8, 2.3, e));
+  text('soon', 'Coming soon', ss(2.6, 3.1, e));
+}
+function shotCredits(u, t) {
+  setBloom(lerp(0.5, 1.2, ss(5.8, 6.8, u)), 0.6, lerp(0.4, 0.1, ss(5.8, 6.8, u))); scene.background = col('#070b16');
+  stars(1400, '#94a3b8', 0.06, [40, 22, 30], 3).position.z = u * 0.25;
+  const p = ss(5.4, 6.6, u);
+  const typed = Math.round(11 * lin(2.2, 3.4, u));
+  credits(creditLayout(p), { head: ss(0.4, 1.0, u), sky: ss(0.9, 1.5, u), x: ss(1.4, 1.8, u), mark: ss(1.6, 2.1, u), chars: typed, caret: u > 2.1 && u < 4.2 && (u < 3.4 || Math.floor(u * 4) % 2 === 0) });
+  endCard(t);
+  look(V(0, 0, lerp(14.4, 14, ss(5.8, 7, u))), V(0, 0, 0));
+  flashOp = win(u, 6.45, 6.95, 0.2) * 0.45;
+  fadeOp = 1 - ss(0, 0.4, u);
+}
+function shotEnd(u, t) {
+  setBloom(1.2, 0.6, 0.1); scene.background = col('#070b16');
+  stars(1400, '#94a3b8', 0.06, [40, 22, 30], 3).position.z = (u + 7) * 0.25;
+  credits(creditLayout(1), {});
+  endCard(t);
+  look(V(0, 0, lerp(14, 13.4, ss(0, 10, u))), V(0, 0, 0));
+  fadeOp = ss(9.0, 10.0, u);
+}
+
+// ---------- Frame ----------
+const FN = { globe: shotGlobe, siglums: shotSiglums, wall: shotWall, wait: shotWait, turn: shotTurn, gate: shotGate, tabs: shotTabs, layout: shotLayout, slideshow: shotSlideshow, credits: shotCredits, end: shotEnd };
+let flashOp = 0, fadeOp = 0;
+function clearScene() {
+  scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  while (scene.children.length) scene.remove(scene.children[0]);
+  ov.innerHTML = ''; lab.innerHTML = '';
+}
+window.renderAt = (t) => {
+  clearScene(); flashOp = 0; fadeOp = 0;
+  const s = SHOTS.find((x) => t < x[2]) || SHOTS[SHOTS.length - 1];
+  FN[s[0]](t - s[1], t);
+  if (t < 0.8) fadeOp = Math.max(fadeOp, 1 - ss(0, 0.8, t));
+  flashEl.style.opacity = flashOp; fadeEl.style.opacity = fadeOp;
+  composer.render(); labels.render(scene, camera);
+  return s[0];
+};
+window.renderAt(Number(Q.get('t') || 2));
+window.__done = true;
+</script>
+</body>
+</html>

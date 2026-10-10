@@ -1,0 +1,479 @@
+<title>Risk Trajectories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a 3D stage with its control bar, and a details panel beside it (stacked on phones).
+     Committed dark look: the scene is a lit instrument on a navy ground, in every viewer theme. */
+  :root {
+    --bg: #0a0f1c;
+    --surface: #111a2c;
+    --surface-2: #17223a;
+    --line: #24324d;
+    --fg: #e7ecf5;
+    --muted: #8d9ab0;
+    --accent: #ec4f8f;
+    --target: #a5b4fc;
+    --crit: #ef4444;
+    --major: #f59e0b;
+    --mod: #eab308;
+    --minor: #22c55e;
+    --font-display: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-data: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body { font-family: var(--font-body); font-size: 14px; line-height: 1.5; padding-inline: 16px; padding-block: 20px 28px; }
+  .page { max-width: 1400px; margin-inline: auto; display: grid; gap: 16px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 24px; }
+  .eyebrow { font-family: var(--font-data); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 3vw, 32px); line-height: 1.1; margin: 4px 0 0; text-wrap: balance; }
+  .sample { font-size: 13px; color: var(--muted); max-width: 60ch; }
+  .sample b { color: var(--fg); font-weight: 600; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+  @media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+  .stage-wrap { min-width: 0; display: grid; gap: 10px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { font: 500 13px var(--font-body); color: var(--muted); background: var(--surface); border: 0; padding: 7px 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--fg); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+  .time { display: flex; align-items: center; gap: 10px; flex: 1 1 280px; min-width: 0; }
+  .play { font: 600 13px var(--font-body); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  #quarter { flex: 1; min-width: 80px; accent-color: var(--accent); }
+  #quarterLabel { font-family: var(--font-data); font-size: 13px; color: var(--fg); min-width: 11ch; text-align: right; font-variant-numeric: tabular-nums; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .stage { position: relative; height: min(72vh, 720px); min-height: 380px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); touch-action: none; }
+  @media (max-width: 600px) { .stage { height: 64vh; } }
+  .stage canvas { display: block; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .tick { color: var(--muted); font: 12px var(--font-data); }
+  .axis { color: var(--muted); font: 600 12px var(--font-data); letter-spacing: 0.08em; white-space: nowrap; }
+  .q { color: var(--muted); font: 12px var(--font-data); white-space: nowrap; }
+  .q.now { color: var(--fg); font-weight: 500; }
+  .q.tgt { color: var(--target); }
+  .rlabel { font-size: 12px; color: var(--fg); background: color-mix(in srgb, var(--bg) 82%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  .rlabel b { font-family: var(--font-data); color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .tooltip { position: absolute; pointer-events: none; z-index: 2; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent); max-width: 260px; }
+  .tooltip .id { font-family: var(--font-data); color: var(--muted); font-size: 12px; }
+  .stage-hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  aside { min-width: 0; display: grid; gap: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; }
+  .panel h2 { font: 600 12px var(--font-data); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font: 500 13px var(--font-body); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+  .chip .n { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .chip[aria-pressed="true"] { border-color: var(--chip, var(--accent)); box-shadow: inset 0 0 0 1px var(--chip, var(--accent)); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip, var(--muted)); }
+
+  .detail-id { font: 500 12px var(--font-data); color: var(--accent); }
+  .detail-title { font: 600 18px var(--font-display); margin: 0; text-wrap: balance; }
+  .pill { justify-self: start; font: 600 12px var(--font-body); padding: 2px 10px; border-radius: 999px; color: var(--pill); border: 1px solid color-mix(in srgb, var(--pill) 50%, transparent); background: color-mix(in srgb, var(--pill) 14%, transparent); }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .history { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .history td { padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+  .history td:last-child, .history th:last-child { text-align: right; }
+  .history tr.future td { color: var(--muted); }
+  .open { font: 600 13px var(--font-body); color: var(--fg); background: color-mix(in srgb, var(--accent) 80%, var(--bg)); border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; }
+  .note { font-size: 12px; color: var(--muted); min-height: 1.5em; }
+
+  .risk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .risk-list button { width: 100%; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 10px; text-align: left; font: 13px var(--font-body); color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+  .risk-list button:hover { background: var(--surface-2); }
+  .risk-list button[aria-current="true"] { background: var(--surface-2); border-color: var(--accent); }
+  .risk-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .risk-list .score { font-family: var(--font-data); font-variant-numeric: tabular-nums; color: var(--muted); }
+  .risk-list li.dimmed { opacity: 0.4; }
+
+  .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+</style>
+
+<div class="page">
+  <header>
+    <div>
+      <div class="eyebrow">ERM · Explore view prototype</div>
+      <h1>Risk Trajectories</h1>
+    </div>
+    <p class="sample"><b>Sample data.</b> The floor is the heat map, height is time, and each line is one risk moving between cells quarter by quarter, then on to its target.</p>
+  </header>
+
+  <div class="main">
+    <section class="stage-wrap" aria-label="3D risk trajectories">
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Camera view">
+          <button id="view3d" type="button" aria-pressed="true">3D</button>
+          <button id="viewTop" type="button" aria-pressed="false">Heat map (top)</button>
+          <button id="viewSide" type="button" aria-pressed="false">Timeline (side)</button>
+        </div>
+        <div class="time">
+          <button id="play" class="play" type="button">▶ Play</button>
+          <input id="quarter" type="range" min="1" max="6" step="1" value="6" aria-label="Show quarters up to">
+          <span id="quarterLabel">Q2 2026</span>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="labels" id="labels"></div>
+        <div class="tooltip" id="tooltip" hidden></div>
+        <div class="stage-hint">Drag to rotate · scroll or pinch to zoom · click a line to select</div>
+      </div>
+      <div class="legend" aria-label="Legend">
+        <span><i class="sw" style="background:var(--crit)"></i>Critical 12–16</span>
+        <span><i class="sw" style="background:var(--major)"></i>Major 8–11</span>
+        <span><i class="sw" style="background:var(--mod)"></i>Moderate 4–7</span>
+        <span><i class="sw" style="background:var(--minor)"></i>Minor 1–3</span>
+        <span><i class="sw" style="background:transparent;border:2px solid var(--target);border-radius:50%"></i>Target position</span>
+      </div>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <h2>Filter by trend</h2>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="panel" id="detail" aria-live="polite"></div>
+      <div class="panel">
+        <h2>Risks on this dashboard</h2>
+        <ul class="risk-list" id="riskList"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ---------- Sample data ----------
+const QUARTERS = ['Q1 2025', 'Q2 2025', 'Q3 2025', 'Q4 2025', 'Q1 2026', 'Q2 2026'];
+// path: [probability, impact] per quarter; target: [probability, impact]
+const RISKS = [
+  { id: 'R-2072', title: 'Skills shortage', path: [[1,2],[2,2],[2,3],[3,3],[3,4],[4,4]], target: [2,2], targetDate: 'Q4 2026', jitter: [0.35, 0.35] },
+  { id: 'R-1003', title: 'Cybersecurity', path: [[4,4],[4,4],[3,4],[3,3],[2,3],[2,3]], target: [1,2], targetDate: 'Q3 2026', jitter: [-0.35, 0.3] },
+  { id: 'R-2041', title: 'Supplier capacity', path: [[3,3],[4,3],[4,3],[4,3],[4,3],[4,3]], target: [2,3], targetDate: 'Q4 2026', jitter: [-0.3, -0.3] },
+  { id: 'R-2051', title: 'Test campaign slip', path: [[3,4],[3,4],[3,3],[2,3],[2,2],[2,2]], target: [1,2], targetDate: 'Q3 2026', jitter: [0.3, -0.3] },
+  { id: 'R-3101', title: 'Castings delay', path: [[3,3],[3,3],[3,3],[3,3],[3,3],[3,3]], target: [2,2], targetDate: 'Q2 2026', jitter: [0, 0] },
+  { id: 'R-2061', title: 'Legacy access model', path: [[4,2],[3,2],[3,2],[2,2],[2,1],[1,1]], target: [1,1], targetDate: 'Q2 2026', jitter: [0, 0.3] },
+  { id: 'R-2042', title: 'Raw material price', path: [[2,4],[2,4],[2,3],[2,3],[1,3],[1,3]], target: [1,2], targetDate: 'Q4 2026', jitter: [0.3, 0] },
+  { id: 'R-2062', title: 'Third-party tools', path: [[3,1],[2,1],[2,1],[2,1],[1,1],[1,1]], target: [1,1], targetDate: 'Q2 2026', jitter: [-0.3, 0] },
+];
+const css = getComputedStyle(document.documentElement);
+const tok = n => css.getPropertyValue(n).trim();
+const COLORS = { crit: tok('--crit'), major: tok('--major'), mod: tok('--mod'), minor: tok('--minor'), target: tok('--target'), accent: tok('--accent'), line: tok('--line'), bg: tok('--bg') };
+const levelColor = s => s >= 12 ? COLORS.crit : s >= 8 ? COLORS.major : s >= 4 ? COLORS.mod : COLORS.minor;
+const STATUS = {
+  worse: { label: 'Getting worse', color: COLORS.crit, rank: 0 },
+  stuck: { label: 'Stuck', color: COLORS.major, rank: 1 },
+  track: { label: 'On track', color: COLORS.minor, rank: 2 },
+};
+// Trend over the last 3 quarters: worse if criticality rose; stuck if unchanged and still above target; otherwise on track.
+for (const r of RISKS) {
+  r.scores = r.path.map(([p, i]) => p * i);
+  const s = r.scores, n = s.length, tgt = r.target[0] * r.target[1];
+  r.status = s[n - 1] > s[n - 3] ? 'worse' : (s[n - 1] === s[n - 2] && s[n - 2] === s[n - 3] && s[n - 1] > tgt) ? 'stuck' : 'track';
+}
+
+// ---------- Page state ----------
+const state = { selected: 'R-2072', hovered: null, filter: 'all', quarter: QUARTERS.length, view: '3d' };
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- Scene ----------
+const stage = document.getElementById('stage');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+} catch (e) {
+  stage.insertAdjacentHTML('beforeend', '<div class="fallback">This view needs WebGL, which is turned off in this browser. Try another browser or enable hardware acceleration.</div>');
+  throw e;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+stage.prepend(renderer.domElement);
+const labelRenderer = new CSS2DRenderer({ element: document.getElementById('labels') });
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(COLORS.bg);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = !reduceMotion;
+controls.minDistance = 10; controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI * 0.49;
+scene.add(new THREE.HemisphereLight('#e2e8f0', COLORS.bg, 1.2));
+const key = new THREE.DirectionalLight('#ffffff', 1.5); key.position.set(10, 25, 10); scene.add(key);
+
+const label = (html, cls, pos, parent = scene) => {
+  const d = document.createElement('div'); d.className = cls; d.innerHTML = html;
+  const o = new CSS2DObject(d); o.position.copy(pos); parent.add(o); return o;
+};
+
+// Heat map floor: x = impact 1..4, z = probability 1..4 (probability rises towards the back).
+const CELL = 2.4;
+const cellX = i => (i - 2.5) * CELL;
+const cellZ = p => (2.5 - p) * CELL;
+for (let p = 1; p <= 4; p++) for (let i = 1; i <= 4; i++) {
+  const c = new THREE.Color(levelColor(p * i));
+  const tile = new THREE.Mesh(new THREE.BoxGeometry(CELL - 0.12, 0.12, CELL - 0.12),
+    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.25, roughness: 0.6, transparent: true, opacity: 0.5 }));
+  tile.position.set(cellX(i), -0.06, cellZ(p)); scene.add(tile);
+}
+for (let i = 1; i <= 4; i++) label(String(i), 'tick', new THREE.Vector3(cellX(i), 0, cellZ(1) + CELL * 0.75));
+for (let p = 1; p <= 4; p++) label(String(p), 'tick', new THREE.Vector3(cellX(4) + CELL * 0.75, 0, cellZ(p)));
+label('IMPACT →', 'axis', new THREE.Vector3(0, 0, cellZ(1) + CELL * 1.25));
+label('PROBABILITY →', 'axis', new THREE.Vector3(cellX(4) + CELL * 1.5, 0, 0));
+
+// Time levels
+const STEP = 1.45, yOf = k => 0.5 + k * STEP;
+const TARGET_Y = yOf(QUARTERS.length) + 0.9;
+const corner = new THREE.Vector3(cellX(1) - CELL * 0.62, 0, cellZ(1) + CELL * 0.62);
+scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([corner.clone(), corner.clone().setY(TARGET_Y)]), new THREE.LineBasicMaterial({ color: COLORS.line })));
+const frameAt = y => { const s = CELL * 2; return [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([x, z]) => new THREE.Vector3(x, y, z)); };
+const quarterFrames = [], quarterLabels = [];
+QUARTERS.forEach((q, k) => {
+  const f = new THREE.Line(new THREE.BufferGeometry().setFromPoints(frameAt(yOf(k))), new THREE.LineBasicMaterial({ color: COLORS.line, transparent: true, opacity: 0.6 }));
+  scene.add(f); quarterFrames.push(f);
+  quarterLabels.push(label(q, 'q', new THREE.Vector3(corner.x - 1.4, yOf(k), corner.z)));
+});
+{
+  const t = new THREE.Line(new THREE.BufferGeometry().setFromPoints(frameAt(TARGET_Y)), new THREE.LineDashedMaterial({ color: COLORS.target, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.6 }));
+  t.computeLineDistances(); scene.add(t);
+  label('Target', 'q tgt', new THREE.Vector3(corner.x - 1.2, TARGET_Y, corner.z));
+}
+
+// Risks
+const pickables = [];
+const pointOf = (r, k) => new THREE.Vector3(cellX(r.path[k][1]) + r.jitter[0], yOf(k), cellZ(r.path[k][0]) + r.jitter[1]);
+for (const r of RISKS) {
+  const g = new THREE.Group(); scene.add(g); r.group = g;
+  r.points = r.path.map((_, k) => pointOf(r, k));
+  r.targetPt = new THREE.Vector3(cellX(r.target[1]) + r.jitter[0], TARGET_Y, cellZ(r.target[0]) + r.jitter[1]);
+  r.segments = []; r.glow = []; r.markers = [];
+  for (let k = 1; k < r.points.length; k++) {
+    const curve = new THREE.LineCurve3(r.points[k - 1], r.points[k]);
+    const c = new THREE.Color(levelColor(r.scores[k]));
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 4, 0.07, 10, false),
+      new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.3, transparent: true }));
+    tube.userData = { risk: r.id, k }; g.add(tube); r.segments.push(tube); pickables.push(tube);
+    const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, 4, 0.2, 10, false),
+      new THREE.MeshBasicMaterial({ color: COLORS.accent, transparent: true, opacity: 0.22, depthWrite: false }));
+    glow.userData = { k }; g.add(glow); r.glow.push(glow);
+  }
+  r.points.forEach((pt, k) => {
+    const c = new THREE.Color(levelColor(r.scores[k]));
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.3, transparent: true }));
+    m.position.copy(pt); m.userData = { risk: r.id, k }; g.add(m); r.markers.push(m); pickables.push(m);
+  });
+  r.now = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 16), new THREE.MeshStandardMaterial({ emissiveIntensity: 0.5, transparent: true }));
+  r.now.userData = { risk: r.id }; g.add(r.now); pickables.push(r.now);
+  r.halo = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.05, 16, 64), new THREE.MeshBasicMaterial({ color: COLORS.accent }));
+  r.halo.rotation.x = Math.PI / 2.3; g.add(r.halo);
+  r.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.28, 32), new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, depthWrite: false }));
+  r.shadow.renderOrder = 2; r.shadow.rotation.x = -Math.PI / 2; g.add(r.shadow);
+  r.toTarget = new THREE.Line(new THREE.BufferGeometry().setFromPoints([r.points[0], r.targetPt]),
+    new THREE.LineDashedMaterial({ color: COLORS.target, dashSize: 0.25, gapSize: 0.18, transparent: true }));
+  g.add(r.toTarget);
+  r.ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.04, 12, 48), new THREE.MeshBasicMaterial({ color: COLORS.target, transparent: true }));
+  r.ring.rotation.x = Math.PI / 2; r.ring.position.copy(r.targetPt); g.add(r.ring);
+  const st = STATUS[r.status];
+  r.label = label(`<b>${r.id}</b>${r.title}`, 'rlabel', new THREE.Vector3(), g);
+  r.label.element.style.borderColor = st.color;
+}
+
+// ---------- Apply state to the scene ----------
+const visibleRisk = r => state.filter === 'all' || r.status === state.filter;
+function applyScene() {
+  const q = state.quarter - 1;
+  quarterFrames.forEach((f, k) => { f.visible = k <= q; f.material.opacity = k === q ? 0.95 : 0.45; f.material.color.set(k === q ? '#94a3b8' : COLORS.line); });
+  quarterLabels.forEach((l, k) => { l.element.className = 'q' + (k === q ? ' now' : ''); l.element.textContent = QUARTERS[k] + (k === q ? (k === QUARTERS.length - 1 ? ' · today' : ' · showing') : ''); l.visible = k <= q; });
+  for (const r of RISKS) {
+    const sel = r.id === state.selected, hov = r.id === state.hovered;
+    const dim = !visibleRisk(r) && !sel;
+    const opacity = dim ? 0.08 : sel || hov ? 1 : 0.55;
+    r.segments.forEach((s, i) => { s.visible = i + 1 <= q; s.material.opacity = opacity; s.material.emissiveIntensity = sel ? 0.6 : hov ? 0.45 : 0.25; });
+    r.glow.forEach((g, i) => { g.visible = sel && i + 1 <= q; });
+    r.markers.forEach((m, k) => { m.visible = k < q; m.material.opacity = opacity; });
+    const nowPt = r.points[q], c = new THREE.Color(levelColor(r.scores[q]));
+    r.now.position.copy(nowPt); r.now.material.color.copy(c); r.now.material.emissive.copy(c);
+    r.now.material.opacity = dim ? 0.12 : 1; r.now.scale.setScalar(sel ? 1.25 : hov ? 1.1 : 0.8);
+    r.halo.visible = sel; r.halo.position.copy(nowPt);
+    r.shadow.visible = !dim; r.shadow.position.set(nowPt.x, 0.02, nowPt.z); r.shadow.material.opacity = sel || hov ? 0.6 : 0.25;
+    r.toTarget.geometry.setFromPoints([nowPt, r.targetPt]); r.toTarget.computeLineDistances();
+    r.toTarget.material.opacity = dim ? 0.06 : sel || hov ? 0.95 : 0.3;
+    r.ring.material.opacity = dim ? 0.08 : sel || hov ? 1 : 0.35;
+    r.label.position.copy(nowPt).add(new THREE.Vector3(0, 0.8, 0));
+    r.label.visible = !dim && (sel || hov || visibleRisk(r) && state.filter !== 'all');
+  }
+}
+
+// ---------- Panel ----------
+const chipsEl = document.getElementById('chips');
+const listEl = document.getElementById('riskList');
+const detailEl = document.getElementById('detail');
+function renderChips() {
+  const counts = { all: RISKS.length, track: 0, stuck: 0, worse: 0 };
+  RISKS.forEach(r => counts[r.status]++);
+  const defs = [['all', 'All', COLORS.accent], ['worse', STATUS.worse.label, STATUS.worse.color], ['stuck', STATUS.stuck.label, STATUS.stuck.color], ['track', STATUS.track.label, STATUS.track.color]];
+  chipsEl.innerHTML = defs.map(([k, t, c]) =>
+    `<button class="chip" type="button" data-filter="${k}" style="--chip:${c}" aria-pressed="${state.filter === k}"><i class="dot"></i>${t}<span class="n">${counts[k]}</span></button>`).join('');
+}
+function renderList() {
+  const sorted = [...RISKS].sort((a, b) => STATUS[a.status].rank - STATUS[b.status].rank || b.scores.at(-1) - a.scores.at(-1));
+  listEl.innerHTML = sorted.map(r => `<li class="${visibleRisk(r) ? '' : 'dimmed'}"><button type="button" data-risk="${r.id}" aria-current="${r.id === state.selected}">
+      <i class="dot" style="--chip:${STATUS[r.status].color}"></i><span class="name">${r.id} · ${r.title}</span><span class="score">${r.scores[state.quarter - 1]}</span></button></li>`).join('');
+}
+function renderDetail() {
+  const r = RISKS.find(x => x.id === state.selected);
+  if (!r) { detailEl.innerHTML = '<h2>Selected risk</h2><p class="note">Click a line or pick a risk from the list.</p>'; return; }
+  const q = state.quarter - 1, st = STATUS[r.status], tgt = r.target[0] * r.target[1];
+  const rows = r.path.map(([p, i], k) => `<tr class="${k > q ? 'future' : ''}"><td>${QUARTERS[k]}</td><td>P${p} × I${i}</td><td style="color:${k > q ? 'inherit' : levelColor(p * i)}">${p * i}</td></tr>`).join('');
+  detailEl.innerHTML = `
+    <h2>Selected risk</h2>
+    <div class="detail-id">#${r.id}</div>
+    <h3 class="detail-title">${r.title}</h3>
+    <span class="pill" style="--pill:${st.color}">${st.label}</span>
+    <dl class="facts">
+      <dt>${QUARTERS[0]} → ${QUARTERS[q]}</dt><dd>${r.scores[0]} → <span style="color:${levelColor(r.scores[q])}">${r.scores[q]}</span></dd>
+      <dt>Target</dt><dd>${tgt} by ${r.targetDate}</dd>
+      <dt>Gap to target</dt><dd>${Math.max(0, r.scores[q] - tgt)}</dd>
+    </dl>
+    <table class="history"><thead><tr><th>Quarter</th><th>Cell</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>
+    <button class="open" type="button" id="openRisk">Open in edit drawer</button>
+    <p class="note" id="openNote"></p>`;
+  document.getElementById('openRisk').addEventListener('click', () => {
+    document.getElementById('openNote').textContent = `Prototype only. In the ERM app this opens the edit drawer for #${r.id}.`;
+  });
+}
+function refresh() { applyScene(); renderChips(); renderList(); renderDetail(); }
+
+chipsEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-filter]'); if (!b) return;
+  state.filter = b.dataset.filter;
+  const sel = RISKS.find(r => r.id === state.selected);
+  if (sel && !visibleRisk(sel)) state.selected = RISKS.find(visibleRisk)?.id ?? null;
+  refresh();
+});
+listEl.addEventListener('click', e => { const b = e.target.closest('[data-risk]'); if (b) { state.selected = b.dataset.risk; refresh(); } });
+
+// ---------- Time ----------
+const slider = document.getElementById('quarter');
+const qLabel = document.getElementById('quarterLabel');
+const playBtn = document.getElementById('play');
+function setQuarter(n) {
+  state.quarter = n; slider.value = String(n);
+  qLabel.textContent = QUARTERS[n - 1] + (n === QUARTERS.length ? ' · today' : '');
+  refresh();
+}
+slider.addEventListener('input', () => { stopPlay(); setQuarter(Number(slider.value)); });
+let playTimer = null;
+function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; playBtn.textContent = '▶ Play'; } }
+playBtn.addEventListener('click', () => {
+  if (playTimer) return stopPlay();
+  playBtn.textContent = '❚❚ Pause';
+  setQuarter(1);
+  playTimer = setInterval(() => {
+    if (state.quarter >= QUARTERS.length) return stopPlay();
+    setQuarter(state.quarter + 1);
+  }, reduceMotion ? 1400 : 900);
+});
+
+// ---------- Camera views ----------
+const VIEWS = {
+  '3d':   { pos: new THREE.Vector3(14, 13, 20), target: new THREE.Vector3(0, 4.2, 0) },
+  'top':  { pos: new THREE.Vector3(0, 30, 0.01), target: new THREE.Vector3(0, 0, 0) },
+  'side': { pos: new THREE.Vector3(0, 5, 27), target: new THREE.Vector3(0, 4.4, 0) },
+};
+let tween = null;
+function setView(name) {
+  state.view = name;
+  for (const [id, v] of [['view3d', '3d'], ['viewTop', 'top'], ['viewSide', 'side']]) document.getElementById(id).setAttribute('aria-pressed', String(v === name));
+  const to = VIEWS[name];
+  if (reduceMotion) { camera.position.copy(to.pos); controls.target.copy(to.target); controls.update(); return; }
+  tween = { fromPos: camera.position.clone(), fromTarget: controls.target.clone(), to, t0: performance.now(), dur: 700 };
+}
+document.getElementById('view3d').addEventListener('click', () => setView('3d'));
+document.getElementById('viewTop').addEventListener('click', () => setView('top'));
+document.getElementById('viewSide').addEventListener('click', () => setView('side'));
+camera.position.copy(VIEWS['3d'].pos); controls.target.copy(VIEWS['3d'].target); controls.update();
+
+// ---------- Hover and click ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+function pick(ev) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(pickables.filter(o => o.visible), false)
+    .find(h => { const r = RISKS.find(x => x.id === h.object.userData.risk); return r && (visibleRisk(r) || r.id === state.selected); });
+  return hit ? { risk: RISKS.find(x => x.id === hit.object.userData.risk), x: ev.clientX - rect.left, y: ev.clientY - rect.top } : null;
+}
+let pending = null;
+renderer.domElement.addEventListener('pointermove', ev => {
+  if (pending) return;
+  pending = requestAnimationFrame(() => {
+    pending = null;
+    const h = pick(ev);
+    const id = h?.risk.id ?? null;
+    if (id !== state.hovered) { state.hovered = id; applyScene(); }
+    renderer.domElement.style.cursor = h ? 'pointer' : 'grab';
+    if (h) {
+      const r = h.risk, q = state.quarter - 1;
+      tooltip.innerHTML = `<div class="id">#${r.id}</div><div><b>${r.title}</b></div><div>${QUARTERS[q]}: <b style="color:${levelColor(r.scores[q])}">${r.scores[q]}</b> · ${STATUS[r.status].label}</div>`;
+      tooltip.hidden = false;
+      const w = stage.clientWidth;
+      tooltip.style.left = Math.min(h.x + 14, w - 270) + 'px';
+      tooltip.style.top = (h.y + 14) + 'px';
+    } else tooltip.hidden = true;
+  });
+});
+renderer.domElement.addEventListener('pointerleave', () => { tooltip.hidden = true; if (state.hovered) { state.hovered = null; applyScene(); } });
+let down = null;
+renderer.domElement.addEventListener('pointerdown', ev => { down = { x: ev.clientX, y: ev.clientY }; });
+renderer.domElement.addEventListener('pointerup', ev => {
+  if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 5) return;
+  const h = pick(ev);
+  if (h) { state.selected = h.risk.id; refresh(); }
+});
+
+// ---------- Resize and loop ----------
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h); labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = w < 600 ? 64 : 38;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+setQuarter(QUARTERS.length);
+
+function loop(now) {
+  if (tween) {
+    const t = Math.min(1, (now - tween.t0) / tween.dur), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    camera.position.lerpVectors(tween.fromPos, tween.to.pos, e);
+    controls.target.lerpVectors(tween.fromTarget, tween.to.target, e);
+    if (t === 1) tween = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
