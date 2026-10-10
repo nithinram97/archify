@@ -2,8 +2,8 @@
 ERM 2.0 trailer for ERM users (1:34, 11 shots), built entirely in Blender.
 
 Follows storyboard v3 (erm-migration/docs/trailer-storyboard, motion preview: prototypes/trailer-animatic.html):
-  1 ERM around the world   globe of dots, stops on each country, pins, arcs, colleague counts
-  2 Across every siglum    the globe's dots fly into one cloud per siglum around an ERM hub, dive into the hub
+  1 ERM around the world   globe of dots, stops on each country, pins, arcs, user counts
+  2 Across every function the globe's dots fly into one cloud per siglum around an ERM hub, dive into the hub
   3 Your ERM               curved wall of today's dashboards
   4 Until now              the wall drains, a spinner turns, dip to black
   5 The turn               "So we rebuilt it. From the ground up." A line of light collapses to a point
@@ -66,7 +66,7 @@ SLATE_DOT = '#5d6f8f'
 
 K = 1.26  # camera distances from the animatic (40° vertical FOV) scaled for the 35 mm lens used here
 
-# [country, colleagues, site, lat, lon, arrival time s]
+# [country, users, site, lat, lon, arrival time s]
 COUNTRIES = [
     ('France', 314, 'Blagnac · Toulouse', 43.63, 1.36, 1.4), ('Germany', 205, 'Hamburg', 53.55, 9.99, 3.0),
     ('United Kingdom', 58, 'Broughton', 53.17, -2.99, 4.4), ('Spain', 25, 'Getafe', 40.31, -3.73, 5.6),
@@ -660,9 +660,9 @@ def shot_globe():
             GLOBE_MATS.append((arc_m, 1.0))
         # Country tag: the country is centred, so the tag sits just right of centre
         hud(name, 0.12, 0.2, WHITE, F(t0), F(min(nxt, 8.9)), x=0.4, align='LEFT', ramp=6)
-        hud(f'{users} colleagues  ·  {site}', 0.06, 0.04, '#f9a8d4', F(t0) + 3, F(min(nxt, 8.9)), x=0.4, align='LEFT', ramp=6)
-    hud('892 colleagues  ·  6 countries  ·  1,600+ dashboards', 0.15, HUD_H / 2 - 0.42, WHITE, F(9.0), F(10.4))
-    caption('Every day, colleagues around the world manage risk in ERM.', 'ERM today', F(1.0), F(8.7))
+        hud(f'{users} users  ·  {site}', 0.06, 0.04, '#f9a8d4', F(t0) + 3, F(min(nxt, 8.9)), x=0.4, align='LEFT', ramp=6)
+    hud('892 users  ·  6 countries  ·  1,600+ dashboards', 0.15, HUD_H / 2 - 0.42, WHITE, F(9.0), F(10.4))
+    caption('Every day, users around the world manage risk in ERM.', 'ERM today', F(1.0), F(8.7))
     cam_path(0, 10, lambda t: (G + Vector((0, -keyed(GLOBE_DIST, t) * K, 0.2)), G), step=0.2, cut=False)
     return globe
 
@@ -692,7 +692,7 @@ def shot_siglums(globe):
             d = Vector((rnd.random() - 0.5, rnd.random() - 0.5, rnd.random() - 0.5)).normalized()
             dst.append(nd['pos'] + d * (nd['r'] * 1.2 + 0.12 + rnd.random() ** 0.7 * (0.3 + nd['r'] * 1.4)))
             swirl.append(rnd.random() - 0.5)
-    # One dot per colleague: the front-facing globe dots at 10 s become the people
+    # One dot per user: the front-facing globe dots at 10 s become the people
     rot = globe_rot(*globe_pose(10.0)).to_matrix()
     front = [p for p in (G + rot @ ll(la, lo) for la, lo, _ in DOT_DATA) if p.y - G.y < -0.3]
     src = [front[int(i * len(front) / len(dst))] for i in range(len(dst))]
@@ -747,7 +747,7 @@ def shot_siglums(globe):
     more_m = Mat('more', '#cbd5e1', 1.2, 0.0)
     text('+ 12 more', 0.2, more_m, c, G + anim(4.2, -3.5, -1.2))
     fade(more_m.alpha, F(13.0), F(16.3), 8)
-    caption('Every organisation reports its risks in ERM.', 'Across every siglum', F(11.6), F(16.15))
+    caption('Every function reports its risks in ERM.', 'Across every function', F(11.6), F(16.15))
 
     def cam_fn(t):
         u = t - t_a
@@ -895,8 +895,13 @@ def frame_mat(gate_x):
     return m
 
 
+BOOST = 1.7  # screens speed up once they are through the gate
+
+
 def gate_x(k, u):
     x = -9.5 + (u - 0.9 - k * 0.75) * SPEED
+    if x > 0:
+        x *= BOOST
     return min(x, X_STOP) if k == 5 else x
 
 
@@ -911,7 +916,9 @@ def shot_gate():
         fr.parent = p
         fr.location = (0, 0, -0.01)
         y, z = math.sin(k * 1.7) * 0.3, math.cos(k * 2.3) * 0.35
-        for u in ([0.0, 8.0] if k < 5 else [0.0, 0.9 + 5 * 0.75 + (X_STOP + 9.5) / SPEED, 8.0]):
+        u_cross = 0.9 + k * 0.75 + 9.5 / SPEED
+        keys = [0.0, u_cross, 8.0] if k < 5 else [0.0, u_cross, u_cross + X_STOP / (SPEED * BOOST), 8.0]
+        for u in keys:
             kf(p, 'location', F(t_a + u), o + anim(gate_x(k, u), y, z), 'LINEAR')
         if k < 5:
             fade_out(m.alpha, F(40.0), F(40.6))
@@ -932,7 +939,7 @@ def shot_gate():
     kf(ring, 'scale', F(t_a + 1.1), Vector((1, 0.62, 1)))
     for m in (line_m, ring_m):
         fade_out(m.alpha, F(40.0), F(40.7))
-    caption('Everything you rely on, carried over and made faster.', 'Nothing left behind', F(34.4), F(39.7))
+    caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', F(34.4), F(39.7))
     # Camera: three-quarter view of the gate, then lands square on the Maps screen (it becomes shot 7)
     n = anim(math.sin(SRY), 0, math.cos(SRY))
     tgt0 = o + anim(0.6, 0, 0)
@@ -953,6 +960,18 @@ def shot_gate():
 # ----------------------------------------------------------------------------------------------
 AW, AH = 5.4, 3.375
 A = O(7)
+
+
+def load_bar(c, p, t0):
+    """A pink bar on the screen's top edge that fills almost instantly as the screen arrives."""
+    bm = Mat('load bar', '#ff4fa0', 3.0, 1.0)
+    bar = plane('load bar', AW, 0.05, c, bm)
+    bar.parent = p
+    kf(bar, 'location', F(t0 - 0.15), Vector((-AW / 2, AH / 2 + 0.03, 0.02)))
+    kf(bar, 'scale', F(t0 - 0.15), Vector((0.001, 1, 1)))
+    kf(bar, 'location', F(t0 + 0.12), Vector((0, AH / 2 + 0.03, 0.02)))
+    kf(bar, 'scale', F(t0 + 0.12), Vector((1, 1, 1)))
+    fade_out(bm.alpha, F(t0 + 0.25), F(t0 + 0.7))
 
 
 def app_screen(c, key, name):
@@ -1053,8 +1072,14 @@ def shot_app():
         if k == 0:
             place(p, F(41), 0, 0, 0, 0.96)  # lands from the gate shot and settles
             place(p, F(41.35), 0, 0, 0, 1.0)
+        load_bar(c, p, t0)
         caption(line, name, F(t0 + 0.4), F(t0 + 3.6))
     tab_bar()
+    # The one performance note, on the first tab
+    tag_m = Mat('speed tag', '#0f172a', 1.0, 0.0)
+    hud_plane('speed tag', hs(150), hs(28), hx(940), hy(114), tag_m, -0.004)
+    fade(tag_m.alpha, F(41.5), F(44.4), 8, 0.9)
+    hud('LOADS IN A BLINK', hs(12), hy(114), '#f9a8d4', F(41.5), F(44.4), x=hx(940), spacing=1.3, ramp=8)
     # Shot 8 · custom one-pager layout
     p, _, _ = app_screen(c, 'onepager_pick', 'one-pager layout')
     push_screen(p, 65, 71, (0.79, 0.46), zoom=0.38, kb=0.65, yaw=-0.06)

@@ -356,14 +356,14 @@ function shotGlobe(u) {
     const facing = ss(0.6, 1.6, wp.z);
     if (k !== active) return;
     const op = facing * ss(t0, t0 + 0.35, u) * (1 - ss(8.9, 9.2, u));
-    label(`<b>${c[1]}</b><span>${c[2]} colleagues</span><i>${c[3]}</i>`, wp, 'gl', op);
+    label(`<b>${c[1]}</b><span>${c[2]} users</span><i>${c[3]}</i>`, wp, 'gl', op);
   });
   look(V(0, 0.2, keys(CZ, u, 1)), V(0, 0, 0));
-  text('big', '892 <i>colleagues</i> · 6 <i>countries</i> · 1,600+ <i>dashboards</i>', ss(9.0, 9.5, u));
-  caption('Every day, colleagues around the world manage risk in ERM.', 'ERM today', u, 1.0, 8.7);
+  text('big', '892 <i>users</i> · 6 <i>countries</i> · 1,600+ <i>dashboards</i>', ss(9.0, 9.5, u));
+  caption('Every day, users around the world manage risk in ERM.', 'ERM today', u, 1.0, 8.7);
 }
 
-// ---------- Shot 2: siglums (same idea as the countries: one dot per colleague, grouped by organisation) ----------
+// ---------- Shot 2: siglums (same idea as the countries: one dot per user, grouped by function) ----------
 const SIGS = [['B', 345], ['O', 120], ['P', 95], ['A', 60], ['L', 55], ['S', 55], ['K', 50]];
 const NODES = [];
 SIGS.forEach(([n, users], i) => {
@@ -432,7 +432,7 @@ function shotSiglums(u) {
   const ang = lerp(-0.14, 0.14, clamp(u / 6.2));
   const dist = lerp(lerp(14, 12.5, ss(0, 1.6, u)), 0.55, Math.pow(ss(6.15, 7.0, u), 1.6));
   look(V(Math.sin(ang) * dist, 0.8 * dist / 12.5, Math.cos(ang) * dist + HUB.z), HUB);
-  caption('Every organisation reports its risks in ERM.', 'Across every siglum', u, 1.6, 6.15);
+  caption('Every function reports its risks in ERM.', 'Across every function', u, 1.6, 6.15);
   flashOp = ss(6.55, 7.0, u) * 0.95;
 }
 
@@ -479,7 +479,8 @@ function shotTurn(u) {
 const CLIP_L = new THREE.Plane(V(-1, 0, 0), 0), CLIP_R = new THREE.Plane(V(1, 0, 0), 0);
 const GATE = [['table', 'table'], ['tracker', 'tracker'], ['summary', 'onepager'], ['report', 'report'], ['fullsearch', 'search'], ['heat', 'heat']];
 const SW = 3.4, SH = 2.125, SRY = -0.6, SPEED = 4.2, X_STOP = 2.4;
-const gateX = (k, u) => { const x = -9.5 + (u - 0.9 - k * 0.75) * SPEED; return k === 5 ? Math.min(x, X_STOP) : x; };
+const BOOST = 1.7; // screens speed up once through the gate
+const gateX = (k, u) => { let x = -9.5 + (u - 0.9 - k * 0.75) * SPEED; if (x > 0) x *= BOOST; return k === 5 ? Math.min(x, X_STOP) : x; };
 function shotGate(u) {
   setBloom(0.8, 0.5, 0.93); scene.background = col('#060a14');
   const gateOp = 1 - ss(7.0, 7.7, u);
@@ -512,7 +513,7 @@ function shotGate(u) {
   const n = V(Math.sin(SRY), 0, Math.cos(SRY));
   const e = ss(7.0, 8.0, u);
   look(V(-6.2 + u * 0.12, 0.9, 7.6).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
-  caption('Everything you rely on, carried over and made faster.', 'Nothing left behind', u, 1.4, 6.7);
+  caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', u, 1.4, 6.7);
 }
 
 // ---------- Shots 7-9: inside the app ----------
@@ -536,8 +537,16 @@ function appScreen(key, v, dur, { focus = [0.5, 0.5], zoom = 0.1, kb = 0.5, ry =
   s.position.set(-fx * sc * p * kb + off.x, -fy * sc * p * kb, 0);
   s.rotation.y = ry + off.yaw;
   if (extra) extra(s, p);
+  loadBar(s, v);
   scene.add(s);
   return s;
+}
+// A pink load bar on the screen's top edge that fills almost instantly as the screen arrives.
+function loadBar(s, v) {
+  const fill = ss(-0.15, 0.12, v), op = 1 - ss(0.25, 0.7, v);
+  if (fill <= 0.01 || op <= 0.01) return;
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(AW * fill, 0.05), basic('#ff4fa0', { transparent: true, opacity: op }));
+  b.position.set(-AW / 2 + AW * fill / 2, AH / 2 + 0.03, 0.02); s.add(b);
 }
 function streaks(e) {
   const o = Math.sin(e * Math.PI) * 0.35; if (o < 0.02) return;
@@ -588,6 +597,8 @@ function shotTabs(u) {
   const k = Math.min(5, Math.floor(u / 4)), v = u - k * 4;
   const [, name, line] = TABS[k];
   drawApp(41 + u);
+  const fo = win(u, 0.5, 3.4, 0.35);  // the one performance note, on the first tab
+  if (fo > 0.01) abs('<span class="new" style="background:#0f172a;border:1px solid #ec4f8f;box-shadow:0 0 16px rgba(236,79,143,.6)">⚡ Loads in a blink</span>', '', `right:265px;top:100px;opacity:${fo};transform:translateY(${(1 - ss(0.5, 0.9, u)) * 8}px)`);
   appCam(41 + u);
   tabBar(k, k < 5 ? ss(4 - PUSH, 4.0, v) : 0, ss(0.1, 0.5, u) * (1 - ss(24 - PUSH, 24, u)));
   caption(line, name, v, 0.4, 3.6);
