@@ -9,6 +9,7 @@ Requirements
   The textures/ folder next to this script (mock app screens). Real screenshots take priority when present:
     slate_<name>.png  for the wall in shots 2 and 3 (heat, table, onepager, tracker)
     react_<name>.png  for the feature cards (search, share, slide, filters, onepager_pick, report, locked, toast)
+    logo_skywise.png, logo_clairvoyant.png  team logos on the end card (transparent PNG; names show until added)
   See textures/SCREENSHOTS.md for what to capture. Use sample or test data only.
 
 Run
@@ -45,6 +46,10 @@ SHOTS = {
     8: (43, 50), 9: (50, 57), 10: (57, 64), 11: (64, 71), 12: (71, 77), 13: (77, 83), 14: (83, 89),
     15: (89, 99), 16: (99, 108),
 }
+
+# Team logos on the end card: textures/logo_skywise.png and textures/logo_clairvoyant.png.
+LOGO_H = 0.2         # logo height on screen (HUD units; the frame is about 2.9 tall)
+LOGO_PLATE = None    # e.g. '#f8fafc' to put a light card behind dark logos
 
 PINK = '#ec4f8f'
 INDIGO = '#6366f1'
@@ -394,6 +399,40 @@ def hud(body, size, y, color=WHITE, f_in=None, f_out=None, x=0.0, spacing=1.0, r
     return ob, m
 
 
+def hud_logo(names, fallback, h, x, y, f_in, f_out, plate=None):
+    """A team logo on the HUD: the first image found among `names`, `h` tall, aspect from the file.
+    Transparent PNG/SVG-export is best. `plate` puts a rounded-off card behind it (for dark logos).
+    Without a file it falls back to the team name as a wordmark, so the credit still reads."""
+    img = load_image(*names)
+    if img is None:
+        ob, m = hud(fallback, h * 0.42, y - h * 0.15, WHITE, f_in, f_out, x=x, spacing=1.5)
+        return ob
+    w = h * img.size[0] / max(1, img.size[1])
+    m = Mat('logo ' + fallback, WHITE, 1.0, 0.0, image=img)
+    nt = m.mat.node_tree
+    tex = next(n for n in nt.nodes if n.type == 'TEX_IMAGE')
+    mix = next(n for n in nt.nodes if n.type == 'MIX_SHADER')
+    mul = nt.nodes.new('ShaderNodeMath')
+    mul.operation = 'MULTIPLY'
+    mul.inputs[1].default_value = 0.0
+    nt.links.new(tex.outputs['Alpha'], mul.inputs[0])
+    nt.links.new(mul.outputs[0], mix.inputs[0])
+    m.alpha = mul.inputs[1]  # fade the logo while keeping its own transparency
+    ob = plane('logo ' + fallback, w, h, C_CAM, m)
+    ob.parent = hud_root
+    ob.location = (x, y, -HUD_D + 0.005)
+    fade(m.alpha, f_in, f_out, 12)
+    if plate:
+        pm = Mat('logo plate', plate, 1.0, 0.0)
+        pl = plane('logo plate ' + fallback, w + h * 0.5, h * 1.5, C_CAM, pm)
+        pl.parent = hud_root
+        pl.location = (x, y, -HUD_D + 0.004)
+        fade(pm.alpha, f_in, f_out, 12)
+    kf(ob, 'location', f_in, Vector((x, y - 0.04, -HUD_D + 0.005)))
+    kf(ob, 'location', f_in + 18, Vector((x, y, -HUD_D + 0.005)))
+    return ob
+
+
 def caption(main, eyebrow, f_in, f_out):
     hud(main, 0.135, -HUD_H / 2 + 0.42, WHITE, f_in, f_out)
     if eyebrow:
@@ -732,6 +771,12 @@ def shot_15():
 def shot_16():
     c = collection('16 end card')
     rings_and_logo(16, c, ('Everything you rely on. Faster and easier.', 'COMING SOON'))
+    # Team credit above the logo: Skywise and the Clairvoyant team, side by side.
+    a = S0(16)
+    hud('BROUGHT TO YOU BY', 0.05, 1.1, MUTED, a + 84, END - 6, spacing=1.8)
+    hud_logo(('logo_skywise',), 'SKYWISE', LOGO_H, -0.85, 0.86, a + 92, END - 6, LOGO_PLATE)
+    hud('×', 0.08, 0.83, MUTED, a + 98, END - 6)
+    hud_logo(('logo_clairvoyant',), 'CLAIRVOYANT TEAM', LOGO_H, 0.85, 0.86, a + 104, END - 6, LOGO_PLATE)
 
 
 # ----------------------------------------------------------------------------------------------

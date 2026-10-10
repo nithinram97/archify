@@ -35,3 +35,12 @@ mock-ups automatically. Any missing file falls back to the mock-up of the same n
 | `react_toast.png` | The green "updated successfully" message after saving a risk |
 
 Optional: `react_heat.png`, `react_table.png`, `react_onepager.png`, `react_tracker.png` are not used yet.
+
+## Team logos (end card)
+
+| File | What |
+|---|---|
+| `logo_skywise.png` | Official Skywise logo, transparent background, at least 600 px wide |
+| `logo_clairvoyant.png` | Clairvoyant team logo, transparent background, at least 600 px wide |
+
+Use the official files from brand or comms; don't redraw them. Until the files are in place, the end card shows the team names as text. If a logo is dark, set `LOGO_PLATE = '#f8fafc'` in `erm2_trailer.py` to put a light card behind it.
