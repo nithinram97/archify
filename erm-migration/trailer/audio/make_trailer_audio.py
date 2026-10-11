@@ -267,10 +267,10 @@ def groove(t0, t1, names, clap_on=True, hats=True, bass_on=True, stabs=True, bar
 progression(0.0, 16.0, ['Am9', 'F', 'C', 'G'], gain=0.24, a=1.2)
 add(music, pad(CH['G'][0], 1.6, 0.2, 0.6), 16.0, 0.24)
 arps(1.0, 16.0, ['Am9', 'F', 'C', 'G'], step=0.25, gain=0.085)
-for i, t in enumerate([1.4, 3.0, 4.4, 5.6, 7.0, 8.4]):  # a chime on each country
-    add(sfx, bell([76, 79, 81, 84, 86, 88][i], 2.5), t - 0.05, 0.3, pan=-0.2 + i * 0.08)
-for t, d in ((6.3, 0.9), (7.65, 1.0)):  # the long spins
-    add(sfx, whoosh(d), t, 0.35)
+for i, t in enumerate([1.4, 3.0, 4.4, 5.6, 7.0]):  # a chime on each country
+    add(sfx, bell([76, 79, 81, 84, 86][i], 2.5), t - 0.05, 0.3, pan=-0.2 + i * 0.1)
+add(sfx, whoosh(0.9), 6.3, 0.35)  # the long spin to Canada
+add(sfx, sweep(1.1, False, 0.3), 7.6, 0.18)  # soft pull-back over the Atlantic
 add(sfx, sparkle(1.4, 81, 7), 9.0, 0.5)  # the totals appear
 add(sfx, sweep(1.8, True, 0.4), 10.0, 0.3)  # the dots lift off
 add(sfx, sparkle(1.8, 84, 12), 10.1, 0.5)

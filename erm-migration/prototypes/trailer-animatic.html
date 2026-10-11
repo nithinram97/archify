@@ -304,11 +304,11 @@ const ll = (lat, lon, r = R) => { const a = lat * D2R, o = lon * D2R; return V(r
 const COUNTRIES = [
   [1, 'France', 314, 'Blagnac · Toulouse', 43.63, 1.36, 1.4], [2, 'Germany', 205, 'Hamburg', 53.55, 9.99, 3.0],
   [3, 'United Kingdom', 58, 'Broughton', 53.17, -2.99, 4.4], [4, 'Spain', 25, 'Getafe', 40.31, -3.73, 5.6],
-  [5, 'Canada', 12, 'Mirabel', 45.68, -74.04, 7.0], [6, 'India', 7, 'Bangalore', 12.97, 77.59, 8.4],
+  [5, 'Canada', 12, 'Mirabel', 45.68, -74.04, 7.0],
 ];
-// Globe orientation keys [t, lat, lon]: stop on each country, fast spins between (westward to India across the Pacific).
-const GK = [[0, 25, -35], [1.4, 46, 2], [2.4, 46, 2], [3.0, 51, 10], [3.8, 51, 10], [4.4, 54, -2], [5.0, 54, -2], [5.6, 40, -4], [6.2, 40, -4], [7.0, 46, -74], [7.6, 46, -74], [8.4, 15, -282.4], [8.9, 15, -282.4], [10.4, 32, -345]];
-const CZ = [[0, 13], [1.4, 10.5], [6.2, 10.5], [6.6, 11.9], [7.0, 10.5], [7.6, 10.5], [8.0, 12.3], [8.4, 10.5], [8.9, 10.5], [10, 14]];
+// Globe orientation keys [t, lat, lon]: stop on each country, a fast spin to Canada, then pull back over the Atlantic.
+const GK = [[0, 25, -35], [1.4, 46, 2], [2.4, 46, 2], [3.0, 51, 10], [3.8, 51, 10], [4.4, 54, -2], [5.0, 54, -2], [5.6, 40, -4], [6.2, 40, -4], [7.0, 46, -74], [7.6, 46, -74], [8.6, 40, -30], [10.4, 40, -24]];
+const CZ = [[0, 13], [1.4, 10.5], [6.2, 10.5], [6.6, 11.9], [7.0, 10.5], [7.6, 10.5], [8.6, 13.5], [10, 14]];
 function keys(K, t, i) {
   if (t <= K[0][0]) return K[0][i];
   for (let k = 0; k < K.length - 1; k++) { const a = K[k], b = K[k + 1]; if (t <= b[0]) return lerp(a[i], b[i], ss(a[0], b[0], t)); }
@@ -329,7 +329,7 @@ function shotGlobe(u) {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: HALO, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 }));
   halo.scale.setScalar(R * 2.9); halo.renderOrder = -1; scene.add(halo);
   let active = -1; COUNTRIES.forEach((c, k) => { if (u >= c[6] - 0.25) active = k; });
-  const overview = u > 8.9;
+  const overview = u > 8.3;
   const pos = [], cols = [], cBase = col('#5d6f8f'), cAct = col('#ff4f9a'), cVis = col('#c46b9b');
   dots.forEach(([, , c], i) => {
     const p = DOTPOS[i]; pos.push(p.x, p.y, p.z);
@@ -355,11 +355,11 @@ function shotGlobe(u) {
     const wp = tip.clone().applyMatrix4(g.matrixWorld);
     const facing = ss(0.6, 1.6, wp.z);
     if (k !== active) return;
-    const op = facing * ss(t0, t0 + 0.35, u) * (1 - ss(8.9, 9.2, u));
+    const op = facing * ss(t0, t0 + 0.35, u) * (1 - ss(8.3, 8.6, u));
     label(`<b>${c[1]}</b><span>${c[2]} users</span><i>${c[3]}</i>`, wp, 'gl', op);
   });
   look(V(0, 0.2, keys(CZ, u, 1)), V(0, 0, 0));
-  text('big', '892 <i>users</i> · 6 <i>countries</i> · 1,600+ <i>dashboards</i>', ss(9.0, 9.5, u));
+  text('big', '892 <i>users</i> · 1,600+ <i>dashboards</i>', ss(8.8, 9.3, u));
   caption('Every day, users around the world manage risk in ERM.', 'ERM today', u, 1.0, 8.7);
 }
 

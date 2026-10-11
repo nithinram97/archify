@@ -2,7 +2,7 @@
 ERM 2.0 trailer for ERM users (1:34, 11 shots), built entirely in Blender.
 
 Follows storyboard v3 (erm-migration/docs/trailer-storyboard, motion preview: prototypes/trailer-animatic.html):
-  1 ERM around the world   globe of dots, stops on each country, pins, arcs, user counts
+  1 ERM around the world   globe of dots, stops on France, Germany, UK, Spain, Canada; pins, arcs, user counts
   2 Across every function the globe's dots fly into one cloud per siglum around an ERM hub, dive into the hub
   3 Your ERM               curved wall of today's dashboards
   4 Until now              the wall drains, a spinner turns, dip to black
@@ -70,14 +70,13 @@ K = 1.26  # camera distances from the animatic (40° vertical FOV) scaled for th
 COUNTRIES = [
     ('France', 314, 'Blagnac · Toulouse', 43.63, 1.36, 1.4), ('Germany', 205, 'Hamburg', 53.55, 9.99, 3.0),
     ('United Kingdom', 58, 'Broughton', 53.17, -2.99, 4.4), ('Spain', 25, 'Getafe', 40.31, -3.73, 5.6),
-    ('Canada', 12, 'Mirabel', 45.68, -74.04, 7.0), ('India', 7, 'Bangalore', 12.97, 77.59, 8.4),
+    ('Canada', 12, 'Mirabel', 45.68, -74.04, 7.0),
 ]
-# Globe orientation keys [t, lat, lon]: stop on each country, fast spins between (westward to India).
+# Globe orientation keys [t, lat, lon]: stop on each country, a fast spin to Canada, then pull back over the Atlantic.
 GLOBE_KEYS = [(0, 25, -35), (1.4, 46, 2), (2.4, 46, 2), (3.0, 51, 10), (3.8, 51, 10), (4.4, 54, -2), (5.0, 54, -2),
-              (5.6, 40, -4), (6.2, 40, -4), (7.0, 46, -74), (7.6, 46, -74), (8.4, 15, -282.4), (8.9, 15, -282.4),
-              (10.0, None, None), (10.4, 32, -345)]
-GLOBE_DIST = [(0, 13), (1.4, 10.5), (6.2, 10.5), (6.6, 11.9), (7.0, 10.5), (7.6, 10.5), (8.0, 12.3), (8.4, 10.5),
-              (8.9, 10.5), (10, 14)]
+              (5.6, 40, -4), (6.2, 40, -4), (7.0, 46, -74), (7.6, 46, -74), (8.6, 40, -30), (10.0, None, None),
+              (10.4, 40, -24)]
+GLOBE_DIST = [(0, 13), (1.4, 10.5), (6.2, 10.5), (6.6, 11.9), (7.0, 10.5), (7.6, 10.5), (8.6, 13.5), (10, 14)]
 SIGLUMS = [('B', 345), ('O', 120), ('P', 95), ('A', 60), ('L', 55), ('S', 55), ('K', 50)]
 GATE = [('table', 'table'), ('tracker', 'tracker'), ('summary', 'onepager'), ('report', 'report'),
         ('fullsearch', 'search'), ('heat', 'heat')]  # (ERM 2.0 screen, today's mock-up); Maps comes out last
@@ -624,20 +623,21 @@ def shot_globe():
     halo_m = halo_mat()
     halo = sphere('globe halo', R * 1.12, c, halo_m)
     halo.parent = globe
+    LIT = set(range(1, len(COUNTRIES) + 1))  # dot codes of the countries that light up; others are plain land
     base_m = Mat('globe dots', SLATE_DOT, 1.6, 1.0, blend=False)
-    base_ob, _ = dots('globe dots', [ll(la, lo) for la, lo, cc in DOT_DATA if not cc], 0.028, c, base_m)
+    base_ob, _ = dots('globe dots', [ll(la, lo) for la, lo, cc in DOT_DATA if cc not in LIT], 0.028, c, base_m)
     base_ob.parent = globe
     GLOBE_MATS.extend([(core_m, 1.0), (halo_m, 0.45), (base_m, 1.0)])
     blagnac = ll(43.63, 1.36)
     for k, (name, users, site, lat, lon, t_arr) in enumerate(COUNTRIES):
         t0 = t_arr - 0.25
-        nxt = COUNTRIES[k + 1][5] - 0.25 if k + 1 < len(COUNTRIES) else 8.9
+        nxt = COUNTRIES[k + 1][5] - 0.25 if k + 1 < len(COUNTRIES) else 8.3
         m = Mat('country ' + name, SLATE_DOT, 1.6, 1.0, blend=False)
         ob, _ = dots('country ' + name, [ll(la, lo) for la, lo, cc in DOT_DATA if cc == k + 1], 0.03, c, m)
         ob.parent = globe
         GLOBE_MATS.append((m, 1.0))
         for f, col, st in ((F(t0), SLATE_DOT, 1.6), (F(t0) + 6, '#ff4f9a', 5.0), (F(nxt), '#ff4f9a', 5.0),
-                           (F(nxt) + 8, '#c46b9b', 2.2), (F(8.9), '#c46b9b', 2.2), (F(9.2), '#ff4f9a', 4.0)):
+                           (F(nxt) + 8, '#c46b9b', 2.2), (F(8.3), '#c46b9b', 2.2), (F(8.6), '#ff4f9a', 4.0)):
             kf(m.color, 'default_value', f, rgba(col))
             kf(m.strength, 'default_value', f, st)
         # Pin, head and the arc back to Toulouse (all ride on the globe)
@@ -659,9 +659,9 @@ def shot_globe():
             grow(arc, F(t0), F(t0 + 0.8))
             GLOBE_MATS.append((arc_m, 1.0))
         # Country tag: the country is centred, so the tag sits just right of centre
-        hud(name, 0.12, 0.2, WHITE, F(t0), F(min(nxt, 8.9)), x=0.4, align='LEFT', ramp=6)
-        hud(f'{users} users  ·  {site}', 0.06, 0.04, '#f9a8d4', F(t0) + 3, F(min(nxt, 8.9)), x=0.4, align='LEFT', ramp=6)
-    hud('892 users  ·  6 countries  ·  1,600+ dashboards', 0.15, HUD_H / 2 - 0.42, WHITE, F(9.0), F(10.4))
+        hud(name, 0.12, 0.2, WHITE, F(t0), F(min(nxt, 8.3)), x=0.4, align='LEFT', ramp=6)
+        hud(f'{users} users  ·  {site}', 0.06, 0.04, '#f9a8d4', F(t0) + 3, F(min(nxt, 8.3)), x=0.4, align='LEFT', ramp=6)
+    hud('892 users  ·  1,600+ dashboards', 0.15, HUD_H / 2 - 0.42, WHITE, F(8.8), F(10.4))
     caption('Every day, users around the world manage risk in ERM.', 'ERM today', F(1.0), F(8.7))
     cam_path(0, 10, lambda t: (G + Vector((0, -keyed(GLOBE_DIST, t) * K, 0.2)), G), step=0.2, cut=False)
     return globe
