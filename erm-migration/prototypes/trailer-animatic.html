@@ -487,6 +487,11 @@ const SWIRL = (() => { const c = document.createElement('canvas'); c.width = c.h
   for (let arm = 0; arm < 4; arm++) { g.beginPath(); for (let i = 0; i <= 120; i++) { const t = i / 120, a = arm * Math.PI / 2 + t * 5.5, r = 18 + t * 230; const px = 256 + Math.cos(a) * r, py = 256 + Math.sin(a) * r; i ? g.lineTo(px, py) : g.moveTo(px, py); }
     g.strokeStyle = 'rgba(255,190,225,0.5)'; g.lineWidth = 14; g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const SWIRL_SIDE = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, 'rgba(255,120,190,0.05)'); gr.addColorStop(1, 'rgba(255,160,210,0.35)');
+  g.fillStyle = gr; g.fillRect(0, 0, 1024, 256);
+  for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(i * 80 - 120, 256); g.bezierCurveTo(i * 80 - 40, 170, i * 80 + 40, 90, i * 80 + 160, 0); g.strokeStyle = 'rgba(255,200,230,0.55)'; g.lineWidth = 7; g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; })();
 const STREAM = (() => { seed = 77; const a = []; for (let i = 0; i < 320; i++) a.push([rnd(), rnd() * 6.283, Math.sqrt(rnd()) * 0.95, rnd()]); return a; })();
 const gateX = (k, u) => { let x = -9.5 + (u - 0.9 - k * 0.75) * SPEED; if (x > 0) x *= BOOST; return k === 5 ? Math.min(x, X_STOP) : x; };
 function shotGate(u) {
@@ -500,7 +505,9 @@ function shotGate(u) {
     crossing = Math.max(crossing, 1 - clamp(Math.abs(x) / 1.6));
     const y = Math.sin(k * 1.7) * 0.3, z = Math.cos(k * 2.3) * 0.35;
     const fadeOthers = k === 5 ? 1 : 1 - ss(7.0, 7.6, u);
-    for (const [tex, clip, opts] of [[mockTex(mock, MOCKS[mock]), CLIP_L, { tint: '#7d848f', glow: '#475569', glowOp: 0.35 }], [imgTex(real), CLIP_R, {}]]) {
+    const near = Math.max(0, 1 - Math.abs(x) / 3.2) * gateOp;  // pink light from the portal on nearby screens
+    const spill = (c) => col(c).lerp(col('#ff8cc4'), near * 0.38).getStyle();
+    for (const [tex, clip, opts] of [[mockTex(mock, MOCKS[mock]), CLIP_L, { tint: spill('#7d848f'), glow: '#475569', glowOp: 0.35 }], [imgTex(real), CLIP_R, { tint: spill('#e2e8f0') }]]) {
       const s = screenObj(tex, SW, SH, { ...opts, clip, op: fadeOthers });
       s.position.set(x, y, z); s.rotation.y = SRY; scene.add(s);
     }
@@ -528,7 +535,20 @@ function shotGate(u) {
     [[0.045, '#ff7ab6', 1], [0.14, '#ec4f8f', 0.22 + 0.25 * crossing]].forEach(([tb, c, o]) => portal.add(new THREE.Mesh(new THREE.TorusGeometry(2.75, tb, 12, 160), basic(c, add(o)))));
     // Event horizon: a swirling glow inside the ring
     const disc = new THREE.Mesh(new THREE.CircleGeometry(2.7, 96), new THREE.MeshBasicMaterial({ map: SWIRL, color: '#ff6fb0', side: THREE.DoubleSide, ...add(0.42) }));
-    disc.rotation.z = -u * 1.3; disc.material.opacity *= ss(0.5, 1.2, u); portal.add(disc);
+    disc.rotation.z = -u * 1.3; disc.material.opacity *= ss(0.5, 1.2, u) * 0.7; disc.position.z = -1.0; portal.add(disc);
+    // Depth: a vortex bowl that dips back into the old side, and rings receding into a tunnel
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 1.0, 1.0, 96, 6, true), new THREE.MeshBasicMaterial({ map: SWIRL_SIDE, color: '#ff6fb0', side: THREE.DoubleSide, ...add(0.5 * ss(0.5, 1.2, u)) }));
+    bowl.rotation.x = Math.PI / 2; bowl.rotation.y = -u * 1.1; bowl.position.z = -0.5; portal.add(bowl);
+    for (let i = 1; i <= 7; i++) {
+      const d = i * 0.42, k2 = 1 - i * 0.075, o = 0.55 * (1 - i / 8.5) * ss(0.6 + i * 0.06, 1.3 + i * 0.06, u);
+      const r = new THREE.Mesh(new THREE.TorusGeometry(2.75 * k2, 0.022, 8, 120), basic(i % 2 ? '#ff7ab6' : '#a78bfa', add(o)));
+      r.position.z = -d; r.rotation.z = u * (0.3 + i * 0.12) * (i % 2 ? 1 : -1); portal.add(r);
+      for (let j = 0; j < 2; j++) { const tick = new THREE.Mesh(new THREE.TorusGeometry(2.75 * k2, 0.05, 6, 24, 0.35), basic('#ffd1e6', add(o * 1.2))); tick.position.z = -d; tick.rotation.z = u * (0.9 + i * 0.2) * (i % 2 ? -1 : 1) + j * Math.PI; portal.add(tick); }
+    }
+    for (let i = 1; i <= 3; i++) {  // a few rings fanning out on the new side
+      const r = new THREE.Mesh(new THREE.TorusGeometry(2.75 * (1 + i * 0.06), 0.015, 8, 120), basic('#ff9cc8', add(0.35 * (1 - i / 4) * ss(0.9, 1.5, u))));
+      r.position.z = i * 0.3; portal.add(r);
+    }
     // Arc brackets turning in opposite directions
     for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.03, 8, 64, 1.2), basic('#f9a8d4', add(0.75 * ss(0.8, 1.4, u)))); m.rotation.z = u * 0.8 + i * 2.094; portal.add(m); }
     for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.TorusGeometry(3.32, 0.02, 8, 48, 0.5), basic('#818cf8', add(0.6 * ss(1.0, 1.6, u)))); m.rotation.z = -u * 0.5 + i * 1.571; portal.add(m); }
@@ -561,7 +581,8 @@ function shotGate(u) {
   const ph = V(gateX(5, u), Math.sin(5 * 1.7) * 0.3, Math.cos(5 * 2.3) * 0.35);
   const n = V(Math.sin(SRY), 0, Math.cos(SRY));
   const e = ss(7.0, 8.0, u);
-  look(V(-6.2 + u * 0.12, 0.9 - u * 0.04, 7.6 - u * 0.18).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
+  const arc = ss(0.8, 6.8, u);  // the camera swings round the portal, so its depth shows
+  look(V(lerp(-6.4, -3.6, arc), lerp(0.7, 1.5, arc), lerp(7.4, 8.6, arc)).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
   caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', u, 1.4, 6.7);
 }
 

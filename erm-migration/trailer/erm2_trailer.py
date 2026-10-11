@@ -866,7 +866,13 @@ def gate_mat(name, mock_img, real_img, gate_x):
         tex.image = img
         tex.interpolation = 'Cubic'
         nt.links.new(tex.outputs['Color'], socket(mix.inputs, ident))
-    nt.links.new(socket(mix.outputs, 'Result_Color'), m.em.inputs['Color'])
+    spill = nt.nodes.new('ShaderNodeMix')  # pink light from the portal, keyed per screen
+    spill.data_type = 'RGBA'
+    nt.links.new(socket(mix.outputs, 'Result_Color'), socket(spill.inputs, 'A_Color'))
+    socket(spill.inputs, 'B_Color').default_value = rgba('#ff8cc4')
+    socket(spill.inputs, 'Factor_Float').default_value = 0.0
+    m.spill = socket(spill.inputs, 'Factor_Float')
+    nt.links.new(socket(spill.outputs, 'Result_Color'), m.em.inputs['Color'])
     st = nt.nodes.new('ShaderNodeMath')
     st.operation = 'MULTIPLY_ADD'  # strength 0.45 before the gate, 0.82 after
     st.inputs[1].default_value = 0.37
@@ -1008,6 +1014,11 @@ def shot_gate():
             kf(p, 'location', F(t_a + u), o + anim(gate_x(k, u), y, z), 'LINEAR')
         if k < 5:
             fade_out(m.alpha, F(40.0), F(40.6))
+        for xs, val in ((-3.2, 0.0), (0.0, 0.38), (3.2, 0.0)):  # spill peaks as the screen crosses
+            raw = xs / BOOST if xs > 0 else xs
+            if k == 5 and xs > X_STOP:
+                continue
+            kf(m.spill, 'default_value', F(t_a + (raw + 9.5) / SPEED + 0.9 + k * 0.75), val)
         # The seam where the screen is being rebuilt: a bright line on the screen at the portal plane
         half = SW / 2 * math.cos(SRY)
         seam_m = Mat('seam', WHITE, 8.0, 0.9)
@@ -1048,7 +1059,46 @@ def shot_gate():
     disc_m = swirl_mat()
     disc = disc_mesh('portal surface', 2.7, c, disc_m)
     disc.parent = portal
-    fade(disc_m.alpha, F(t_a + 0.5), None, 16, 0.42)
+    disc.location = (0, 0, -1.0)
+    fade(disc_m.alpha, F(t_a + 0.5), None, 16, 0.3)
+    # Depth: a vortex bowl dipping back into the old side, and rings receding into a tunnel
+    bowl_m = swirl_mat()
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=False, cap_tris=False, segments=96, radius1=1.0, radius2=2.7, depth=1.0)
+    bowl = mesh_object('portal bowl', bm, c, bowl_m)
+    bowl.parent = portal
+    bowl.location = (0, 0, -0.5)
+    fade(bowl_m.alpha, F(t_a + 0.5), None, 16, 0.5)
+    kf(bowl, 'rotation_euler', F(t_a), Vector((0, 0, 0)), 'LINEAR')
+    kf(bowl, 'rotation_euler', F(41), Vector((0, 0, -1.1 * 8)), 'LINEAR')
+    gate_mats.append(bowl_m)
+    for i in range(1, 8):
+        k2, o_max = 1 - i * 0.075, 0.55 * (1 - i / 8.5)
+        tm = Mat('tunnel ring', '#ff7ab6' if i % 2 else '#a78bfa', 3.0, 0.0)
+        fade(tm.alpha, F(t_a + 0.6 + i * 0.06), None, 16, o_max)
+        tr = torus('tunnel ring', 2.75 * k2, 0.022, c, tm, seg=120, ring=8)
+        tr.parent = portal
+        tr.location = (0, 0, -i * 0.42)
+        spin = empty('tunnel ticks', c)
+        spin.parent = portal
+        spin.location = (0, 0, -i * 0.42)
+        km = Mat('tunnel tick', '#ffd1e6', 4.0, 0.0)
+        fade(km.alpha, F(t_a + 0.6 + i * 0.06), None, 16, min(1.0, o_max * 1.2))
+        for j in range(2):
+            tk = torus_arc('tunnel tick', 2.75 * k2, 0.05, 0.35, c, km, seg=12, ring=6)
+            tk.parent = spin
+            tk.rotation_euler = (0, 0, j * math.pi)
+        d = 1 if i % 2 else -1
+        kf(spin, 'rotation_euler', F(t_a), Vector((0, 0, 0)), 'LINEAR')
+        kf(spin, 'rotation_euler', F(41), Vector((0, 0, -d * (0.9 + i * 0.2) * 8)), 'LINEAR')
+        gate_mats.extend([tm, km])
+    for i in range(1, 4):  # a few rings fanning out on the new side
+        nm = Mat('outer ring', '#ff9cc8', 3.0, 0.0)
+        fade(nm.alpha, F(t_a + 0.9), None, 14, 0.35 * (1 - i / 4))
+        nr = torus('outer ring', 2.75 * (1 + i * 0.06), 0.015, c, nm, seg=120, ring=8)
+        nr.parent = portal
+        nr.location = (0, 0, i * 0.3)
+        gate_mats.append(nm)
     kf(disc, 'rotation_euler', F(t_a), Vector((0, 0, 0)), 'LINEAR')
     kf(disc, 'rotation_euler', F(41), Vector((0, 0, -1.3 * 8)), 'LINEAR')
     gate_mats.append(disc_m)
@@ -1082,7 +1132,8 @@ def shot_gate():
     def cam_fn(t):
         u = t - t_a
         ph = o + anim(gate_x(5, u), math.sin(5 * 1.7) * 0.3, math.cos(5 * 2.3) * 0.35)
-        base = tgt0 + (anim(-6.2 + u * 0.12, 0.9 - u * 0.04, 7.6 - u * 0.18) + o - tgt0) * K
+        arc = ss(0.8, 6.8, u)  # the camera swings round the portal, so its depth shows
+        base = tgt0 + (anim(lerp(-6.4, -3.6, arc), lerp(0.7, 1.5, arc), lerp(7.4, 8.6, arc)) + o - tgt0) * K
         land = ph + n * 4.66 * K
         e = ss(7.0, 8.0, u)
         return base.lerp(land, e), tgt0.lerp(ph, e)
