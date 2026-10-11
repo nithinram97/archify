@@ -90,6 +90,7 @@ TABS = [('heat', 'Maps', 'Your risks and opportunities on one heat map.', (0.72,
 MICH_ADV = {'A': 1.0625, 'C': 1.0474, 'I': 0.2812, 'L': 0.8125, 'N': 1.1333, 'O': 1.0474, 'R': 1.019, 'T': 0.9355,
             'V': 1.0, 'Y': 1.0625}
 MICH_SPACING = 1.07  # 7% tracking (brand kit)
+WORD = 0.36  # name height vs the mark: larger than the brand-kit lockup (0.19) so it holds its own next to Skywise
 
 # ----------------------------------------------------------------------------------------------
 # Arguments
@@ -1364,8 +1365,8 @@ def mich_width(s):
 
 
 def cv_width(mh):
-    """Clairvoyant lockup width for mark height mh (brand kit: wordmark 52/272 of the mark, gap 64/272)."""
-    return mh * MARK_A + mh * 64 / 272 + mich_width('CLAIRVOYANT') * mh * 52 / 272
+    """Clairvoyant credit width for mark height mh (gap 64/272 of the mark as in the brand kit, name WORD x mh)."""
+    return mh * MARK_A + mh * 64 / 272 + mich_width('CLAIRVOYANT') * mh * WORD
 
 
 def credit_layouts():
@@ -1419,7 +1420,7 @@ def shot_credits():
     fade(mm.alpha, F(78.6), None, 10)
     pop(mark, F(78.6), dur=12, overshoot=1.08)
     glide(mark, g0, g1, (mx_a, hy(a['cy']), z), (mx_b, hy(b['cy']), z), b['mh'] / a['mh'])
-    fs_a = mh_a * 52 / 272
+    fs_a = mh_a * WORD
     tx_a, tx_b = hx(a['cl']) + mh_a * (MARK_A + 64 / 272), hx(b['cl']) + mh_b * (MARK_A + 64 / 272)
     word = 'CLAIRVOYANT'
     step = (80.4 - 79.2) / len(word)

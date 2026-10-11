@@ -696,7 +696,9 @@ const SKY_A = 772 / 193.2, MARK_A = (IMG.cmark ? IMG.cmark.width / IMG.cmark.hei
 const meas = document.createElement('span'); meas.className = 'mich'; meas.style.cssText = 'position:absolute;visibility:hidden;font-size:100px'; meas.textContent = 'CLAIRVOYANT'; document.body.appendChild(meas);
 const MICH_W = meas.getBoundingClientRect().width / 100; meas.remove();
 // Clairvoyant lockup proportions (brand kit): wordmark 52/272 of the mark height, gap 64/272.
-const cvWidth = (mh) => mh * MARK_A + mh * 64 / 272 + MICH_W * mh * 52 / 272;
+// The name is set larger than the brand-kit lockup (0.19 of the mark) so it holds its own next to Skywise.
+const WORD = 0.36;
+const cvWidth = (mh) => mh * MARK_A + mh * 64 / 272 + MICH_W * mh * WORD;
 function creditLayout(p) {
   const A = (() => { const sh = 66, mh = 118, sw = sh * SKY_A, cw = cvWidth(mh), gap = 64, xw = 26;
     const total = sw + gap + xw + gap + cw, x0 = 640 - total / 2;
@@ -708,7 +710,7 @@ function credits(L, { head = 1, sky = 1, x = 1, mark = 1, chars = 11, caret = fa
   abs('Brought to you by', 'credit', `left:0;right:0;text-align:center;top:${L.hy}px;transform:translateY(-50%);font-size:${L.hs}px;letter-spacing:${L.hl}px;opacity:${head}`);
   if (IMG.skywise) abs(`<img src="${IMG.skywise.src}" style="height:${L.sh}px;display:block">`, '', `left:${L.sx}px;top:${L.sy}px;transform:translate(-50%,-50%) scale(${lerp(0.92, 1, sky)});opacity:${sky}`);
   abs('×', '', `left:${L.xx}px;top:${L.xy}px;transform:translate(-50%,-50%);font-size:${L.xs}px;color:#94a3b8;opacity:${x}`);
-  const fs = L.mh * 52 / 272, gap = L.mh * 64 / 272;
+  const fs = L.mh * WORD, gap = L.mh * 64 / 272;
   const word = 'CLAIRVOYANT'.slice(0, chars);
   abs(`<img src="${IMG.cmark ? IMG.cmark.src : ''}" style="height:${L.mh}px;display:block;opacity:${mark};transform:scale(${lerp(0.6, 1, eob(mark))})">` +
       `<span class="mich" style="font-size:${fs}px;margin-left:${gap}px">${word}${caret ? '<span class="caret"></span>' : ''}</span>`,
