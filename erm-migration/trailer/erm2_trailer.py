@@ -44,7 +44,7 @@ import math
 import os
 import random
 import sys
-from mathutils import Euler, Vector
+from mathutils import Euler, Matrix, Vector
 
 # ----------------------------------------------------------------------------------------------
 # Settings
@@ -250,6 +250,12 @@ def _blended(mat):
         mat.use_backface_culling = False
 
 
+def glow(strength):
+    """Emission strength above 1 is compressed: enough to trigger the glow pass, not so much that
+    saturated colours clip towards white/lavender under the Standard view transform."""
+    return strength if strength <= 1.0 else 1.0 + (strength - 1.0) * 0.3
+
+
 class Mat:
     """Emission material. `.alpha`, `.strength` and `.color` are sockets you can keyframe.
     With an image, the image drives the colour and its own transparency is kept (alpha = image alpha x .alpha).
@@ -268,7 +274,7 @@ class Mat:
         nt.links.new(em.outputs[0], mix.inputs[2])
         nt.links.new(mix.outputs[0], out.inputs['Surface'])
         em.inputs['Color'].default_value = rgba(color)
-        em.inputs['Strength'].default_value = strength
+        em.inputs['Strength'].default_value = glow(strength)
         self.alpha = mix.inputs[0]
         if image is not None:
             tex = self.tex = nt.nodes.new('ShaderNodeTexImage')
@@ -416,7 +422,16 @@ def grow(curve_ob, f0, f1, from_middle=False):
     kf(curve_ob.data, 'bevel_factor_end', f1, 1.0)
 
 
-FONT = bpy.data.fonts.load(FONT_PATH) if FONT_PATH and os.path.exists(FONT_PATH) else None
+def _font(*candidates):
+    for path in candidates:
+        if path and os.path.exists(path):
+            return bpy.data.fonts.load(path, check_existing=True)
+    return None
+
+
+WIN_FONTS = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts')
+FONT = _font(FONT_PATH, os.path.join(WIN_FONTS, 'seguisb.ttf'), os.path.join(WIN_FONTS, 'segoeui.ttf'))  # captions
+LOGO_FONT = _font(os.path.join(WIN_FONTS, 'seguibl.ttf'), os.path.join(WIN_FONTS, 'segoeuib.ttf')) or FONT  # ERM 2.0
 MICHROMA = bpy.data.fonts.load(MICHROMA_PATH) if os.path.exists(MICHROMA_PATH) else None
 if not MICHROMA:
     print('[erm2] fonts/Michroma-Regular.ttf not found; the Clairvoyant name uses the default font')
@@ -691,7 +706,7 @@ def shot_globe():
         for f, col, st in ((F(t0), SLATE_DOT, 1.6), (F(t0) + 6, '#ff4f9a', 5.0), (F(nxt), '#ff4f9a', 5.0),
                            (F(nxt) + 8, '#c46b9b', 2.2), (F(8.3), '#c46b9b', 2.2), (F(8.6), '#ff4f9a', 4.0)):
             kf(m.color, 'default_value', f, rgba(col))
-            kf(m.strength, 'default_value', f, st)
+            kf(m.strength, 'default_value', f, glow(st))
         # Pin, head and the arc back to Toulouse (all ride on the globe)
         pin_m = Mat('pin', '#f9a8d4', 3.0)
         pin = curve_path('pin ' + name, [ll(lat, lon), ll(lat, lon, R * 1.14)], c, pin_m, 0.012)
@@ -1089,9 +1104,9 @@ def shot_gate():
     grow(line, F(t_a), F(t_a + 0.55), from_middle=True)
     crossings = [t_a + 0.9 + k * 0.75 + 9.5 / SPEED for k in range(6)]
     for tc in crossings:  # the line flares as each screen crosses
-        kf(line_m.strength, 'default_value', F(tc - 0.3), 6.0)
-        kf(line_m.strength, 'default_value', F(tc), 16.0)
-        kf(line_m.strength, 'default_value', F(tc + 0.3), 6.0)
+        kf(line_m.strength, 'default_value', F(tc - 0.3), glow(6.0))
+        kf(line_m.strength, 'default_value', F(tc), glow(16.0))
+        kf(line_m.strength, 'default_value', F(tc + 0.3), glow(6.0))
     portal = empty('portal', c, o)
     portal.rotation_euler = (0, math.radians(90), 0)  # local XY plane faces along +X; local X is world height
     oval = Vector((1, 0.62, 1))
@@ -1392,6 +1407,24 @@ def glide(ob, f0, f1, loc_a, loc_b, sc_b):
     kf(ob, 'scale', f1, Vector((sc_b,) * 3))
 
 
+def eob(t):
+    """Ease out with a small overshoot (as in the animatic)."""
+    t = min(1.0, max(0.0, t))
+    c1 = 1.70158
+    return 1 + (c1 + 1) * (t - 1) ** 3 + c1 * (t - 1) ** 2
+
+
+AX = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))  # animatic axes (Y up, camera on +Z) to Blender's
+
+
+def ring_pose(ob, frame, rot3, scale):
+    """Key a ring with the animatic's three.js rotation (XYZ Euler) and in-plane scale."""
+    r3 = Euler(rot3, 'ZYX').to_matrix()  # three.js 'XYZ' order = Rx @ Ry @ Rz
+    rb = AX @ r3 @ AX.transposed() @ Euler((math.pi / 2, 0, 0), 'XYZ').to_matrix()
+    kf(ob, 'rotation_euler', frame, Vector(rb.to_euler('XYZ')))
+    kf(ob, 'scale', frame, Vector((max(scale, 0.001), max(scale, 0.001), 1)))
+
+
 def shot_credits():
     c, o = collection('10-11 credits and end card'), O(10)
     a, b = credit_layouts()
@@ -1451,32 +1484,37 @@ def shot_credits():
     kf(caret, 'scale', F(81.2), Vector((0.001,) * 3), 'CONSTANT')
     show(caret, F(81.2), False)
     kf(caret_m.alpha, 'default_value', F(81.2), 0.0, 'CONSTANT')
-    # Stars, rings and the logo
-    stars = dust('stars', 1100, (20, 14, 11), c, Mat('stars', '#cbd5e1', 2.0), 0.03, o + Vector((0, 14, 0)))
+    # Stars, rings and the logo (matched to the animatic's end card)
+    stars = dust('stars', 1100, (20, 14, 11), c, Mat('stars', '#cbd5e1', 1.6), 0.018, o + Vector((0, 14, 0)))
     kf(stars, 'location', S0(10), stars.location.copy(), 'LINEAR')
-    kf(stars, 'location', END, stars.location + Vector((0, -6, 0)), 'LINEAR')
-    r1 = torus('ring pink', 4.6, 0.06, c, Mat('ring', PINK, 6.0))
-    r2 = torus('ring indigo', 5.4, 0.03, c, Mat('ring', INDIGO, 6.0))
-    for i, (r, rot, sc) in enumerate(((r1, (1.35, 0.15, 0), 1.25), (r2, (1.45, -0.2, 0.25), 1.2))):
+    kf(stars, 'location', END, stars.location + Vector((0, -4.2, 0)), 'LINEAR')
+    for i, (R_ring, tube, colr, rot, sc) in enumerate(((4.6, 0.06, PINK, (1.35, 0.15, 0.0), 1.25),
+                                                        (5.4, 0.03, INDIGO, (1.45, -0.2, 0.25), 1.2))):
+        r = torus('ring', R_ring, tube, c, Mat('ring', colr, 6.0))
         r.location = o
-        final = Vector((math.pi / 2 - rot[0], rot[1], rot[2]))  # nearly edge-on, a wide ellipse
-        f0 = F(E0 + i * 0.12)
-        pop(r, f0, base=sc, dur=24, overshoot=1.08)
-        kf(r, 'rotation_euler', f0, final + Vector((-0.6, 0, 0)))  # swings down into place
-        kf(r, 'rotation_euler', f0 + 24, final)
-        kf(r, 'rotation_euler', END, final + Vector((math.radians(4), math.radians(14), 0)), 'LINEAR')
-    logo_w = Mat('logo', WHITE, 3.0, 0.0)
-    logo_p = Mat('logo 2.0', PINK, 4.0, 0.0)
-    erm = text('ERM', 1.9, logo_w, c, o + Vector((-1.35, -1.0, 0.1)), extrude=0.06)
-    two = text('2.0', 1.9, logo_p, c, o + Vector((2.15, -1.0, 0.1)), extrude=0.06)
-    fade(logo_w.alpha, F(E0 + 0.5), None, 12)
-    fade(logo_p.alpha, F(E0 + 0.65), None, 12)
-    pop(erm, F(E0 + 0.5), dur=16, overshoot=1.06)
-    pop(two, F(E0 + 0.65), dur=16, overshoot=1.1)
+        r.rotation_mode = 'XYZ'
+        t = E0 - 0.05
+        while t <= 94.0 + 1e-6:
+            e = t - E0
+            ring_pose(r, F(t), (rot[0] - (1 - min(1.0, max(0.0, e))) * 0.6, rot[1] + e * 0.02, rot[2] + e * 0.015 * (-1 if i else 1)),
+                      eob((e - i * 0.12) / 1.0) * sc)
+            t += 1 / 12 if e < 1.3 else 1.0
+    # ERM 2.0 on the HUD, two colours in one text, as in the animatic
+    lw, lp = Mat('logo', WHITE, 1.5, 0.0), Mat('logo 2.0', PINK, 2.6, 0.0)
+    logo, _ = hud('ERM 2.0', hs(128), hy(330), WHITE, x=0, font=LOGO_FONT, spacing=1.04, rise=False)
+    logo.data.materials.clear()
+    logo.data.materials.append(lw.mat)
+    logo.data.materials.append(lp.mat)
+    for k in range(4, 7):
+        logo.data.body_format[k].material_index = 1
+    for m in (lw, lp):
+        fade(m.alpha, F(E0 + 0.5), None, 12)
+    kf(logo, 'scale', F(E0 + 0.5), Vector((0.9, 0.9, 0.9)))
+    kf(logo, 'scale', F(E0 + 1.0), Vector((1, 1, 1)))
     flash(F(E0 + 0.7), WHITE, 0.45, 5)
-    hud('Everything you rely on. Faster and easier.', 0.13, -0.95, '#e2e8f0', F(E0 + 1.8), END - 6)
-    hud('COMING SOON', 0.07, -1.18, '#f9a8d4', F(E0 + 2.6), END - 6, spacing=1.6)
-    cam_path(77, 94, lambda t: (o + Vector((0, lerp(-15.2, -14.0, ss(77, 84, t)) + 0.6 * ss(84, 94, t), 0)), o), step=1.0, cut=False)
+    hud('Everything you rely on. Faster and easier.', hs(24), hy(528), '#e2e8f0', F(E0 + 1.8), END - 6)
+    hud('COMING SOON', hs(16), hy(575), '#f9a8d4', F(E0 + 2.6), END - 6, spacing=1.3)
+    cam_path(77, 94, lambda t: (o + Vector((0, -K * (lerp(14.4, 14.0, ss(82.8, 84, t)) - 0.6 * ss(84, 94, t)), 0)), o), step=0.5, cut=False)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -1538,15 +1576,25 @@ def setup_compositor():
             out = tree.nodes.new('CompositorNodeComposite')
         rl = tree.nodes.new('CompositorNodeRLayers')
         glare = tree.nodes.new('CompositorNodeGlare')
-        for attr, val in (('glare_type', 'FOG_GLOW'), ('quality', 'HIGH'), ('size', 8), ('threshold', 0.9), ('mix', -0.55)):
-            if hasattr(glare, attr):
-                setattr(glare, attr, val)
-        for name, val in (('Threshold', 0.9), ('Strength', 0.5), ('Size', 0.6)):
-            if name in glare.inputs and hasattr(glare.inputs[name], 'default_value'):
+        done = []
+        for attr, val in (('glare_type', 'BLOOM'), ('glare_type', 'FOG_GLOW'), ('quality', 'HIGH'), ('size', 8), ('threshold', 0.85), ('mix', 0.0)):
+            if hasattr(glare, attr):  # Blender 4.2-4.3: node properties
                 try:
-                    glare.inputs[name].default_value = val
-                except TypeError:
+                    setattr(glare, attr, val)
+                    done.append(f'{attr}={val}')
+                except (TypeError, ValueError):
                     pass
+        for name, vals in (('Type', ('Bloom', 'BLOOM', 'Fog Glow', 'FOG_GLOW')), ('Quality', ('High', 'HIGH')),
+                           ('Threshold', (0.85,)), ('Highlights Threshold', (0.85,)), ('Strength', (1.0,)), ('Size', (0.7,))):
+            sock = glare.inputs.get(name) if hasattr(glare.inputs, 'get') else None
+            for v in vals:  # Blender 4.4+ / 5.x: node inputs
+                try:
+                    sock.default_value = v
+                    done.append(f'{name}={v}')
+                    break
+                except Exception:
+                    continue
+        print('[erm2] glow:', ', '.join(done) or 'defaults')
         tree.links.new(rl.outputs['Image'], glare.inputs[0])
         last = glare.outputs[0]
         try:
@@ -1559,12 +1607,21 @@ def setup_compositor():
                 if hasattr(blur, attr):
                     setattr(blur, attr, val)
             tree.links.new(ell.outputs[0], blur.inputs[0])
-            mix = tree.nodes.new('CompositorNodeMixRGB')
-            mix.blend_type = 'MULTIPLY'
-            tree.links.new(last, mix.inputs[1])
-            tree.links.new(blur.outputs[0], mix.inputs[2])
-            mix.inputs[0].default_value = 0.35
-            last = mix.outputs[0]
+            try:
+                mix = tree.nodes.new('CompositorNodeMixRGB')
+                mix.blend_type = 'MULTIPLY'
+                tree.links.new(last, mix.inputs[1])
+                tree.links.new(blur.outputs[0], mix.inputs[2])
+                mix.inputs[0].default_value = 0.35
+                last = mix.outputs[0]
+            except Exception:  # Blender 5.x: the generic Mix node
+                mix = tree.nodes.new('ShaderNodeMix')
+                mix.data_type = 'RGBA'
+                mix.blend_type = 'MULTIPLY'
+                socket(mix.inputs, 'Factor_Float').default_value = 0.35
+                tree.links.new(last, socket(mix.inputs, 'A_Color'))
+                tree.links.new(blur.outputs[0], socket(mix.inputs, 'B_Color'))
+                last = socket(mix.outputs, 'Result_Color')
         except Exception as exc:  # vignette is optional
             print('[erm2] vignette skipped:', exc)
         tree.links.new(last, out.inputs[0])
