@@ -418,13 +418,28 @@ def pop(ob, f, base=1.0, dur=10, overshoot=1.12, out=None, out_dur=8):
         kf(ob, 'scale', out, b * 0.001)
 
 
-def window(ob, f_in, f_out, base=1.0):
-    """Hard on/off visibility via constant-interpolated scale."""
+def show(ob, frame, visible):
+    """Hard visibility switch from `frame` on (render and viewport)."""
+    kf(ob, 'hide_render', frame, not visible, 'CONSTANT')
+    kf(ob, 'hide_viewport', frame, not visible, 'CONSTANT')
+
+
+def window(ob, f_in, f_out, base=1.0, mat=None):
+    """Hard on/off visibility: hidden before f_in and from f_out. Uses the hide switches (and the
+    material alpha when given) rather than scale alone, so it holds in every Blender version."""
     b = Vector(base) if hasattr(base, '__len__') else Vector((base,) * 3)
     kf(ob, 'scale', 1, b * 0.001, 'CONSTANT')
     kf(ob, 'scale', max(f_in, 2), b, 'CONSTANT')
+    show(ob, 1, False)
+    show(ob, max(f_in, 2), True)
+    if mat is not None:
+        kf(mat.alpha, 'default_value', 1, 0.0, 'CONSTANT')
+        kf(mat.alpha, 'default_value', max(f_in, 2), mat.alpha.default_value or 1.0, 'CONSTANT')
     if f_out is not None:
         kf(ob, 'scale', f_out, b * 0.001, 'CONSTANT')
+        show(ob, f_out, False)
+        if mat is not None:
+            kf(mat.alpha, 'default_value', f_out, 0.0, 'CONSTANT')
 
 
 # ----------------------------------------------------------------------------------------------
@@ -1375,22 +1390,30 @@ def shot_credits():
     caret_m = Mat('cursor', WHITE, 1.5, 1.0)
     caret = hud_plane('cursor', hs(2.2), fs_a * 0.95, tx_a, hy(a['cy']), caret_m, 0.0)
     kf(caret, 'scale', 1, Vector((0.001,) * 3), 'CONSTANT')
+    show(caret, 1, False)
+    kf(caret_m.alpha, 'default_value', 1, 0.0, 'CONSTANT')
     for i in range(1, len(word) + 1):
         f_in = F(79.2 + (i - 1) * step)
         last = i == len(word)
         t_ob, t_m = hud(word[:i], fs_a, hy(a['cy']), WHITE, x=tx_a, align='LEFT', font=MICHROMA, spacing=MICH_SPACING, rise=False)
         t_m.alpha.default_value = 1.0
-        window(t_ob, f_in, None if last else F(79.2 + i * step))
+        window(t_ob, f_in, None if last else F(79.2 + i * step), mat=t_m)
         kf(caret, 'location', f_in, Vector((tx_a + mich_width(word[:i]) * fs_a + hs(3), hy(a['cy']), z)), 'CONSTANT')
         kf(caret, 'scale', f_in, Vector((1, 1, 1)), 'CONSTANT')
+        show(caret, f_in, True)
+        kf(caret_m.alpha, 'default_value', f_in, 1.0, 'CONSTANT')
         if last:
             glide(t_ob, g0, g1, (tx_a, hy(a['cy']), z), (tx_b, hy(b['cy']), z), b['mh'] / a['mh'])
     t = 80.4
     while t < 81.2:  # blink, then gone
         kf(caret, 'scale', F(t), Vector((0.001,) * 3), 'CONSTANT')
         kf(caret, 'scale', F(t + 0.25), Vector((1, 1, 1)), 'CONSTANT')
+        show(caret, F(t), False)
+        show(caret, F(t + 0.25), True)
         t += 0.5
     kf(caret, 'scale', F(81.2), Vector((0.001,) * 3), 'CONSTANT')
+    show(caret, F(81.2), False)
+    kf(caret_m.alpha, 'default_value', F(81.2), 0.0, 'CONSTANT')
     # Stars, rings and the logo
     stars = dust('stars', 1100, (20, 14, 11), c, Mat('stars', '#cbd5e1', 2.0), 0.03, o + Vector((0, 14, 0)))
     kf(stars, 'location', S0(10), stars.location.copy(), 'LINEAR')
