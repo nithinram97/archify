@@ -1528,7 +1528,7 @@ r.filepath = OUT
 
 if MUSIC and os.path.exists(MUSIC):
     se = scene.sequence_editor_create()
-    strips = getattr(se, 'strips', None) or se.sequences
+    strips = se.strips if hasattr(se, 'strips') else se.sequences  # 'strips' in Blender 5.x, 'sequences' before
     strips.new_sound('music', MUSIC, channel=1, frame_start=1)
     r.ffmpeg.audio_codec = 'AAC'
     print('[erm2] music added:', MUSIC)
