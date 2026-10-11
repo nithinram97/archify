@@ -111,6 +111,7 @@ const font = new FontFace('Michroma', `url(${ROOT}fonts/michroma.woff2)`);
 const [dots] = await Promise.all([
   fetch(ROOT + 'data/globe-dots.json').then((r) => r.json()),
   ...SCREENS.map((k) => loadImg(k, `textures/react_${k}.png`)),
+  ...['heat', 'table', 'onepager', 'tracker', 'report', 'search'].map((k) => loadImg('slate_' + k, `textures/slate_${k}.png`)),
   loadImg('skywise', 'textures/logo_skywise.png'), loadImg('cmark', 'textures/logo_clairvoyant_mark.png'),
   font.load().then((f) => document.fonts.add(f)).catch(() => console.warn('Michroma not loaded')),
 ]);
@@ -246,6 +247,7 @@ const drawReport = (g, w, h) => {
 
 const mockCache = {};
 const mockTex = (key, draw) => {
+  if (IMG['slate_' + key]) return imgTex('slate_' + key);  // today's (Slate) screen, recreated with sample data
   if (mockCache[key]) return mockCache[key];
   const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
   const g = c.getContext('2d');

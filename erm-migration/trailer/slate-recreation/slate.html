@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ERM (Slate) screens, recreated</title>
+<!--
+  Recreations of today's ERM (Slate) screens for the trailer, laid out from screenshots of the
+  real app but filled with invented sample data (no real risks, IDs, programmes or people).
+  ?s=heat | report | onepager | tracker | table | search  ->  1600 x 1000 screen.
+  Render: node render.mjs (writes ../textures/slate_<name>.png).
+-->
+<style>
+  @font-face { font-family: 'SS3'; font-weight: 400; src: url(source-sans-3-latin-400-normal.woff2); }
+  @font-face { font-family: 'SS3'; font-weight: 600; src: url(source-sans-3-latin-600-normal.woff2); }
+  @font-face { font-family: 'SS3'; font-weight: 700; src: url(source-sans-3-latin-700-normal.woff2); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1600px; height: 1000px; overflow: hidden; font-family: 'SS3', 'Liberation Sans', Arial, sans-serif; color: #1f2937; background: #0d1b33; }
+  .top { height: 54px; background: #0d1b33; display: flex; align-items: center; padding: 0 18px; color: #fff; gap: 14px; }
+  .top img { height: 25px; }
+  .top .sep { width: 1px; height: 26px; background: #64748b; }
+  .crumb { font-size: 19px; color: #e2e8f0; } .crumb i { color: #94a3b8; font-size: 16px; } .crumb b { font-weight: 600; } .crumb .v { color: #a5b4fc; font-style: italic; font-size: 16px; }
+  .crumb .gt { margin: 0 10px; color: #cbd5e1; }
+  .spacer { flex: 1; }
+  .validate { background: #e5e7eb; color: #1f2937; border-radius: 4px; font-size: 13px; line-height: 15px; text-align: center; padding: 4px 12px; font-weight: 600; }
+  .tabs { display: flex; gap: 22px; font-size: 15.5px; margin-left: 20px; height: 54px; align-items: center; }
+  .tabs span { color: #e2e8f0; position: relative; height: 54px; line-height: 54px; }
+  .tabs .on { color: #fff; font-weight: 600; } .tabs .on::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: 0; height: 3px; background: #fff; }
+  .tabs .dim { color: #94a3b8; }
+  .icons { display: flex; gap: 16px; margin-left: 18px; padding-left: 16px; border-left: 1px solid #475569; height: 30px; align-items: center; }
+  .icons i { width: 18px; height: 18px; border: 2px solid #cbd5e1; border-radius: 50%; display: block; opacity: .8; }
+  .page { position: absolute; top: 54px; left: 0; right: 0; bottom: 0; background: #f4f5f7; }
+  .funnel { position: absolute; left: 14px; top: 12px; width: 14px; height: 14px; background: #b91c3c; clip-path: polygon(0 0, 100% 0, 60% 55%, 60% 100%, 40% 100%, 40% 55%); }
+  /* heat map */
+  .grid { position: absolute; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 7px; }
+  .cell { position: relative; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .rank { position: absolute; left: 8px; top: 7px; width: 19px; height: 19px; border-radius: 50%; background: rgba(255,255,255,.55); font-size: 11px; text-align: center; line-height: 19px; font-weight: 600; color: #374151; }
+  .cnt { position: absolute; left: 32px; top: 7px; font-size: 11px; font-weight: 600; color: #374151; line-height: 19px; }
+  .pills { position: absolute; right: 12%; top: 18%; display: grid; grid-template-columns: auto auto; gap: 6px 8px; }
+  .pill { background: #fff; border-radius: 12px; padding: 2px 13px; font-size: 14px; font-weight: 600; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,.25); border-left: 4px solid #6b7280; }
+  .pill.solo { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); }
+  .yl { position: absolute; font-size: 12.5px; color: #4b5563; transform: rotate(-90deg); transform-origin: left top; white-space: nowrap; }
+  .xl { position: absolute; font-size: 13px; color: #4b5563; }
+  .c-r { background: #d9566f; } .c-o { background: #e99a35; } .c-y { background: #dccb4c; } .c-g { background: #9dc35c; }
+  .c-y2 { background: #e3d567; }
+  .toolbar { position: absolute; left: 40px; top: 12px; display: flex; gap: 12px; align-items: center; font-size: 14px; }
+  .search { width: 290px; height: 34px; border: 1px solid #cbd5e1; background: #fff; border-radius: 3px; padding: 7px 10px; color: #9ca3af; }
+  .anyall { font-size: 13px; color: #6b7280; margin-top: -14px; } .anyall b { color: #b91c3c; font-weight: 600; }
+  .seg { display: flex; border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; height: 34px; }
+  .seg span { padding: 7px 10px; background: #fff; color: #9ca3af; } .seg .on { color: #b91c3c; font-weight: 600; box-shadow: inset 0 0 0 1px #ef9a9a; background: #fff5f5; }
+  .seg .dk { background: #e5e7eb; color: #111827; font-weight: 700; }
+  .legend { position: absolute; right: 26px; font-size: 13.5px; color: #4b5563; display: flex; gap: 10px; align-items: center; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+  .timeline { position: absolute; left: 92px; right: 40px; bottom: 26px; height: 22px; }
+  .timeline .bar { position: absolute; left: 0; right: 0; top: 4px; height: 3px; background: #c2185b; }
+  .timeline .q { position: absolute; top: 14px; font-size: 11px; color: #6b7280; }
+  .tick { position: absolute; top: -2px; width: 52px; height: 18px; font-size: 11px; color: #fff; background: #3b5b98; border-radius: 2px; text-align: center; line-height: 18px; }
+  /* report */
+  .sheet { position: absolute; left: 70px; top: 20px; right: 330px; bottom: 0; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .h2 { position: absolute; left: 0; right: 0; text-align: center; font-size: 22px; font-weight: 600; color: #111827; }
+  .leg2 { position: absolute; font-size: 14px; color: #374151; display: flex; gap: 22px; align-items: center; }
+  .leg2 s { color: #374151; }
+  .box { position: absolute; border: 2px solid #1f2937; border-radius: 4px; background: #fff; font-size: 15px; font-weight: 600; padding: 10px 12px; }
+  .pen { position: absolute; right: 10px; top: 10px; width: 22px; height: 22px; border-radius: 50%; background: #e5e7eb; }
+  .c-b1 { background: #0b4f8a; } .c-b2 { background: #1366ad; } .c-b3 { background: #3b9be0; } .c-b4 { background: #4aa8ea; }
+  /* tables */
+  .chips { position: absolute; left: 40px; right: 40px; top: 20px; border: 1px solid #cbd5e1; background: #fff; border-radius: 3px; height: 116px; padding: 8px 10px; }
+  .chips label { position: absolute; left: 10px; top: -22px; font-size: 15px; color: #111827; }
+  .chip { display: inline-block; background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 8px; margin-right: 8px; font-size: 13.5px; }
+  .chip::after { content: ' ×'; color: #6b7280; }
+  .btn { display: inline-block; background: #c0264f; color: #fff; border-radius: 4px; font-size: 15px; padding: 6px 12px; font-weight: 600; }
+  .btn.ic { padding: 6px 12px; } .btn.ic::before { content: '⇪'; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  thead th { background: #0d1b4d; color: #fff; text-align: left; font-weight: 600; font-size: 14px; padding: 11px 10px; }
+  tbody td { padding: 6px 10px; color: #1f2937; border-bottom: 1px solid #eef0f3; }
+  .cb { display: inline-block; width: 18px; height: 18px; border: 2px solid #9ca3af; border-radius: 3px; vertical-align: -4px; margin-right: 6px; background: #fff; }
+  .cb.on { background: #b91c3c; border-color: #b91c3c; position: relative; } .cb.on::after { content: '✓'; color: #fff; position: absolute; left: 2px; top: -3px; font-size: 13px; font-weight: 700; }
+  .due { color: #fff; font-size: 14px; } .due.r { background: #e2552b; color: #ffe2d6; } .due.o { background: #f39c12; color: #fff3d6; }
+  /* one-pager */
+  .panel { position: absolute; background: #fff; border: 1px solid #d1d5db; }
+  .navyhead { background: #0d1b4d; color: #fff; display: flex; justify-content: space-around; font-size: 14px; padding: 6px 0 8px; }
+  .navyhead div { text-align: center; } .navyhead i { display: block; width: 14px; height: 14px; border-radius: 50%; margin: 4px auto 0; }
+</style>
+</head>
+<body>
+<div class="top">
+  <img src="skywise.svg" alt="skywise"><div class="sep"></div>
+  <div class="crumb" id="crumb"><b>ERM Dashboard</b> <span class="v">(V1)</span><span class="gt">›</span><b>Sample Slate Dashboard</b> <span class="v">(V1.1)</span></div>
+  <div class="spacer"></div>
+  <div class="validate" id="validate">Validate<br>dashboard</div>
+  <div class="tabs" id="tabs"></div>
+  <div class="icons"><i></i><i></i><i></i></div>
+</div>
+<div class="page" id="page"></div>
+<script>
+const S = new URLSearchParams(location.search).get('s') || 'heat';
+const page = document.getElementById('page');
+const TABS = ['Maps', 'Table', 'Action Tracker', 'Summary', 'Report', 'Full Search'];
+const ACTIVE = { heat: 'Maps', table: 'Table', tracker: 'Action Tracker', report: 'Report', search: 'Full Search', onepager: 'Onepager' };
+const tabs = S === 'onepager' ? [...TABS, 'Onepager', 'Waterfall'] : TABS;
+document.getElementById('tabs').innerHTML = tabs.map((t) => `<span class="${t === ACTIVE[S] ? 'on' : t === 'Waterfall' ? 'dim' : ''}">${t}</span>`).join('');
+if (S === 'onepager') {
+  document.getElementById('crumb').innerHTML = '<span style="margin-right:14px">←</span><b>R-2041 · Supplier capacity for castings</b>';
+  document.getElementById('validate').style.display = 'none';
+}
+const h = (html) => { page.insertAdjacentHTML('beforeend', html); };
+
+// Sample data (invented)
+const RANKS = [[12, 7, 3, 1], [13, 9, 5, 2], [15, 11, 6, 4], [16, 14, 10, 8]];
+const COLOR = (r) => (r <= 2 ? 'c-r' : r <= 6 ? 'c-o' : r <= 12 ? 'c-y' : 'c-g');
+const PILLS = { 1: ['2072'], 2: ['2041', '2044', '2049', '2052', '2058'], 15: ['3101'], 11: ['2051'], 6: ['1003'], 10: ['2061'] };
+function heatGrid(x, y, w, hgt, { labels = true, pillScale = 1, cold = false } = {}) {
+  let out = `<div class="grid" style="left:${x}px;top:${y}px;width:${w}px;height:${hgt}px">`;
+  RANKS.forEach((row) => row.forEach((r) => {
+    const cls = cold ? ['c-b1', 'c-b2', 'c-b3', 'c-b4'][Math.min(3, Math.floor((r - 1) / 4))] : COLOR(r);
+    const ids = cold ? [] : (PILLS[r] || []);
+    const pills = ids.length > 1
+      ? `<div class="pills" style="font-size:${pillScale}em">${ids.map((i) => `<span class="pill">${i}</span>`).join('')}</div>`
+      : ids.length ? `<span class="pill solo" style="font-size:${14 * pillScale}px">${ids[0]}</span>` : '';
+    out += `<div class="cell ${cls}"><span class="rank">${r}</span>${ids.length ? `<span class="cnt">${ids.length}</span>` : ''}${pills}</div>`;
+  }));
+  out += '</div>';
+  if (labels) {
+    ['Nearly Certain', 'Likely', 'Possible', 'Unlikely'].forEach((t, i) => { out += `<div class="yl" style="left:${x - 26}px;top:${y + (i + 0.5) * hgt / 4 + 40}px">${t}</div>`; });
+    ['Low', 'Medium', 'High', 'Very High'].forEach((t, i) => { out += `<div class="xl" style="left:${x + (i + 0.45) * w / 4}px;top:${y + hgt + 6}px">${t}</div>`; });
+  }
+  return out;
+}
+
+if (S === 'heat') {
+  h(`<div class="funnel"></div>
+  <div class="toolbar"><div class="search">Search by keywords</div><div class="anyall">Any / <b>All</b></div>
+    <div class="seg"><span class="on">Risk (10/10)</span><span>Opp. (11/11)</span></div><div class="seg"><span class="dk">Id.</span><span>Title</span></div></div>
+  <div class="legend" style="top:60px"><span><i class="dot" style="background:#374151"></i>A</span><span><i class="dot" style="background:#374151"></i>Programme X</span><span style="color:#e18aa5"><i class="dot" style="background:#e18aa5"></i>B</span><span style="color:#f0b660"><i class="dot" style="background:#f0b660"></i>P</span></div>`);
+  h(heatGrid(92, 86, 1480, 788));
+  let tl = '<div class="timeline"><div class="bar"></div>';
+  ['Q4-2025', 'Q1-2026', 'Q2-2026', 'Q3-2026', 'Q4-2026', 'Q1-2027', 'Q2-2027', 'Q3-2027', 'Q4-2027', 'Q1-2028', 'Q2-2028', 'Q3-2028', 'Q4-2028', 'Q1-2029', 'Q2-2029', 'Q3-2029', 'Q4-2029', 'Q1-2030', 'Q2-2030', 'Q3-2030']
+    .forEach((q, i, a) => { tl += i === 0 || i === a.length - 1 ? `<span class="tick" style="left:${i / (a.length - 1) * 100}%;margin-left:-26px">${q}</span>` : `<span class="q" style="left:${i / (a.length - 1) * 100}%;margin-left:-20px">${q}</span>`; });
+  h(tl + '</div>');
+}
+
+if (S === 'report') {
+  h(`<div class="funnel"></div><div class="sheet" id="sheet"></div>`);
+  const sh = document.getElementById('sheet');
+  sh.innerHTML = `<div class="h2" style="top:28px">HeatMap</div>
+    <div class="leg2" style="left:40px;top:76px"><span>⚠ Criticality differs from ARM</span><span>⚡ Occurrence</span><span>🆕 New Top Risk</span><s>Removed Top Risk</s></div>
+    <div class="leg2" style="right:24px;top:76px"><span><i class="dot" style="background:#374151"></i>A</span><span><i class="dot" style="background:#374151"></i>Programme X</span><span style="color:#e18aa5">● B</span><span style="color:#f0b660">● P</span></div>
+    ${heatGrid(60, 112, 1060, 470, { pillScale: 0.85 })}
+    <div class="box" style="left:44px;top:620px;width:540px;height:126px"><span class="pen"></span></div>
+    <div class="box" style="left:598px;top:614px;width:534px;height:126px">Assumption Pack<span class="pen"></span></div>
+    <div class="h2" style="top:786px">ColdMap</div>
+    <div class="leg2" style="left:40px;top:830px"><span>⚠ Criticality differs from ARM</span><span>⚡ Occurrence</span><span>🆕 New Top Opportunity</span><s>Removed Top Opportunity</s></div>
+    <div class="leg2" style="right:24px;top:830px"><span style="color:#16a34a">● 1</span><span>● A</span><span>● AA</span><span>● Programme X</span><span style="color:#e18aa5">● B</span><span style="color:#14b8a6">● O</span></div>
+    ${heatGrid(44, 866, 1094, 470, { labels: false, cold: true })}`;
+  sh.querySelectorAll('.grid')[1].querySelectorAll('.cell')[2].insertAdjacentHTML('beforeend', '<span class="pill solo" style="left:30%;top:22%">OP-4410</span><span class="pill solo" style="left:62%;top:22%">5133</span>');
+}
+
+if (S === 'table') {
+  const rows = [['2072', 'Programme X', 'Programme X · Final assembly', 'Skills shortage in final assembly'], ['2041', 'Programme X', 'Programme X · Supply chain', 'Supplier capacity for castings'],
+    ['2044', 'Programme X', 'Programme X · Supply chain', 'Late selection of airframe work-package suppliers'], ['2049', 'Programme X', 'Programme X · Engineering', 'Lead time of major assemblies not achievable'],
+    ['2052', 'Programme X', 'Programme X · Industrial', 'Assembly process disruption'], ['2058', 'Programme X', 'Programme X · Supply chain', 'Suppliers not interested in the proposals'],
+    ['1003', 'IT', 'Operations · IT security', 'Cybersecurity of shop-floor tools'], ['2061', 'Finance', 'Operations · Finance', 'Raw material price increase'],
+    ['2051', 'Engineering', 'Programme Y · Engineering', 'Test campaign slip of one week'], ['3101', 'Industrial', 'Programme Z · Industrial', 'Tooling availability in the second line']];
+  h(`<div class="funnel"></div><div class="chips"><label>Select the columns to display in the report table:</label><span class="chip">ARM ID</span><span class="chip">Owner</span><span class="chip">Perimeter</span><span class="chip">Risk Title</span></div>
+    <div style="position:absolute;left:40px;top:160px;font-size:15px"><span class="cb"></span>Include children<br>Showing 10 risks</div>
+    <div style="position:absolute;left:200px;top:166px"><span class="btn">Save</span> <span class="btn ic"></span></div>
+    <div style="position:absolute;left:40px;right:40px;top:224px"><table><thead><tr><th style="width:60px">⌃</th><th style="width:110px">⇕ ARM ID</th><th style="width:150px">⇕ Owner</th><th style="width:300px">⇕ Perimeter</th><th>⇕ Risk Title</th><th style="width:44px;background:#fff;color:#0d1b4d;font-size:20px;text-align:center">+</th></tr></thead>
+    <tbody>${rows.map((r, i) => `<tr><td style="text-align:center">${i + 1}</td><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td colspan="2">${r[3]}</td></tr>`).join('')}</tbody></table></div>`);
+}
+
+if (S === 'tracker') {
+  const acts = [['20/12/2025', 'r', 'Secure the schedule', '2072'], ['20/12/2025', 'r', 'Define an integrated plan', '2049'], ['13/01/2026', 'r', 'Confirm the global schedule', '2041'],
+    ['13/01/2026', 'r', 'Confirm the entry-into-service need', '2072'], ['31/01/2026', 'r', 'Resources', '2072'], ['31/01/2026', 'r', 'Supplier selection', '2044'],
+    ['31/01/2026', 'r', 'Organisation and skills', '2049'], ['31/01/2026', 'r', 'Build a fallback process', '2052'], ['05/05/2026', 'r', 'Fallback solution for the test bench', '2041'],
+    ['30/05/2026', 'r', 'Supplier management', '2058'], ['30/09/2026', 'r', 'Redeploy resources to other projects', '3101'], ['28/11/2026', 'r', 'Commit with suppliers', '2049'],
+    ['18/12/2026', 'o', 'Close the material qualification', '2051'], ['18/12/2026', 'o', 'Renew short-term tooling from drawings', '1003'], ['31/12/2026', 'o', 'Close the dual-source implementation', '2051'],
+    ['31/12/2026', 'o', 'Set up a cross-functional team', '2061'], ['08/04/2027', '', 'Drawing release in the new tool', '1003'], ['28/06/2030', '', 'Industrialise the 3D master', '1003']];
+  h(`<div class="funnel"></div>
+    <div class="chips" style="height:58px;left:200px;top:14px;padding:12px"><span class="chip">Due Date</span><span class="chip">Plan / Progress</span><span class="chip">Risk ID</span></div>
+    <div style="position:absolute;left:40px;top:34px;font-size:15px;width:160px">Select the columns to display in the action tracker table:</div>
+    <div style="position:absolute;left:52px;top:96px;font-size:15px">Response Status<br><br><span class="cb on"></span>Active &nbsp; <span class="cb on"></span>Draft &nbsp; <span class="cb"></span>Closed &nbsp; <span class="cb"></span>Rejected</div>
+    <div style="position:absolute;left:480px;top:96px;font-size:15px">Completion Status<br><br><span class="cb on"></span>Completed &nbsp; <span class="cb on"></span>Late &nbsp; <span class="cb on"></span>Pending &nbsp; <span class="cb on"></span>On Time</div>
+    <div style="position:absolute;left:44px;top:192px;font-size:15px">Showing 18 actions <span class="btn" style="margin-left:18px">Save</span> <span class="btn ic"></span></div>
+    <div style="position:absolute;left:40px;right:40px;top:240px"><table><thead><tr><th style="width:110px">⌃ Due Date</th><th style="width:560px;text-align:center">⇕ Plan / Progress</th><th>⇕ Risk ID</th><th style="width:44px;background:#fff;color:#0d1b4d;font-size:20px;text-align:center">+</th></tr></thead>
+    <tbody>${acts.map((a) => `<tr><td class="due ${a[1]}" style="${a[1] ? '' : 'color:#374151'}">${a[0]}</td><td>${a[2]}</td><td colspan="2">${a[3]}</td></tr>`).join('')}</tbody></table></div>`);
+}
+
+if (S === 'onepager') {
+  h(`<div class="panel" style="left:14px;top:6px;width:520px;height:330px">${heatGrid(10, 6, 500, 316, { labels: false })}</div>`);
+  page.querySelector('.panel .grid').querySelectorAll('.pill').forEach((p) => p.remove());
+  page.querySelector('.panel .grid').querySelectorAll('.cnt').forEach((p) => p.remove());
+  page.querySelector('.panel .grid').children[11].insertAdjacentHTML('beforeend', '<span class="pill solo" style="top:4px;font-size:13px;color:#b91c3c">2041</span>');
+  h(`<div class="panel" style="left:14px;top:340px;width:520px;height:146px;background:#1e2633"><span style="position:absolute;right:12px;top:10px;width:26px;height:26px;background:#22a046;border-radius:4px"></span></div>
+    <div class="panel" style="left:14px;top:490px;width:520px;height:440px;padding:16px 18px;font-size:14px">
+      <div style="text-align:center;font-weight:600">Description</div><div style="margin-top:10px">Two castings suppliers are below their committed rate.</div>
+      <div style="text-align:center;font-weight:600;margin-top:70px">Causes</div><div style="margin-top:10px">• Capacity constraints at supplier sites</div>
+      <div style="text-align:center;font-weight:600;margin-top:70px">Effects</div><div style="margin-top:10px">• Late structure assembly</div></div>
+    <div class="panel" style="left:540px;top:6px;width:640px;height:636px" id="wf"></div>
+    <div class="panel" style="left:540px;top:646px;width:640px;height:284px;padding:12px"><div style="text-align:right"><span style="border:1px solid #cbd5e1;padding:4px 10px;font-size:14px;border-radius:3px">Configure Table</span></div>
+      <table style="margin-top:12px"><thead><tr><th>Due Date</th><th style="text-align:center">Plan / Progress</th><th style="text-align:right">Risk ID</th></tr></thead></table></div>
+    <div class="panel" style="left:1186px;top:6px;width:400px;height:924px">
+      <div class="navyhead"><div>Trend<i style="background:#22a046"></i></div><div>Status<i style="background:#f2c94c"></i></div><div>Confidence<i style="border:2px solid #fff"></i></div></div>
+      <div style="text-align:center;font-weight:700;font-size:13px;margin-top:12px">KEY MESSAGES</div>
+      <div style="position:absolute;left:12px;right:12px;top:90px;bottom:60px;border:1px solid #e5e7eb"></div>
+      <div style="position:absolute;left:12px;bottom:18px;font-size:12px;display:flex;gap:6px;align-items:center"><b style="border:1px solid #9ca3af;padding:1px 6px">B</b><i style="border:1px solid #9ca3af;padding:1px 6px">I</i><u style="border:1px solid #9ca3af;padding:1px 6px">U</u><span style="border:1px solid #9ca3af;padding:1px 6px">Bullets</span><span class="btn" style="font-size:12px;padding:2px 8px">Save</span><span style="background:#0d1b4d;color:#fff;padding:2px 8px;border-radius:3px">Validate</span><span style="margin-left:60px;color:#6b7280">0/2000 character</span></div></div>`);
+  // waterfall chart
+  const wf = document.getElementById('wf');
+  const bands = [['#d9566f', 2], ['#e99a35', 4], ['#dccb4c', 6], ['#9dc35c', 4]];
+  let y = 46, html = `<div style="position:absolute;left:18px;top:10px;font-size:14px;color:#374151"><b>From</b> <span style="border:1px solid #cbd5e1;padding:3px 10px;margin:0 16px 0 6px">📅 2025-10-11 ×</span><b>To</b> <span style="border:1px solid #cbd5e1;padding:3px 10px;margin-left:6px">📅 2026-11-11 ×</span></div>`;
+  bands.forEach(([c, n]) => { html += `<div style="position:absolute;left:40px;right:16px;top:${y}px;height:${n * 29}px;background:${c};opacity:.92"></div>`; y += n * 29; });
+  for (let i = 1; i <= 16; i++) html += `<div style="position:absolute;left:18px;top:${46 + (i - 0.6) * 29}px;font-size:11px;color:#6b7280">${i}</div>`;
+  for (let i = 0; i < 13; i++) html += `<div style="position:absolute;left:${40 + i * 45}px;top:46px;bottom:150px;width:1px;background:rgba(255,255,255,.35)"></div><div style="position:absolute;left:${48 + i * 45}px;top:${46 + 464 + 8}px;font-size:10.5px;color:#6b7280;text-align:center">${['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'][i]}<br>${i < 3 ? 25 : 26}</div>`;
+  html += `<div style="position:absolute;left:180px;top:${46 + 3.5 * 29}px;width:400px;height:2px;background:#fff"></div><div style="position:absolute;left:176px;top:${46 + 3.5 * 29 - 4}px;width:9px;height:9px;background:#fff;border:1px solid #9ca3af"></div>
+    <div style="position:absolute;left:572px;top:${46 + 3.5 * 29 - 9}px;width:16px;height:16px;background:#fff;border:2px solid #6b7280;transform:rotate(45deg)"></div>
+    <div style="position:absolute;left:470px;top:${46 + 3.5 * 29 - 32}px;color:#fff;font-weight:700;font-size:15px">Current criticality</div>
+    <div style="position:absolute;left:176px;top:${46 + 10.5 * 29}px;width:8px;height:8px;background:#2563eb"></div>
+    <div style="position:absolute;left:30px;top:560px;font-size:12.5px;color:#374151">Legend: &nbsp; ⚲ Planned &nbsp; ● Achieved &nbsp; ☐ Current &nbsp; <span style="color:#b91c3c">●</span> Original criticality &nbsp; ◇ Current criticality &nbsp; ▪ Target</div>`;
+  wf.innerHTML = html;
+}
+
+if (S === 'search') {
+  const rows = [['2041', 'Supplier capacity for castings', 'P', 12], ['4410', 'Single-source supplier for harnesses', 'B', 8], ['4422', 'Supplier quality escapes', 'A', 6], ['2058', 'Suppliers not interested in the proposals', 'P', 9], ['3101', 'Tooling availability in the second line', 'O', 8]];
+  h(`<div class="funnel"></div>
+    <div style="position:absolute;left:40px;top:22px;font-size:15px"><b>Status</b> &nbsp; <span class="cb on"></span>Active &nbsp; <span class="cb on"></span>Draft &nbsp; <span class="cb"></span>Occurred &nbsp; <span class="cb"></span>Closed &nbsp; <span class="cb"></span>Rejected</div>
+    <div class="search" style="position:absolute;right:40px;top:16px;width:360px">supplier</div>
+    <div style="position:absolute;left:40px;top:80px;width:300px;bottom:30px;background:#fff;border:1px solid #d1d5db;padding:14px;font-size:14px"><b>ARM Category</b><div class="search" style="width:100%;margin:8px 0 18px">Filter category…</div><b>Perimeter Folders</b><div style="margin-top:10px;color:#374151">▸ 📁 Company</div><div style="margin:6px 0 0 18px">▸ 📁 Programme X</div><div style="margin:6px 0 0 18px">▸ 📁 Programme Y</div><div style="margin:6px 0 0 18px">▸ 📁 Operations</div></div>
+    <div style="position:absolute;left:356px;right:40px;top:80px"><div style="font-size:14px;color:#374151;margin-bottom:8px">Company (Preview of 5 risks)</div><table><thead><tr><th>ID</th><th>Title</th><th>Siglum</th><th>Score</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody></table></div>`);
+}
+document.fonts.ready.then(() => { window.__done = true; });
+</script>
+</body>
+</html>
