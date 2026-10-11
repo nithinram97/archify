@@ -164,11 +164,47 @@ PREF = bpy.context.preferences.edit
 _old_interp = PREF.keyframe_new_interpolation_type
 
 
+def _fcurves(idb):
+    """All F-curves of an ID's action: legacy actions and the layered actions of Blender 4.4+ / 5.x."""
+    ad = getattr(idb, 'animation_data', None)
+    act = ad.action if ad else None
+    if act is None:
+        return []
+    if getattr(act, 'layers', None):
+        try:
+            from bpy_extras import anim_utils
+            bag = anim_utils.action_get_channelbag_for_slot(act, ad.action_slot)
+            if bag:
+                return list(bag.fcurves)
+        except Exception:
+            pass
+        found = []
+        for layer in act.layers:
+            for strip in layer.strips:
+                for bag in getattr(strip, 'channelbags', []):
+                    found.extend(bag.fcurves)
+        return found
+    return list(getattr(act, 'fcurves', []))
+
+
 def kf(target, path, frame, value, interp='BEZIER'):
-    """Set a property and insert a keyframe whose segment to the next key uses `interp`."""
+    """Set a property and insert a keyframe whose segment to the next key uses `interp`.
+    The interpolation is set on the key itself: newer Blender versions ignore the preference for
+    keys inserted from Python, which turned hard cuts and on/off switches into slow ramps."""
     PREF.keyframe_new_interpolation_type = interp
     setattr(target, path, value)
     target.keyframe_insert(path, frame=frame)
+    if interp == 'BEZIER':
+        return
+    try:
+        full = target.path_from_id(path)
+    except Exception:
+        full = path
+    for fc in _fcurves(target.id_data):
+        if fc.data_path == full:
+            for kp in fc.keyframe_points:
+                if abs(kp.co[0] - frame) < 0.5:
+                    kp.interpolation = interp
 
 
 def hex_rgb(h):
