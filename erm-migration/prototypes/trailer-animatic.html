@@ -87,7 +87,8 @@ let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 214748364
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(1); renderer.setSize(W, H);
+const DPR = Number(Q.get('dpr') || 1);  // ?dpr=1.5 renders 1920 x 1080 from the 1280 x 720 layout
+renderer.setPixelRatio(DPR); renderer.setSize(W, H);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.localClippingEnabled = true;
 wrap.prepend(renderer.domElement);
@@ -95,6 +96,7 @@ const labels = new CSS2DRenderer({ element: lab }); labels.setSize(W, H);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, W / H, 0.05, 300);
 const composer = new EffectComposer(renderer);
+composer.setPixelRatio(DPR);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.3, 0.4, 0.95);
 composer.addPass(bloom);
