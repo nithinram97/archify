@@ -480,9 +480,17 @@ const CLIP_L = new THREE.Plane(V(-1, 0, 0), 0), CLIP_R = new THREE.Plane(V(1, 0,
 const GATE = [['table', 'table'], ['tracker', 'tracker'], ['summary', 'onepager'], ['report', 'report'], ['fullsearch', 'search'], ['heat', 'heat']];
 const SW = 3.4, SH = 2.125, SRY = -0.6, SPEED = 4.2, X_STOP = 2.4;
 const BOOST = 1.7; // screens speed up once through the gate
+const SWIRL = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 256, 0, 256, 256, 256); gr.addColorStop(0, 'rgba(255,200,230,0.35)'); gr.addColorStop(0.45, 'rgba(255,120,190,0.3)'); gr.addColorStop(0.85, 'rgba(255,90,170,0.18)'); gr.addColorStop(1, 'rgba(255,80,160,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
+  g.globalCompositeOperation = 'lighter';
+  for (let arm = 0; arm < 4; arm++) { g.beginPath(); for (let i = 0; i <= 120; i++) { const t = i / 120, a = arm * Math.PI / 2 + t * 5.5, r = 18 + t * 230; const px = 256 + Math.cos(a) * r, py = 256 + Math.sin(a) * r; i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.strokeStyle = 'rgba(255,190,225,0.5)'; g.lineWidth = 14; g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const STREAM = (() => { seed = 77; const a = []; for (let i = 0; i < 320; i++) a.push([rnd(), rnd() * 6.283, Math.sqrt(rnd()) * 0.95, rnd()]); return a; })();
 const gateX = (k, u) => { let x = -9.5 + (u - 0.9 - k * 0.75) * SPEED; if (x > 0) x *= BOOST; return k === 5 ? Math.min(x, X_STOP) : x; };
 function shotGate(u) {
-  setBloom(0.8, 0.5, 0.93); scene.background = col('#060a14');
+  setBloom(0.6, 0.5, 0.97); scene.background = col('#060a14');
   const gateOp = 1 - ss(7.0, 7.7, u);
   stars(500, '#334155', 0.04, [40, 22, 30], 9);
   const lineH = 5.4 * ss(0, 0.55, u);
@@ -496,23 +504,64 @@ function shotGate(u) {
       const s = screenObj(tex, SW, SH, { ...opts, clip, op: fadeOthers });
       s.position.set(x, y, z); s.rotation.y = SRY; scene.add(s);
     }
+    // The seam where the screen is being rebuilt: a bright line across the screen at the portal plane
+    const tcut = -x / Math.cos(SRY);
+    if (Math.abs(tcut) < SW / 2 && gateOp > 0.01) {
+      const zc = z - tcut * Math.sin(SRY);
+      [[0.012, '#ffffff', 0.9], [0.05, '#ff9cc8', 0.28]].forEach(([r, c, o]) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, SH * 1.04, 8), basic(c, { transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.position.set(0.02, y, zc); scene.add(m);
+      });
+    }
   });
   if (u > 0.05 && gateOp > 0.01) {
+    const add = (o) => ({ transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false });
     // Core line + soft additive layers (a glow that does not depend on bloom, so the screens stay crisp)
     [[0.02, '#ffffff', 1], [0.07, '#ff9cc8', 0.35], [0.18, '#ec4f8f', 0.12]].forEach(([r, c, o]) => {
-      const l = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 12), basic(c, { transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 12), basic(c, add(o * (1 - 0.6 * ss(0.9, 1.6, u)))));
       l.scale.set(1 + crossing * 2.5, Math.max(lineH, 0.01), 1 + crossing * 2.5); scene.add(l);
     });
-    [[0.045, '#ff7ab6', 1], [0.14, '#ec4f8f', 0.22]].forEach(([tb, c, o]) => {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.75, tb, 12, 160), basic(c, { transparent: true, opacity: o * gateOp, blending: THREE.AdditiveBlending, depthWrite: false }));
-      ring.rotation.y = Math.PI / 2; ring.scale.set(0.62 * ss(0.4, 1.1, u) + 0.001, ss(0.15, 0.7, u) + 0.001, 1); scene.add(ring);
+    // The portal, built in its own XY plane and turned to face along +X (oval: narrower in depth)
+    const open = eob(lin(0.3, 1.15, u)), pulse = 1 + 0.05 * crossing;
+    const portal = new THREE.Group(); portal.rotation.y = Math.PI / 2;
+    portal.scale.set(0.62 * open * pulse + 0.001, Math.max(ss(0.15, 0.7, u), 0.001) * pulse, 1); scene.add(portal);
+    [[0.045, '#ff7ab6', 1], [0.14, '#ec4f8f', 0.22 + 0.25 * crossing]].forEach(([tb, c, o]) => portal.add(new THREE.Mesh(new THREE.TorusGeometry(2.75, tb, 12, 160), basic(c, add(o)))));
+    // Event horizon: a swirling glow inside the ring
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(2.7, 96), new THREE.MeshBasicMaterial({ map: SWIRL, color: '#ff6fb0', side: THREE.DoubleSide, ...add(0.42) }));
+    disc.rotation.z = -u * 1.3; disc.material.opacity *= ss(0.5, 1.2, u); portal.add(disc);
+    // Arc brackets turning in opposite directions
+    for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.03, 8, 64, 1.2), basic('#f9a8d4', add(0.75 * ss(0.8, 1.4, u)))); m.rotation.z = u * 0.8 + i * 2.094; portal.add(m); }
+    for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.TorusGeometry(3.32, 0.02, 8, 48, 0.5), basic('#818cf8', add(0.6 * ss(1.0, 1.6, u)))); m.rotation.z = -u * 0.5 + i * 1.571; portal.add(m); }
+    // A stream of light that funnels into the portal and sprays out the other side
+    const pts = [], cols = [], cPink = col('#ff7ab6'), cWhite = col('#ffffff');
+    const streamOp = ss(0.7, 1.5, u) * gateOp;
+    STREAM.forEach(([ph, ang, rad, w]) => {
+      const f = (u * 0.32 + ph) % 1, x = lerp(-7.5, 7.5, f);
+      const funnel = 0.12 + 0.88 * Math.min(1, Math.abs(x) / 5) * (x > 0 ? 1.15 : 1);
+      pts.push(x, Math.sin(ang) * rad * 2.6 * funnel, Math.cos(ang) * rad * 1.6 * funnel);
+      const b = Math.sin(f * Math.PI) * streamOp, c = (w > 0.8 ? cWhite : cPink).clone().multiplyScalar(b);
+      cols.push(c.r, c.g, c.b);
     });
+    // Sparks: a burst as the portal opens, and a spray each time a screen comes through
+    const BURSTS = [[0.45, 0, 0, 0, true], ...GATE.map((_, k) => [0.9 + k * 0.75 + 9.5 / SPEED, 0, Math.sin(k * 1.7) * 0.3, Math.cos(k * 2.3) * 0.35, false])];
+    BURSTS.forEach(([t0, , y0, z0, radial], bi) => {
+      const dt = u - t0; if (dt < 0 || dt > 0.7) return;
+      seed = 40 + bi;
+      for (let i = 0; i < (radial ? 70 : 34); i++) {
+        const r1 = rnd(), r2 = rnd(), r3 = rnd(), sp = dt * (radial ? 4.5 : 3.2) * (0.4 + r1);
+        if (radial) { const a2 = r2 * 6.283; pts.push((r3 - 0.5) * 0.3, Math.sin(a2) * sp, Math.cos(a2) * sp * 0.62); }
+        else pts.push(sp, y0 + (r2 - 0.5) * SH * 1.1 + (r3 - 0.5) * dt * 1.5, z0 + (rnd() - 0.5) * 1.2 + (r3 - 0.5) * dt * 1.5);
+        const c = cWhite.clone().lerp(cPink, r1).multiplyScalar((1 - dt / 0.7) * gateOp); cols.push(c.r, c.g, c.b);
+      }
+    });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 0.06, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   }
   // Camera: three-quarter view of the gate, then lands square on the Maps screen (it becomes shot 7)
   const ph = V(gateX(5, u), Math.sin(5 * 1.7) * 0.3, Math.cos(5 * 2.3) * 0.35);
   const n = V(Math.sin(SRY), 0, Math.cos(SRY));
   const e = ss(7.0, 8.0, u);
-  look(V(-6.2 + u * 0.12, 0.9, 7.6).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
+  look(V(-6.2 + u * 0.12, 0.9 - u * 0.04, 7.6 - u * 0.18).lerp(ph.clone().add(n.clone().multiplyScalar(4.66)), e), V(0.6, 0, 0).lerp(ph, e));
   caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', u, 1.4, 6.7);
 }
 
@@ -521,7 +570,7 @@ const TABS = [
   ['heat', 'Maps', 'Your risks and opportunities on one heat map.', [0.72, 0.3]],
   ['table', 'Table', 'Every risk, sorted and filtered your way.', [0.45, 0.28]],
   ['tracker', 'Action Tracker', 'Every action followed through to the finish.', [0.5, 0.32]],
-  ['summary', 'Summary', 'The story of the quarter, in one place.', [0.25, 0.2]],
+  ['summary', 'Summary', 'Tell the story of the quarter, now with better customisation.', [0.25, 0.2]],
   ['report', 'Report', 'Ready-to-share reports, straight to PDF.', [0.62, 0.42]],
   ['fullsearch', 'Full Search', 'Find any risk, across every dashboard.', [0.6, 0.16]],
 ];

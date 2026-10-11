@@ -83,7 +83,7 @@ GATE = [('table', 'table'), ('tracker', 'tracker'), ('summary', 'onepager'), ('r
 TABS = [('heat', 'Maps', 'Your risks and opportunities on one heat map.', (0.72, 0.3)),
         ('table', 'Table', 'Every risk, sorted and filtered your way.', (0.45, 0.28)),
         ('tracker', 'Action Tracker', 'Every action followed through to the finish.', (0.5, 0.32)),
-        ('summary', 'Summary', 'The story of the quarter, in one place.', (0.25, 0.2)),
+        ('summary', 'Summary', 'Tell the story of the quarter, now with better customisation.', (0.25, 0.2)),
         ('report', 'Report', 'Ready-to-share reports, straight to PDF.', (0.62, 0.42)),
         ('fullsearch', 'Full Search', 'Find any risk, across every dashboard.', (0.6, 0.16))]
 # Michroma advance widths (em) for the typed name; the cursor follows them.
@@ -898,6 +898,92 @@ def frame_mat(gate_x):
 BOOST = 1.7  # screens speed up once they are through the gate
 
 
+def torus_arc(name, R, r, arc, coll, mat, seg=48, ring=8):
+    """Part of a torus: `arc` radians of the ring."""
+    bm = bmesh.new()
+    rows = []
+    for i in range(seg + 1):
+        a = arc * i / seg
+        rows.append([bm.verts.new(((R + r * math.cos(b)) * math.cos(a), (R + r * math.cos(b)) * math.sin(a), r * math.sin(b)))
+                     for b in [2 * math.pi * j / ring for j in range(ring)]])
+    for i in range(seg):
+        for j in range(ring):
+            bm.faces.new((rows[i][j], rows[i + 1][j], rows[i + 1][(j + 1) % ring], rows[i][(j + 1) % ring]))
+    return mesh_object(name, bm, coll, mat)
+
+
+def disc_mesh(name, radius, coll, mat, seg=96):
+    bm = bmesh.new()
+    bmesh.ops.create_circle(bm, cap_ends=True, segments=seg, radius=radius)
+    return mesh_object(name, bm, coll, mat)
+
+
+def swirl_mat():
+    """Glowing spiral that fades towards the rim (object space), for the portal surface. Rotate the disc to swirl."""
+    m = Mat('portal swirl', '#ff6fb0', 2.5, 1.0)
+    nt = m.nt
+    co = nt.nodes.new('ShaderNodeTexCoord')
+    sep = nt.nodes.new('ShaderNodeSeparateXYZ')
+    nt.links.new(co.outputs['Object'], sep.inputs[0])
+    ang = nt.nodes.new('ShaderNodeMath')
+    ang.operation = 'ARCTAN2'
+    nt.links.new(sep.outputs['Y'], ang.inputs[0])
+    nt.links.new(sep.outputs['X'], ang.inputs[1])
+    ln = nt.nodes.new('ShaderNodeVectorMath')
+    ln.operation = 'LENGTH'
+    nt.links.new(co.outputs['Object'], ln.inputs[0])
+
+    def op(kind, a, b=None, clamp=False):
+        n = nt.nodes.new('ShaderNodeMath')
+        n.operation = kind
+        n.use_clamp = clamp
+        for i, v in enumerate((a, b)):
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                n.inputs[i].default_value = v
+            else:
+                nt.links.new(v, n.inputs[i])
+        return n.outputs[0]
+
+    r = socket(ln.outputs, 'Value')
+    arms = op('ADD', op('MULTIPLY', ang.outputs[0], 4.0), op('MULTIPLY', r, 2.2))
+    spiral = op('MULTIPLY_ADD', op('SINE', arms), 0.5)
+    spiral.node.inputs[2].default_value = 0.5
+    rim = op('SUBTRACT', 1.0, op('DIVIDE', r, 2.7), clamp=True)
+    shape = op('MULTIPLY', op('MULTIPLY_ADD', spiral, 0.75), rim)
+    shape.node.inputs[2].default_value = 0.25
+    mix = next(n for n in nt.nodes if n.type == 'MIX_SHADER')
+    out = op('MULTIPLY', shape, 0.0)
+    nt.links.new(out, mix.inputs[0])
+    m.alpha = out.node.inputs[1]
+    return m
+
+
+def stream(coll, name, instance, centre, size, count, f0, f1, speed, scatter, life):
+    """Particles emitted from an upright rectangle (facing +X) at `centre`, flying along +X."""
+    em = plane(name, size[0], size[1], coll)
+    em.location = centre
+    em.rotation_euler = (0, math.radians(90), 0)
+    em.modifiers.new(name, 'PARTICLE_SYSTEM')
+    ps = em.particle_systems[0].settings
+    ps.count = count
+    ps.frame_start, ps.frame_end = f0, max(f1, f0 + 1)
+    ps.lifetime = life
+    ps.emit_from = 'FACE'
+    ps.normal_factor = speed
+    ps.factor_random = scatter
+    ps.effector_weights.gravity = 0.0
+    ps.render_type = 'OBJECT'
+    ps.instance_object = instance
+    ps.particle_size = 1.0
+    ps.size_random = 0.5
+    for attr in ('show_instancer_for_render', 'show_instancer_for_viewport'):
+        if hasattr(em, attr):
+            setattr(em, attr, False)
+    return em
+
+
 def gate_x(k, u):
     x = -9.5 + (u - 0.9 - k * 0.75) * SPEED
     if x > 0:
@@ -922,23 +1008,72 @@ def shot_gate():
             kf(p, 'location', F(t_a + u), o + anim(gate_x(k, u), y, z), 'LINEAR')
         if k < 5:
             fade_out(m.alpha, F(40.0), F(40.6))
-    # The gate: a line of light that opens into an upright oval ring
+        # The seam where the screen is being rebuilt: a bright line on the screen at the portal plane
+        half = SW / 2 * math.cos(SRY)
+        seam_m = Mat('seam', WHITE, 8.0, 0.9)
+        seam = curve_path('seam', [Vector((0, 0, -SH * 0.52)), Vector((0, 0, SH * 0.52))], c, seam_m, 0.012)
+        times = []
+        for xs in (-half, 0.0, half):
+            raw = xs / BOOST if xs > 0 else xs
+            u = (raw + 9.5) / SPEED + 0.9 + k * 0.75
+            tcut = -xs / math.cos(SRY)
+            times.append(u)
+            kf(seam, 'location', F(t_a + u), o + anim(0.02, y, z - tcut * math.sin(SRY)), 'LINEAR')
+        window(seam, F(t_a + times[0]), F(t_a + times[-1]))
+    # The gate: a line of light that opens into a portal (ring, swirling surface, turning arcs)
     line_m = Mat('gate line', WHITE, 6.0)
     line = curve_path('gate line', [o + Vector((0, 0, -2.7)), o + Vector((0, 0, 2.7))], c, line_m, 0.02)
     grow(line, F(t_a), F(t_a + 0.55), from_middle=True)
-    for k in range(6):  # flare as each screen crosses
-        tc = t_a + 0.9 + k * 0.75 + 9.5 / SPEED
+    crossings = [t_a + 0.9 + k * 0.75 + 9.5 / SPEED for k in range(6)]
+    for tc in crossings:  # the line flares as each screen crosses
         kf(line_m.strength, 'default_value', F(tc - 0.3), 6.0)
         kf(line_m.strength, 'default_value', F(tc), 16.0)
         kf(line_m.strength, 'default_value', F(tc + 0.3), 6.0)
-    ring_m = Mat('gate ring', '#ff7ab6', 5.0)
-    ring = torus('gate ring', 2.75, 0.045, c, ring_m)
-    ring.location = o
-    ring.rotation_euler = (0, math.radians(90), 0)
-    kf(ring, 'scale', F(t_a + 0.15), Vector((0.001, 0.001, 1)))
-    kf(ring, 'scale', F(t_a + 1.1), Vector((1, 0.62, 1)))
-    for m in (line_m, ring_m):
-        fade_out(m.alpha, F(40.0), F(40.7))
+    portal = empty('portal', c, o)
+    portal.rotation_euler = (0, math.radians(90), 0)  # local XY plane faces along +X; local X is world height
+    oval = Vector((1, 0.62, 1))
+    kf(portal, 'scale', F(t_a + 0.15), Vector((0.001, 0.001, 1)))
+    kf(portal, 'scale', F(t_a + 0.9), Vector((1.08, 0.67, 1)))  # opens with a small overshoot
+    kf(portal, 'scale', F(t_a + 1.15), oval)
+    for tc in crossings:  # pulse as each screen comes through
+        kf(portal, 'scale', F(tc - 0.15), oval)
+        kf(portal, 'scale', F(tc), Vector((1.05, 0.62 * 1.05, 1)))
+        kf(portal, 'scale', F(tc + 0.25), oval)
+    gate_mats = [line_m]
+    for tube, colr, alpha, st in ((0.045, '#ff7ab6', 1.0, 5.0), (0.14, PINK, 0.22, 2.0)):
+        m = Mat('gate ring', colr, st, alpha)
+        r = torus('gate ring', 2.75, tube, c, m)
+        r.parent = portal
+        gate_mats.append(m)
+    disc_m = swirl_mat()
+    disc = disc_mesh('portal surface', 2.7, c, disc_m)
+    disc.parent = portal
+    fade(disc_m.alpha, F(t_a + 0.5), None, 16, 0.42)
+    kf(disc, 'rotation_euler', F(t_a), Vector((0, 0, 0)), 'LINEAR')
+    kf(disc, 'rotation_euler', F(41), Vector((0, 0, -1.3 * 8)), 'LINEAR')
+    gate_mats.append(disc_m)
+    for n_arcs, R_arc, arc, tube, colr, speed, t_in in ((3, 3.05, 1.2, 0.03, '#f9a8d4', 0.8, 0.8), (4, 3.32, 0.5, 0.02, '#818cf8', -0.5, 1.0)):
+        spin = empty('portal arcs', c)
+        spin.parent = portal
+        am = Mat('portal arc', colr, 3.0, 0.0)
+        fade(am.alpha, F(t_a + t_in), None, 14, 0.75)
+        gate_mats.append(am)
+        for i in range(n_arcs):
+            arc_ob = torus_arc('portal arc', R_arc, tube, arc, c, am)
+            arc_ob.parent = spin
+            arc_ob.rotation_euler = (0, 0, i * 2 * math.pi / n_arcs)
+        kf(spin, 'rotation_euler', F(t_a), Vector((0, 0, 0)), 'LINEAR')
+        kf(spin, 'rotation_euler', F(41), Vector((0, 0, speed * 8)), 'LINEAR')
+    for m in gate_mats:
+        kf(m.alpha, 'default_value', F(40.0), m.alpha.default_value)
+        kf(m.alpha, 'default_value', F(40.7), 0.0)
+    # A stream of light through the portal, a burst as it opens and sparks at each crossing
+    spark = sphere('spark', 0.028, c, Mat('spark', '#ffc2dd', 6.0), o + Vector((0, 0, -60)))  # instanced, kept off screen
+    stream(c, 'portal stream', spark, o + Vector((-7.5, 0, 0)), (5.0, 3.0), 700, F(t_a + 0.7), F(40.3), 4.8, 0.0, 75)
+    stream(c, 'portal burst', spark, o, (0.3, 0.3), 70, F(t_a + 0.45), F(t_a + 0.5), 0.5, 4.0, 16)
+    for k, tc in enumerate(crossings):
+        y, z = math.sin(k * 1.7) * 0.3, math.cos(k * 2.3) * 0.35
+        stream(c, 'crossing sparks', spark, o + anim(0, y, z), (SH, 1.0), 34, F(tc), F(tc) + 2, 3.0, 1.5, 16)
     caption('Everything you rely on, carried over. And faster.', 'Nothing left behind', F(34.4), F(39.7))
     # Camera: three-quarter view of the gate, then lands square on the Maps screen (it becomes shot 7)
     n = anim(math.sin(SRY), 0, math.cos(SRY))
@@ -947,7 +1082,7 @@ def shot_gate():
     def cam_fn(t):
         u = t - t_a
         ph = o + anim(gate_x(5, u), math.sin(5 * 1.7) * 0.3, math.cos(5 * 2.3) * 0.35)
-        base = tgt0 + (anim(-6.2 + u * 0.12, 0.9, 7.6) + o - tgt0) * K
+        base = tgt0 + (anim(-6.2 + u * 0.12, 0.9 - u * 0.04, 7.6 - u * 0.18) + o - tgt0) * K
         land = ph + n * 4.66 * K
         e = ss(7.0, 8.0, u)
         return base.lerp(land, e), tgt0.lerp(ph, e)
