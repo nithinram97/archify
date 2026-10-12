@@ -43,6 +43,9 @@
   .pill { display: inline-block; background: rgba(15,23,42,.85); color: #fff; font-weight: 600; font-size: 14px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(148,163,184,.5); margin-left: 8px; }
   .abs { position: absolute; }
   .mich { font-family: 'Michroma', sans-serif; letter-spacing: .07em; color: #fff; white-space: nowrap; }
+  .dms { font-family: 'Montserrat', sans-serif; color: #fff; white-space: nowrap; letter-spacing: .04em; }
+  .dms b { font-weight: 600; }
+  .dms i { font-style: normal; font-weight: 300; letter-spacing: .12em; color: #e2e8f0; }
   .caret { display: inline-block; width: .08em; height: .9em; background: #fff; margin-left: .06em; vertical-align: -0.08em; }
 </style>
 <script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
@@ -87,7 +90,8 @@ let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 214748364
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-const DPR = Number(Q.get('dpr') || 1);  // ?dpr=1.5 renders 1920 x 1080 from the 1280 x 720 layout
+const DPR = Number(Q.get('dpr') || 1);
+const CREDIT = Q.get('credit') === 'dms' ? 'dms' : 'cv';  // ?credit=dms: the DMS India version of the credits  // ?dpr=1.5 renders 1920 x 1080 from the 1280 x 720 layout
 renderer.setPixelRatio(DPR); renderer.setSize(W, H);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.localClippingEnabled = true;
@@ -114,6 +118,7 @@ const [dots] = await Promise.all([
   ...['heat', 'table', 'onepager', 'tracker', 'report', 'search'].map((k) => loadImg('slate_' + k, `textures/slate_${k}.png`)),
   loadImg('skywise', 'textures/logo_skywise.png'), loadImg('cmark', 'textures/logo_clairvoyant_mark.png'),
   font.load().then((f) => document.fonts.add(f)).catch(() => console.warn('Michroma not loaded')),
+  ...[[300, 'montserrat-300'], [600, 'montserrat-600']].map(([w, f]) => new FontFace('Montserrat', `url(${ROOT}fonts/${f}.woff2)`, { weight: String(w) }).load().then((x) => document.fonts.add(x)).catch(() => console.warn('Montserrat not loaded'))),
 ]);
 const texCache = {};
 const imgTex = (k) => {
@@ -700,7 +705,12 @@ const MICH_W = meas.getBoundingClientRect().width / 100; meas.remove();
 // Clairvoyant lockup proportions (brand kit): wordmark 52/272 of the mark height, gap 64/272.
 // The name is set larger than the brand-kit lockup (0.19 of the mark) so it holds its own next to Skywise.
 const WORD = 0.36;
-const cvWidth = (mh) => mh * MARK_A + mh * 64 / 272 + MICH_W * mh * WORD;
+// DMS India has no logo, so its credit is a wordmark: DMS in semibold, India in light, spaced.
+const DMS_TEXT = 'DMS India', DMS_FS = 0.5;
+const dmsHtml = (n) => { const s = DMS_TEXT.slice(0, n); return `<b>${s.slice(0, 3)}</b>${s.length > 3 ? ' <i>' + s.slice(4) + '</i>' : ''}`; };
+const dmeas = document.createElement('span'); dmeas.className = 'dms'; dmeas.style.cssText = 'position:absolute;visibility:hidden;font-size:100px'; dmeas.innerHTML = dmsHtml(9); document.body.appendChild(dmeas);
+const DMS_W = dmeas.getBoundingClientRect().width / 100; dmeas.remove();
+const cvWidth = (mh) => CREDIT === 'dms' ? DMS_W * mh * DMS_FS : mh * MARK_A + mh * 64 / 272 + MICH_W * mh * WORD;
 function creditLayout(p) {
   const A = (() => { const sh = 66, mh = 118, sw = sh * SKY_A, cw = cvWidth(mh), gap = 64, xw = 26;
     const total = sw + gap + xw + gap + cw, x0 = 640 - total / 2;
@@ -712,6 +722,11 @@ function credits(L, { head = 1, sky = 1, x = 1, mark = 1, chars = 11, caret = fa
   abs('Brought to you by', 'credit', `left:0;right:0;text-align:center;top:${L.hy}px;transform:translateY(-50%);font-size:${L.hs}px;letter-spacing:${L.hl}px;opacity:${head}`);
   if (IMG.skywise) abs(`<img src="${IMG.skywise.src}" style="height:${L.sh}px;display:block">`, '', `left:${L.sx}px;top:${L.sy}px;transform:translate(-50%,-50%) scale(${lerp(0.92, 1, sky)});opacity:${sky}`);
   abs('×', '', `left:${L.xx}px;top:${L.xy}px;transform:translate(-50%,-50%);font-size:${L.xs}px;color:#94a3b8;opacity:${x}`);
+  if (CREDIT === 'dms') {
+    const n = Math.round(chars * DMS_TEXT.length / 11);
+    abs(`<span class="dms" style="font-size:${L.mh * DMS_FS}px">${dmsHtml(n)}${caret ? '<span class="caret"></span>' : ''}</span>`, '', `left:${L.cl}px;top:${L.cy}px;transform:translateY(-50%);display:flex;align-items:center`);
+    return;
+  }
   const fs = L.mh * WORD, gap = L.mh * 64 / 272;
   const word = 'CLAIRVOYANT'.slice(0, chars);
   abs(`<img src="${IMG.cmark ? IMG.cmark.src : ''}" style="height:${L.mh}px;display:block;opacity:${mark};transform:scale(${lerp(0.6, 1, eob(mark))})">` +

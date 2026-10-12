@@ -24,6 +24,8 @@ import os
 import wave
 
 import numpy as np
+import sys
+DMS = '--dms' in sys.argv  # DMS India credits: 'DMS India' is typed instead of 'CLAIRVOYANT'
 
 SR = 48000
 DUR = 94.0
@@ -322,10 +324,12 @@ add(sfx, bell(79, 2.0), 73.5, 0.2)
 add(music, pad(CH['F'][0], 3.6, 0.8, 1.0), 77.0, 0.16)
 add(music, pad(CH['G'][0], 3.4, 0.6, 0.8), 80.2, 0.16)
 add(sfx, bell(79, 2.0), 77.9, 0.22, -0.3)   # Skywise
-add(sfx, bell(84, 2.0), 78.6, 0.22, 0.3)    # Clairvoyant mark
-step = 1.2 / 11
-for i in range(11):  # one tuned tick per typed letter
-    add(sfx, tick([2100, 2350, 2640, 2800, 3140][i % 5], 0.05), 79.2 + i * step, 0.3, pan=0.25)
+add(sfx, bell(84, 2.0), 78.6, 0.22, 0.3)    # second credit
+WORD = 'DMS India' if DMS else 'CLAIRVOYANT'
+step = 1.2 / len(WORD)
+for i, ch in enumerate(WORD):  # one tuned tick per typed letter
+    if ch != ' ':
+        add(sfx, tick([2100, 2350, 2640, 2800, 3140][i % 5], 0.05), 79.2 + i * step, 0.3, pan=0.25)
 add(sfx, riser(1.5), 81.8, 0.45)
 
 # 83.3-94 · ERM 2.0
@@ -377,6 +381,8 @@ def write(name, x):
     print('wrote', name)
 
 
-write('erm2_trailer_mix.wav', mix)
-write('erm2_trailer_music.wav', music_w)
-write('erm2_trailer_sfx.wav', sfx_w)
+SUFFIX = '_dms' if DMS else ''
+write(f'erm2_trailer_mix{SUFFIX}.wav', mix)
+if not DMS:  # the stems only differ in the typing ticks, so the DMS version writes just the mix
+    write('erm2_trailer_music.wav', music_w)
+    write('erm2_trailer_sfx.wav', sfx_w)
