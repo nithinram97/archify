@@ -34,6 +34,30 @@ mk.Text3D("Hello").at(0, 0, 1).pop_in(at=0.5).float(start=1, end=5).fade_out(at=
 Rough sizes with the default 35 mm lens and the camera 12 units away: the frame is about 12 units wide
 and 7 tall, and a `Text3D` of `size=1` is a large title.
 
+## 3b. Axes and planes (read this before 3D work)
+
+```
+            Z (up)
+            |
+            |    Y (away from the camera, into the screen)
+            |   /
+            |  /
+            | /
+            +---------- X (right)
+   camera at (0, -12, 1), looking towards +Y
+```
+
+| Plane | Contains | Use it for |
+|---|---|---|
+| **Screen plane** (X and Z) | things that face the camera | text, screens, logos, `Ring()` (default), halos |
+| **Ground plane** (X and Y) | things lying flat | floors (`GridFloor`), orbits (`item.orbit`), `Ring(facing="up")`, maps, bar-chart bases |
+
+* Anything that **circles** something else: use `item.orbit(around=..., radius=..., turns=...)`. It moves
+  on the ground plane (tilt it with `tilt=`). Never build orbits from rotations by hand.
+* Anything that **turns on its own axis** (a planet's day, a spinning logo seen from the front): `.spin(axis="Z")`.
+  A ring facing the camera turns with `axis="Y"`.
+* Looking **from above**: put the camera high on Z (`move(to=(0, -6, 12), look_at=(0, 0, 0))`).
+
 ## 4. Shots
 
 For longer movies, build each section on its own stage:
@@ -61,13 +85,28 @@ the 3D scene can cover it.
 * Sizes are fractions of the frame height: `size=0.05` is 5% of the height.
 * `at=` fades in, `until=` fades out.
 
-## 6. Look: colours, glow, materials
+## 6. Look: glowing or lit
+
+There are two looks, and you choose per object:
+
+| | **Glowing** (default) | **Lit** (`lit=True`) |
+|---|---|---|
+| What it is | Self-lit flat colour; ignores lights | A real surface shaded by lights: bright side, dark side, highlights |
+| Use for | Text, UI, screens, logos, rings, lines, suns, neon | Planets, products, blocks, anything that should look solid |
+| Needs | `movie.effects.glow()` for bloom when `glow` > 1 | At least one `mk.Light(...)` |
+
+* A glowing object never blocks or shadows light, so a glowing sun can hold the `Light` that lights the planets.
+* Lit objects take `roughness` (0 glossy, 1 matte) and `metallic` (0 plastic/rock, 1 metal).
+* A typical lit setup: `mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0)` (key) plus
+  `mk.Light("sun", 0.3).point_at(0, 0, 0)` (soft fill).
+
+## 6b. Colours and glow
 
 * Colours: palette names (`"pink"`, `"indigo"`, `"cyan"`, `"white"`, `"muted"`, `"night"`, `"gold"`,
   `"green"`, `"red"`) or any hex string (`"#22c55e"`). Choose the palette with `Movie(palette="neon")` or
   `"corporate"`, or make your own `mk.Palette`.
-* Everything is **self-lit** (emission materials). There are no lights to place, and colours come out exactly
-  as specified.
+* Glowing items are **self-lit**: no lights needed, and colours come out exactly as specified. Lit items
+  (`lit=True`) are shaded by the `Light`s you add.
 * `glow=1` is a flat colour; `glow=2`-`4` glows once `movie.effects.glow()` is on.
 * Opacity, glow and colour are animatable on every item (`fade_to`, `glow_to`, `color_to`).
 

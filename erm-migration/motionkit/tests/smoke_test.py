@@ -45,6 +45,25 @@ with movie.shot("one", 0, 6) as s1:
     check("Starfield + GridFloor", lambda: (mk.Starfield(200), mk.GridFloor(10, 1)))
     check("Group", lambda: mk.Group(mk.Sphere(0.2), mk.Sphere(0.2).at(1, 0, 0)).move_to(0, 0, 2, at=1).rotate_to(0, 0, 90, 2))
     check("colour animation", lambda: mk.Card(1, 1, "indigo").color_to("pink", 1).glow_to(3, 2).fade_to(0.3, 3))
+    check("lit Sphere + Box + Lights", lambda: (mk.Light("point", 1500).at(2, -3, 3), mk.Light("sun", 0.3).point_at(0, 0, 0),
+                                                mk.Light("area", 800).at(-3, -3, 3).point_at(0, 0, 0).power_to(1200, 1),
+                                                mk.Sphere(0.4, "#3b82f6", lit=True).at(2, 0, 0),
+                                                mk.Box(1, 1, 0.3, "gold", metallic=0.8).at(-2, 0, 0).spin(1, 0, 4),
+                                                mk.Text3D("Lit", lit=True).at(0, 0, 2)))
+    def orbits():
+        sun = mk.Sphere(0.6, "gold", glow=5)
+        planet = mk.Sphere(0.2, "cyan", lit=True).orbit(around=sun, radius=3, turns=1, start=0, end=4, path=True)
+        moon = mk.Sphere(0.05, "white", lit=True).orbit(around=planet, radius=0.5, turns=3, start=0, end=4, tilt=10)
+        bpy.context.scene.frame_set(1)
+        p0 = planet.obj.matrix_world.translation.copy()
+        bpy.context.scene.frame_set(1 + 24)  # a quarter turn later
+        p1 = planet.obj.matrix_world.translation.copy()
+        assert abs(p0.z - p1.z) < 1e-3, "orbit left the ground plane"
+        assert abs((p0 - sun.obj.matrix_world.translation).length - 3) < 1e-3, "orbit radius wrong"
+        assert (p0 - p1).length > 1, "planet did not move"
+        assert moon.obj.parent is not None
+    check("orbit stays flat, keeps its radius, moon follows", orbits)
+    check("flat Ring", lambda: mk.Ring(2, facing="up").draw_on(0, 1))
     portal = mk.Portal().at(0, 4, 0)
     check("Portal.open", lambda: portal.open(2))
     check("camera moves", lambda: (movie.camera.place((0, -10, 1)), movie.camera.push_in((0, -7, 1), 0, 2),

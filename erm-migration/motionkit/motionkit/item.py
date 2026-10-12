@@ -211,6 +211,48 @@ class Item:
             i += 1
         return self
 
+    def orbit(self, around=(0, 0, 0), radius=3.0, turns=1.0, start=0.0, end=8.0, tilt=0.0, phase=0.0,
+              clockwise=False, path=False, path_color="muted", ease="linear"):
+        """Circle around a point or another Item, on the ground plane (flat, like planets round a sun).
+
+        Args:
+            around: a position (x, y, z) or an Item to circle (a moon around a planet follows the planet).
+            radius: distance from the centre.
+            turns: how many full circles between `start` and `end` (0.5 = half a circle).
+            tilt: tilts the orbit's plane, in degrees (0 = perfectly flat).
+            phase: where on the circle it starts, in degrees (0 = right of the centre, 90 = behind it).
+            clockwise: direction seen from above.
+            path: also draw the orbit as a thin flat ring (`path_color`).
+        The item keeps its own `.spin()` for turning on its axis.
+        """
+        import bpy
+        from .stage import STAGE
+        tilt_e = STAGE.link(bpy.data.objects.new(f"{self.obj.name} orbit", None))
+        if isinstance(around, Item):
+            c = tilt_e.constraints.new("COPY_LOCATION")  # follow the centre's position, not its spin
+            c.target = around.obj
+        else:
+            tilt_e.location = around
+        tilt_e.rotation_euler = (math.radians(tilt), 0, 0)
+        spin_e = bpy.data.objects.new(f"{self.obj.name} orbit spin", None)
+        STAGE.link(spin_e)
+        spin_e.parent = tilt_e
+        self.obj.parent = spin_e
+        self.obj.location = (radius, 0, 0)
+        self._loc = self.obj.location.copy()
+        sign = -1 if clockwise else 1
+        a0 = math.radians(phase)
+        key(spin_e, "rotation_euler", start, (0, 0, a0), ease)
+        key(spin_e, "rotation_euler", end, (0, 0, a0 + sign * 2 * math.pi * turns), ease)
+        self.orbit_pivot = Item(spin_e)
+        if path:
+            from .assets import Ring
+            ring = Ring(radius, 0.008, path_color, glow=1.2, facing="up", opacity=0.5)
+            ring.obj.parent = tilt_e
+            ring.obj.location = (0, 0, 0)
+            self.orbit_path = ring
+        return self
+
     def pulse(self, at, times=1, amount=1.15, period=0.5):
         """Briefly grow and settle back, `times` times (draws the eye)."""
         s = self._scale

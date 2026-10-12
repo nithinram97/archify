@@ -8,8 +8,10 @@ Text, screens and logos stand upright facing the camera.
     Card       flat rectangle (solid colour or image)
     Screen     an image (screenshot) with a glowing frame
     Logo       an image with transparency, sized by height
-    Sphere     ball
-    Ring       circle outline; .draw_on() draws it; Arc is a partial ring
+    Sphere     ball (glowing, or lit=True for a shaded planet/object)
+    Box        block with rounded edges (lit)
+    Light      lights for lit objects: point, sun, spot, area
+    Ring       circle outline facing the camera, or flat (facing="up"); .draw_on(); Arc is a partial ring
     Line       a path through points; .draw_on()
     Starfield  a cloud of tiny stars (background depth)
     GridFloor  glowing grid on the ground (tech look)
@@ -29,6 +31,7 @@ from mathutils import Euler, Vector
 
 from .item import Item
 from .keys import key, socket_key, value_at
+from .color import rgba
 from .materials import GlowMaterial, load_image
 from .stage import STAGE
 
@@ -46,6 +49,12 @@ def _font(path):
     return _FONT_CACHE[path]
 
 
+def _no_shadow(ob, mat):
+    """Glowing objects are light sources, not surfaces: they must not block or shadow lights."""
+    if mat is not None and not getattr(mat, "lit", False) and hasattr(ob, "visible_shadow"):
+        ob.visible_shadow = False
+
+
 def _mesh_object(name, bm, mat):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
@@ -53,6 +62,7 @@ def _mesh_object(name, bm, mat):
     ob = bpy.data.objects.new(name, me)
     if mat is not None:
         ob.data.materials.append(mat.mat)
+    _no_shadow(ob, mat)
     return STAGE.link(ob)
 
 
@@ -65,6 +75,7 @@ def _plane_object(name, w, h, mat):
         uv.data[li].uv = co
     ob = bpy.data.objects.new(name, me)
     ob.data.materials.append(mat.mat)
+    _no_shadow(ob, mat)
     return STAGE.link(ob)
 
 
@@ -78,6 +89,7 @@ def _curve_object(name, mat, thickness):
     cu.bevel_factor_mapping_end = "SPLINE"
     ob = bpy.data.objects.new(name, cu)
     ob.data.materials.append(mat.mat)
+    _no_shadow(ob, mat)
     return STAGE.link(ob), cu
 
 
@@ -118,8 +130,8 @@ class Text3D(Item):
     """
 
     def __init__(self, text, size=1.0, color="white", glow=1.5, depth=0.05, font=None, align="center",
-                 spacing=1.0, opacity=1.0):
-        mat = GlowMaterial(color, glow, opacity, name=f"text {text[:12]}")
+                 spacing=1.0, opacity=1.0, lit=False):
+        mat = GlowMaterial(color, None if lit and glow == 1.5 else glow, opacity, name=f"text {text[:12]}", lit=lit)
         self._args = dict(size=size, depth=depth, font=font, align=align, spacing=spacing)
         ob = self._make(text, mat)
         self.text = text
@@ -139,6 +151,7 @@ class Text3D(Item):
             cu.font = f
         ob = bpy.data.objects.new("text " + body[:16], cu)
         ob.data.materials.append(mat.mat)
+        _no_shadow(ob, mat)
         ob.rotation_euler = (math.radians(90), 0, 0)
         return STAGE.link(ob)
 
@@ -186,8 +199,8 @@ class Counter(Item):
 class Card(Item):
     """A flat rectangle facing the camera: solid colour, or an image when `image=` is given."""
 
-    def __init__(self, width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0):
-        mat = GlowMaterial(color, glow, opacity, image=image, name="card")
+    def __init__(self, width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0, lit=False):
+        mat = GlowMaterial(color, None if lit and glow == 1.0 else glow, opacity, image=image, name="card", lit=lit)
         super().__init__(_plane_object("card", width, height, mat), [mat])
 
 
@@ -216,17 +229,98 @@ class Logo(Item):
 
 # ---------------------------------------------------------------------------------------------- solids and lines
 class Sphere(Item):
-    def __init__(self, radius=1.0, color="indigo", glow=1.0, opacity=1.0, blend=False):
-        mat = GlowMaterial(color, glow, opacity, blend=blend, name="sphere")
+    """A ball. Glowing by default (a sun, a light, a marker); `lit=True` for a shaded planet or object
+    (needs a `Light`). `roughness` / `metallic` shape the lit surface."""
+
+    def __init__(self, radius=1.0, color="indigo", glow=None, opacity=1.0, blend=False, lit=False,
+                 roughness=0.6, metallic=0.0):
+        mat = GlowMaterial(color, glow, opacity, blend=blend, name="sphere", lit=lit, roughness=roughness,
+                           metallic=metallic)
         bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=24, radius=radius)
+        bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=radius)
+        for f in bm.faces:
+            f.smooth = True
         super().__init__(_mesh_object("sphere", bm, mat), [mat])
 
 
-class Ring(_Drawable):
-    """A circle outline in the XZ plane (facing the camera). `.draw_on()` draws it, `.spin()` turns it."""
+class Box(Item):
+    """A block with optionally rounded edges (`bevel`). Lit by default: add a `Light`."""
 
-    def __init__(self, radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0):
+    def __init__(self, width=1.0, depth=1.0, height=1.0, color="white", bevel=0.05, lit=True, glow=None,
+                 roughness=0.4, metallic=0.0, opacity=1.0):
+        mat = GlowMaterial(color, glow, opacity, blend=False, name="box", lit=lit, roughness=roughness,
+                           metallic=metallic)
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(width, depth, height), verts=bm.verts)  # real size, so the bevel stays round
+        if bevel > 0:
+            for f in bm.faces:
+                f.smooth = True
+        ob = _mesh_object("box", bm, mat)
+        if bevel > 0:
+            m = ob.modifiers.new("rounded edges", "BEVEL")
+            m.width = bevel
+            m.segments = 4
+            m.harden_normals = True  # flat faces stay flat, only the edges are rounded
+        super().__init__(ob, [mat])
+
+
+class Light(Item):
+    """A light for lit objects (`lit=True`). Glowing objects ignore lights.
+
+    Args:
+        kind: "point" (a bulb, shines all around; put it inside a sun), "sun" (parallel daylight from a
+              direction), "spot" (a cone), "area" (a soft panel, flattering for products).
+        power: brightness. Point/spot/area in watts (500-3000 is typical at 5-10 units away);
+               sun in strength (2-6).
+        color: light colour.
+        size: radius / panel size; bigger = softer shadows.
+        shadows: cast shadows (a little slower).
+    `.point_at(x, y, z)` aims a sun, spot or area light.
+    """
+
+    def __init__(self, kind="point", power=1000.0, color="white", size=0.5, shadows=True):
+        kind = kind.upper()
+        data = bpy.data.lights.new(f"{kind.lower()} light", kind)
+        if kind == "SUN":
+            data.energy = power if power < 50 else 4.0
+            data.angle = math.radians(max(0.5, size * 10))
+        else:
+            data.energy = power
+            if hasattr(data, "shadow_soft_size"):
+                data.shadow_soft_size = size
+            if kind == "AREA":
+                data.size = size * 4
+        data.color = rgba(color)[:3]
+        data.use_shadow = shadows
+        ob = STAGE.link(bpy.data.objects.new(f"{kind.lower()} light", data))
+        ee = bpy.context.scene.eevee
+        if shadows and hasattr(ee, "use_shadows"):
+            ee.use_shadows = True
+        super().__init__(ob)
+
+    def point_at(self, x=0.0, y=0.0, z=0.0):
+        """Aim the light at a point (sun, spot and area lights)."""
+        loc = Vector((x, y, z)) - self.obj.location
+        self.obj.rotation_euler = loc.to_track_quat("-Z", "Y").to_euler()
+        self._rot = self.obj.rotation_euler.copy()
+        return self
+
+    def power_to(self, power, at, duration=0.5, ease="smooth"):
+        """Animate the brightness."""
+        from .keys import value_at
+        key(self.obj.data, "energy", at, value_at(self.obj.data, "energy", at), ease)
+        key(self.obj.data, "energy", at + duration, power, ease)
+        return self
+
+
+class Ring(_Drawable):
+    """A circle outline. `facing="camera"` (default) stands it up facing the camera, like a halo behind a
+    title; `facing="up"` lays it flat on the ground plane, like an orbit path or a target on the floor.
+    `.draw_on()` draws it; `.spin()` turns it (axis "Y" when facing the camera, "Z" when flat)."""
+
+    def __init__(self, radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0,
+                 facing="camera"):
         mat = GlowMaterial(color, glow, opacity, name="ring")
         ob, cu = _curve_object("ring", mat, thickness)
         sp = cu.splines.new("POLY")
@@ -235,6 +329,8 @@ class Ring(_Drawable):
         for i, p in enumerate(sp.points):
             a = math.radians(start + (end - start) * i / n)
             p.co = (radius * math.cos(a), 0, radius * math.sin(a), 1)
+        if facing == "up":
+            ob.rotation_euler = (math.radians(90), 0, 0)
         super().__init__(ob, [mat])
 
 

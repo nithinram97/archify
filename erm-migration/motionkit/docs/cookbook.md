@@ -62,6 +62,30 @@ for i, (name, lat, lon) in enumerate([("Toulouse", 43.6, 1.4), ("Hamburg", 53.5,
     globe.marker(lat, lon, label=name).pop_in(at=t + 1)
 ```
 
+## Solar system (lit planets, orbits, a moon)
+
+```python
+sun = mk.Sphere(1.2, color="#ffb547", glow=6).pop_in(at=0.3)
+mk.Light("point", power=2500, color="#fff3d6", size=1.0)          # inside the sun: lights the planets
+mk.Light("sun", power=0.15, color="#9fb4ff").point_at(0, 0, 0)     # faint fill for the night sides
+earth = mk.Sphere(0.4, color="#3b82f6", lit=True)
+earth.orbit(around=sun, radius=5, turns=1, start=0, end=10, path=True).spin(turns=3, start=0, end=10)
+mk.Sphere(0.1, color="#d4d4d8", lit=True).orbit(around=earth, radius=0.75, turns=4, start=0, end=10)
+movie.camera.place((0, -11, 1.2), look_at=(0, 0, 0))
+movie.camera.move(to=(0, -9, 12), look_at=(0, 0, 0), at=1, duration=8)   # crane up to look from above
+movie.effects.glow(threshold=1.0)
+```
+
+## Product on a turntable (lit)
+
+```python
+mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0.5)   # key light
+mk.Light("sun", 0.4).point_at(0, 0, 0)                     # fill
+mk.Box(2, 1.2, 0.3, color="#1f2937", bevel=0.08, metallic=0.6, roughness=0.3).at(0, 0, 0.15).spin(1, 0, 8)
+mk.Ring(2.2, color="pink", facing="up").at(0, 0, 0.01).draw_on(at=0.5)   # glowing ring on the floor
+movie.camera.place((0, -7, 2.5), look_at=(0, 0, 0.3))
+```
+
 ## Two shots with a flash cut
 
 ```python

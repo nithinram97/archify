@@ -59,6 +59,10 @@ Indent the lines that belong to a shot. Short videos can use a single `SHOT`.
 | `ADD screen "id" "shot.png" width 4 frame cyan` | `mk.Screen("shot.png", width=4, frame_color="cyan")` |
 | `ADD logo "id" "logo.png" height 1` | `mk.Logo("logo.png", height=1)` |
 | `ADD sphere`, `ADD ring`, `ADD arc from 0° to 120°`, `ADD line through x,y,z; x,y,z` | `mk.Sphere`, `mk.Ring`, `mk.Arc`, `mk.Line` |
+| `ADD sphere "earth" 0.4 #3b82f6 lit` | `mk.Sphere(0.4, color="#3b82f6", lit=True)` (shaded; needs a light) |
+| `ADD box "phone" 2x1.2x0.3 #1f2937 bevel 0.08 metallic 0.6` | `mk.Box(2, 1.2, 0.3, color="#1f2937", bevel=0.08, metallic=0.6)` |
+| `ADD light point 2500 at 0,0,0` / `ADD light area 1500 at 4,-6,6 aim 0,0,0` / `ADD light sun 0.3 aim 0,0,0` | `mk.Light("point", 2500).at(0, 0, 0)` / `mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0)` |
+| `ADD ring "path" radius 5 flat` | `mk.Ring(5, facing="up")` (lies on the ground) |
 | `ADD stars`, `ADD grid floor` | `mk.Starfield()`, `mk.GridFloor()` |
 | `ADD globe "id"` | `mk.Globe()` |
 | `ADD chart "id" 345,120,95 labels B,O,P` | `mk.BarChart([345, 120, 95], labels=["B", "O", "P"])` |
@@ -71,6 +75,7 @@ Indent the lines that belong to a shot. Short videos can use a single `SHOT`.
 `scale to 1.5 @t` · `rotate to 0,0,90 @t` · `spin 2 turns axis Z t1-t2` · `float t1-t2` · `pulse @t x2` ·
 `glow to 4 @t` · `color to cyan @t` · `show @t` · `hide @t` · `visible t1-t2` · `draw-on @t for d` ·
 `type-on @t for d` · `face camera`
+`orbit around sun radius 5 2 turns 0s-10s tilt 5 phase 30 path` (circle a point or an item, flat) ·
 Globe: `focus lat,lon @t` · `marker lat,lon "Label" pop-in @t`.
 Chart: `grow @t` · `highlight 0 @t`. Wall: `cascade-in @t`. Portal: `open @t`.
 

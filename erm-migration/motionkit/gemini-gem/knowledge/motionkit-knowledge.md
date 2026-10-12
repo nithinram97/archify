@@ -40,6 +40,30 @@ mk.Text3D("Hello").at(0, 0, 1).pop_in(at=0.5).float(start=1, end=5).fade_out(at=
 Rough sizes with the default 35 mm lens and the camera 12 units away: the frame is about 12 units wide
 and 7 tall, and a `Text3D` of `size=1` is a large title.
 
+## 3b. Axes and planes (read this before 3D work)
+
+```
+            Z (up)
+            |
+            |    Y (away from the camera, into the screen)
+            |   /
+            |  /
+            | /
+            +---------- X (right)
+   camera at (0, -12, 1), looking towards +Y
+```
+
+| Plane | Contains | Use it for |
+|---|---|---|
+| **Screen plane** (X and Z) | things that face the camera | text, screens, logos, `Ring()` (default), halos |
+| **Ground plane** (X and Y) | things lying flat | floors (`GridFloor`), orbits (`item.orbit`), `Ring(facing="up")`, maps, bar-chart bases |
+
+* Anything that **circles** something else: use `item.orbit(around=..., radius=..., turns=...)`. It moves
+  on the ground plane (tilt it with `tilt=`). Never build orbits from rotations by hand.
+* Anything that **turns on its own axis** (a planet's day, a spinning logo seen from the front): `.spin(axis="Z")`.
+  A ring facing the camera turns with `axis="Y"`.
+* Looking **from above**: put the camera high on Z (`move(to=(0, -6, 12), look_at=(0, 0, 0))`).
+
 ## 4. Shots
 
 For longer movies, build each section on its own stage:
@@ -67,13 +91,28 @@ the 3D scene can cover it.
 * Sizes are fractions of the frame height: `size=0.05` is 5% of the height.
 * `at=` fades in, `until=` fades out.
 
-## 6. Look: colours, glow, materials
+## 6. Look: glowing or lit
+
+There are two looks, and you choose per object:
+
+| | **Glowing** (default) | **Lit** (`lit=True`) |
+|---|---|---|
+| What it is | Self-lit flat colour; ignores lights | A real surface shaded by lights: bright side, dark side, highlights |
+| Use for | Text, UI, screens, logos, rings, lines, suns, neon | Planets, products, blocks, anything that should look solid |
+| Needs | `movie.effects.glow()` for bloom when `glow` > 1 | At least one `mk.Light(...)` |
+
+* A glowing object never blocks or shadows light, so a glowing sun can hold the `Light` that lights the planets.
+* Lit objects take `roughness` (0 glossy, 1 matte) and `metallic` (0 plastic/rock, 1 metal).
+* A typical lit setup: `mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0)` (key) plus
+  `mk.Light("sun", 0.3).point_at(0, 0, 0)` (soft fill).
+
+## 6b. Colours and glow
 
 * Colours: palette names (`"pink"`, `"indigo"`, `"cyan"`, `"white"`, `"muted"`, `"night"`, `"gold"`,
   `"green"`, `"red"`) or any hex string (`"#22c55e"`). Choose the palette with `Movie(palette="neon")` or
   `"corporate"`, or make your own `mk.Palette`.
-* Everything is **self-lit** (emission materials). There are no lights to place, and colours come out exactly
-  as specified.
+* Glowing items are **self-lit**: no lights needed, and colours come out exactly as specified. Lit items
+  (`lit=True`) are shaded by the `Light`s you add.
 * `glow=1` is a flat colour; `glow=2`-`4` glows once `movie.effects.glow()` is on.
 * Opacity, glow and colour are animatable on every item (`fade_to`, `glow_to`, `color_to`).
 
@@ -177,6 +216,7 @@ Creating a Movie **clears the current Blender scene**, then sets up the camera, 
 | `.spin(turns=1.0, start=0.0, end=4.0, axis="Z", ease="linear")` | Full turns |
 | `.float(start=0.0, end=4.0, height=0.12, period=2.0)` | Idle bobbing |
 | `.pulse(at, times=1, amount=1.15, period=0.5)` | Grow and settle (draws the eye) |
+| `.orbit(around=(0,0,0), radius=3.0, turns=1.0, start=0.0, end=8.0, tilt=0.0, phase=0.0, clockwise=False, path=False, path_color="muted", ease="linear")` | Circle a point or an Item on the ground plane. `around=item` follows that item (moons). `phase` = start angle in degrees, `path=True` draws the orbit ring. Combine with `.spin()` for the item's own rotation |
 
 ### Look
 | Method | Does |
@@ -192,13 +232,15 @@ Creating a Movie **clears the current Blender scene**, then sets up the camera, 
 
 | Constructor | Notes |
 |---|---|
-| `mk.Text3D(text, size=1.0, color="white", glow=1.5, depth=0.05, font=None, align="center", spacing=1.0, opacity=1.0)` | `font` = path to .ttf/.otf. Extra: `.type_on(at, duration=1.0, cursor=False)` |
+| `mk.Text3D(text, size=1.0, color="white", glow=1.5, depth=0.05, font=None, align="center", spacing=1.0, opacity=1.0, lit=False)` | `font` = path to .ttf/.otf. Extra: `.type_on(at, duration=1.0, cursor=False)` |
 | `mk.Counter(end, start=0, at=0.0, duration=1.5, size=1.0, color="white", glow=1.5, prefix="", suffix="", steps=30, decimals=0, font=None)` | Counts from start to end |
-| `mk.Card(width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0)` | Flat rectangle facing the camera |
+| `mk.Card(width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0, lit=False)` | Flat rectangle facing the camera |
 | `mk.Screen(image, width=3.2, frame_color="pink", frame_glow=2.5, frame=0.04, opacity=1.0)` | Screenshot with a glowing frame; `.height` |
 | `mk.Logo(image, height=1.0, opacity=1.0)` | PNG with transparency |
-| `mk.Sphere(radius=1.0, color="indigo", glow=1.0, opacity=1.0, blend=False)` | |
-| `mk.Ring(radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0)` | Faces the camera. Extra: `.draw_on(at, duration=1.0, ease, from_middle=False)`, `.erase(at, duration)` |
+| `mk.Sphere(radius=1.0, color="indigo", glow=None, opacity=1.0, blend=False, lit=False, roughness=0.6, metallic=0.0)` | Glowing ball (sun, marker) or, with `lit=True`, a shaded planet/object |
+| `mk.Box(width=1.0, depth=1.0, height=1.0, color="white", bevel=0.05, lit=True, glow=None, roughness=0.4, metallic=0.0, opacity=1.0)` | Block with rounded edges (lit) |
+| `mk.Light(kind="point", power=1000.0, color="white", size=0.5, shadows=True)` | `kind`: `"point"`, `"sun"`, `"spot"`, `"area"`. Power in watts (point/spot/area, 500-3000 typical) or strength (sun, 0.2-6). `.point_at(x, y, z)`, `.power_to(power, at, duration)` |
+| `mk.Ring(radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0, facing="camera")` | `facing="camera"` stands up; `facing="up"` lies flat (orbits, floor targets). Extra: `.draw_on(at, duration=1.0, ease, from_middle=False)`, `.erase(at, duration)` |
 | `mk.Arc(radius=2.0, start=0.0, end=120.0, **ring_args)` | Partial ring (degrees, 0 = right, 90 = top) |
 | `mk.Line(points, thickness=0.03, color="cyan", glow=2.5, opacity=1.0)` | Smooth path; `.draw_on`, `.erase` |
 | `mk.Starfield(count=1500, spread=(40, 30, 25), color="muted", size=0.03, glow=1.5, seed=7, center=(0, 20, 0))` | Background stars |
@@ -290,7 +332,7 @@ stands at `at`.
 |---|---|
 | `mk.key(target, prop, at, value, ease="smooth")` | One keyframe on any Blender property |
 | `mk.animate(target, prop, {t: value, ...}, ease="smooth" or [eases])` | Several keyframes |
-| `mk.GlowMaterial(color="white", glow=1.0, alpha=1.0, image=None, blend=True, name=...)` | `.alpha`, `.strength`, `.color` sockets, `.mat` |
+| `mk.GlowMaterial(color="white", glow=None, alpha=1.0, image=None, blend=True, name=..., lit=False, roughness=0.6, metallic=0.0)` | `.alpha`, `.strength`, `.color` sockets, `.mat`; `lit=True` = shaded surface |
 | `mk.Palette(name, {"pink": "#...", ...})` | Your own colour names |
 | `mk.EASINGS` | The ease names |
 
@@ -360,6 +402,10 @@ Indent the lines that belong to a shot. Short videos can use a single `SHOT`.
 | `ADD screen "id" "shot.png" width 4 frame cyan` | `mk.Screen("shot.png", width=4, frame_color="cyan")` |
 | `ADD logo "id" "logo.png" height 1` | `mk.Logo("logo.png", height=1)` |
 | `ADD sphere`, `ADD ring`, `ADD arc from 0° to 120°`, `ADD line through x,y,z; x,y,z` | `mk.Sphere`, `mk.Ring`, `mk.Arc`, `mk.Line` |
+| `ADD sphere "earth" 0.4 #3b82f6 lit` | `mk.Sphere(0.4, color="#3b82f6", lit=True)` (shaded; needs a light) |
+| `ADD box "phone" 2x1.2x0.3 #1f2937 bevel 0.08 metallic 0.6` | `mk.Box(2, 1.2, 0.3, color="#1f2937", bevel=0.08, metallic=0.6)` |
+| `ADD light point 2500 at 0,0,0` / `ADD light area 1500 at 4,-6,6 aim 0,0,0` / `ADD light sun 0.3 aim 0,0,0` | `mk.Light("point", 2500).at(0, 0, 0)` / `mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0)` |
+| `ADD ring "path" radius 5 flat` | `mk.Ring(5, facing="up")` (lies on the ground) |
 | `ADD stars`, `ADD grid floor` | `mk.Starfield()`, `mk.GridFloor()` |
 | `ADD globe "id"` | `mk.Globe()` |
 | `ADD chart "id" 345,120,95 labels B,O,P` | `mk.BarChart([345, 120, 95], labels=["B", "O", "P"])` |
@@ -372,6 +418,7 @@ Indent the lines that belong to a shot. Short videos can use a single `SHOT`.
 `scale to 1.5 @t` · `rotate to 0,0,90 @t` · `spin 2 turns axis Z t1-t2` · `float t1-t2` · `pulse @t x2` ·
 `glow to 4 @t` · `color to cyan @t` · `show @t` · `hide @t` · `visible t1-t2` · `draw-on @t for d` ·
 `type-on @t for d` · `face camera`
+`orbit around sun radius 5 2 turns 0s-10s tilt 5 phase 30 path` (circle a point or an item, flat) ·
 Globe: `focus lat,lon @t` · `marker lat,lon "Label" pop-in @t`.
 Chart: `grow @t` · `highlight 0 @t`. Wall: `cascade-in @t`. Portal: `open @t`.
 
@@ -463,6 +510,30 @@ for i, (name, lat, lon) in enumerate([("Toulouse", 43.6, 1.4), ("Hamburg", 53.5,
     t = 0.5 + i * 2
     globe.focus(lat, lon, at=t)
     globe.marker(lat, lon, label=name).pop_in(at=t + 1)
+```
+
+## Solar system (lit planets, orbits, a moon)
+
+```python
+sun = mk.Sphere(1.2, color="#ffb547", glow=6).pop_in(at=0.3)
+mk.Light("point", power=2500, color="#fff3d6", size=1.0)          # inside the sun: lights the planets
+mk.Light("sun", power=0.15, color="#9fb4ff").point_at(0, 0, 0)     # faint fill for the night sides
+earth = mk.Sphere(0.4, color="#3b82f6", lit=True)
+earth.orbit(around=sun, radius=5, turns=1, start=0, end=10, path=True).spin(turns=3, start=0, end=10)
+mk.Sphere(0.1, color="#d4d4d8", lit=True).orbit(around=earth, radius=0.75, turns=4, start=0, end=10)
+movie.camera.place((0, -11, 1.2), look_at=(0, 0, 0))
+movie.camera.move(to=(0, -9, 12), look_at=(0, 0, 0), at=1, duration=8)   # crane up to look from above
+movie.effects.glow(threshold=1.0)
+```
+
+## Product on a turntable (lit)
+
+```python
+mk.Light("area", 1500).at(4, -6, 6).point_at(0, 0, 0.5)   # key light
+mk.Light("sun", 0.4).point_at(0, 0, 0)                     # fill
+mk.Box(2, 1.2, 0.3, color="#1f2937", bevel=0.08, metallic=0.6, roughness=0.3).at(0, 0, 0.15).spin(1, 0, 8)
+mk.Ring(2.2, color="pink", facing="up").at(0, 0, 0.01).draw_on(at=0.5)   # glowing ring on the floor
+movie.camera.place((0, -7, 2.5), look_at=(0, 0, 0.3))
 ```
 
 ## Two shots with a flash cut
@@ -660,5 +731,55 @@ movie.camera.push_in(to=(0, -9, 1.0), at=0, duration=8.5)
 movie.overlay.caption("Used across five countries", eyebrow="Our users", at=1.2, until=8.6)
 movie.overlay.fade_to_black(at=9.2, duration=0.8)
 movie.effects.glow()
+movie.run()
+```
+
+## examples/04_solar_system.py
+
+```python
+"""Demo 4: a small solar system, 12 seconds. Shows the *lit* look (shaded planets lit by the sun),
+orbits on the ground plane, a moon following its planet, and a camera that cranes up to look from above.
+
+    blender -b -P examples/04_solar_system.py -- --still 6
+    blender -b -P examples/04_solar_system.py -- --preview --render
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import motionkit as mk
+
+movie = mk.Movie("solar_system", length=12)
+mk.Starfield(count=2500, spread=(60, 60, 40), center=(0, 0, 0))
+
+# The sun glows (self-lit) and holds the light that shades every planet.
+sun = mk.Sphere(1.2, color="#ffb547", glow=6).pop_in(at=0.3, duration=1.0)
+mk.Light("point", power=2500, color="#fff3d6", size=1.0)        # at the sun's centre
+mk.Light("sun", power=0.15, color="#9fb4ff").point_at(0, 0, 0)   # faint fill so night sides aren't pure black
+
+# Planets are lit=True: shaded by the sun, with a day side and a night side.
+planets = [  # (radius, colour, distance, turns in 12 s, start angle)
+    (0.22, "#c9b8a6", 2.6, 1.6, 30),
+    (0.38, "#e6b86a", 3.8, 1.1, 200),
+    (0.42, "#3b82f6", 5.2, 0.8, 120),
+    (0.32, "#ef6b4a", 6.8, 0.55, 300),
+]
+for i, (r, color, dist, turns, phase) in enumerate(planets):
+    p = mk.Sphere(r, color=color, lit=True, roughness=0.7)
+    p.orbit(around=sun, radius=dist, turns=turns, start=0, end=12, phase=phase, path=True)
+    p.spin(turns=3, start=0, end=12)                 # turning on its own axis
+    p.pop_in(at=0.8 + i * 0.25, duration=0.6)
+    if i == 2:  # the blue planet gets a moon that follows it around
+        moon = mk.Sphere(0.1, color="#d4d4d8", lit=True)
+        moon.orbit(around=p, radius=0.75, turns=4, start=0, end=12, phase=90).pop_in(at=1.8, duration=0.4)
+
+# Camera: start low and close, crane up to see the whole system from above.
+movie.camera.place((0, -11, 1.2), look_at=(0, 0, 0))
+movie.camera.move(to=(0, -9, 12), look_at=(0, 0, 0), at=1.5, duration=9, ease="ease_in_out")
+
+movie.overlay.caption("Lit planets, real orbits, one line each", eyebrow="motionkit", at=2, until=6)
+movie.overlay.fade_from_black(at=0, duration=0.8)
+movie.overlay.fade_to_black(at=11.2, duration=0.8)
+movie.effects.glow(threshold=1.0)
 movie.run()
 ```

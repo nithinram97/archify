@@ -31,8 +31,9 @@ blender -P hello.py                              # open Blender with the scene b
 | Layer | You get |
 |---|---|
 | **Movie** | Clean scene, EEVEE tuned for motion graphics, shots, music, command-line rendering |
-| **Assets** | `Text3D`, `Counter`, `Card`, `Screen`, `Logo`, `Sphere`, `Ring`, `Arc`, `Line`, `Starfield`, `GridFloor`, `Globe`, `BarChart`, `ScreenWall`, `Portal`, `Group` |
-| **Motion** (on every asset) | `fade_in/out`, `pop_in/out`, `slide_in/out`, `rise_in`, `move_to`, `scale_to`, `rotate_to`, `spin`, `float`, `pulse`, `glow_to`, `color_to`, `show/hide`, `draw_on`, `type_on` ... |
+| **Assets** | `Text3D`, `Counter`, `Card`, `Screen`, `Logo`, `Sphere`, `Box`, `Ring` (upright or flat), `Arc`, `Line`, `Starfield`, `GridFloor`, `Globe`, `BarChart`, `ScreenWall`, `Portal`, `Group`, `Light` |
+| **Looks** | Glowing (self-lit motion graphics) or lit (`lit=True`: shaded solids such as planets and products, with `Light`s) |
+| **Motion** (on every asset) | `fade_in/out`, `pop_in/out`, `slide_in/out`, `rise_in`, `move_to`, `scale_to`, `rotate_to`, `spin`, `orbit`, `float`, `pulse`, `glow_to`, `color_to`, `show/hide`, `draw_on`, `type_on` ... |
 | **Camera** | `place`, `move`, `cut_to`, `push_in`, `pull_out`, `orbit`, `crane`, `follow_path`, `shake`, `zoom`, `dolly_zoom`, `focus` |
 | **Overlay** (screen space) | `caption`, `title`, `lower_third`, `text`, `image`, `box`, `letterbox`, `fade_from_black`, `fade_to_black`, `dip`, `flash` |
 | **Transitions** | `cut`, `fade_through_black`, `dip_to_color`, `flash_cut`, `whip_pan`, `push_through`, `through_portal` |
@@ -55,7 +56,7 @@ motionkit/
     color.py            colours and palettes
     _compat.py          every Blender-version difference, in one place
     data/               world map dots for Globe
-  examples/             01 hello title (the demo), 02 product reveal, 03 globe tour
+  examples/             01 hello title (the demo), 02 product reveal, 03 globe tour, 04 solar system
   docs/                 guide, concepts, API reference, cookbook, Shot Script, troubleshooting
   gemini-gem/           everything to set up the Gemini gem that writes motionkit code
   presentation/         developer deck (PowerPoint / Google Slides) and the demo video

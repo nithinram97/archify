@@ -21,7 +21,7 @@ __version__ = "1.0.0"
 import bpy  # noqa: F401  (loads mathutils when running as the bpy Python module)
 
 from . import transitions
-from .assets import (Arc, BarChart, Card, Counter, Globe, GridFloor, Line, Logo, Portal, Ring, Screen,
+from .assets import (Arc, BarChart, Box, Card, Counter, Globe, GridFloor, Light, Line, Logo, Portal, Ring, Screen,
                      ScreenWall, Sphere, Starfield, Text3D)
 from .color import CORPORATE, NEON, Palette, PALETTES
 from .item import Group, Item
@@ -32,6 +32,6 @@ from .timing import EASINGS
 
 __all__ = [
     "Movie", "Shot", "Item", "Group", "GlowMaterial", "transitions", "key", "animate", "EASINGS",
-    "Text3D", "Counter", "Card", "Screen", "Logo", "Sphere", "Ring", "Arc", "Line", "Starfield", "GridFloor",
+    "Text3D", "Counter", "Card", "Screen", "Logo", "Sphere", "Box", "Light", "Ring", "Arc", "Line", "Starfield", "GridFloor",
     "Globe", "BarChart", "ScreenWall", "Portal", "Palette", "PALETTES", "NEON", "CORPORATE",
 ]

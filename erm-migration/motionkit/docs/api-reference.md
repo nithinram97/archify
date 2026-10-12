@@ -83,6 +83,7 @@ Creating a Movie **clears the current Blender scene**, then sets up the camera, 
 | `.spin(turns=1.0, start=0.0, end=4.0, axis="Z", ease="linear")` | Full turns |
 | `.float(start=0.0, end=4.0, height=0.12, period=2.0)` | Idle bobbing |
 | `.pulse(at, times=1, amount=1.15, period=0.5)` | Grow and settle (draws the eye) |
+| `.orbit(around=(0,0,0), radius=3.0, turns=1.0, start=0.0, end=8.0, tilt=0.0, phase=0.0, clockwise=False, path=False, path_color="muted", ease="linear")` | Circle a point or an Item on the ground plane. `around=item` follows that item (moons). `phase` = start angle in degrees, `path=True` draws the orbit ring. Combine with `.spin()` for the item's own rotation |
 
 ### Look
 | Method | Does |
@@ -98,13 +99,15 @@ Creating a Movie **clears the current Blender scene**, then sets up the camera, 
 
 | Constructor | Notes |
 |---|---|
-| `mk.Text3D(text, size=1.0, color="white", glow=1.5, depth=0.05, font=None, align="center", spacing=1.0, opacity=1.0)` | `font` = path to .ttf/.otf. Extra: `.type_on(at, duration=1.0, cursor=False)` |
+| `mk.Text3D(text, size=1.0, color="white", glow=1.5, depth=0.05, font=None, align="center", spacing=1.0, opacity=1.0, lit=False)` | `font` = path to .ttf/.otf. Extra: `.type_on(at, duration=1.0, cursor=False)` |
 | `mk.Counter(end, start=0, at=0.0, duration=1.5, size=1.0, color="white", glow=1.5, prefix="", suffix="", steps=30, decimals=0, font=None)` | Counts from start to end |
-| `mk.Card(width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0)` | Flat rectangle facing the camera |
+| `mk.Card(width=2.0, height=1.2, color="white", glow=1.0, image=None, opacity=1.0, lit=False)` | Flat rectangle facing the camera |
 | `mk.Screen(image, width=3.2, frame_color="pink", frame_glow=2.5, frame=0.04, opacity=1.0)` | Screenshot with a glowing frame; `.height` |
 | `mk.Logo(image, height=1.0, opacity=1.0)` | PNG with transparency |
-| `mk.Sphere(radius=1.0, color="indigo", glow=1.0, opacity=1.0, blend=False)` | |
-| `mk.Ring(radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0)` | Faces the camera. Extra: `.draw_on(at, duration=1.0, ease, from_middle=False)`, `.erase(at, duration)` |
+| `mk.Sphere(radius=1.0, color="indigo", glow=None, opacity=1.0, blend=False, lit=False, roughness=0.6, metallic=0.0)` | Glowing ball (sun, marker) or, with `lit=True`, a shaded planet/object |
+| `mk.Box(width=1.0, depth=1.0, height=1.0, color="white", bevel=0.05, lit=True, glow=None, roughness=0.4, metallic=0.0, opacity=1.0)` | Block with rounded edges (lit) |
+| `mk.Light(kind="point", power=1000.0, color="white", size=0.5, shadows=True)` | `kind`: `"point"`, `"sun"`, `"spot"`, `"area"`. Power in watts (point/spot/area, 500-3000 typical) or strength (sun, 0.2-6). `.point_at(x, y, z)`, `.power_to(power, at, duration)` |
+| `mk.Ring(radius=2.0, thickness=0.04, color="pink", glow=3.0, start=0.0, end=360.0, opacity=1.0, facing="camera")` | `facing="camera"` stands up; `facing="up"` lies flat (orbits, floor targets). Extra: `.draw_on(at, duration=1.0, ease, from_middle=False)`, `.erase(at, duration)` |
 | `mk.Arc(radius=2.0, start=0.0, end=120.0, **ring_args)` | Partial ring (degrees, 0 = right, 90 = top) |
 | `mk.Line(points, thickness=0.03, color="cyan", glow=2.5, opacity=1.0)` | Smooth path; `.draw_on`, `.erase` |
 | `mk.Starfield(count=1500, spread=(40, 30, 25), color="muted", size=0.03, glow=1.5, seed=7, center=(0, 20, 0))` | Background stars |
@@ -196,7 +199,7 @@ stands at `at`.
 |---|---|
 | `mk.key(target, prop, at, value, ease="smooth")` | One keyframe on any Blender property |
 | `mk.animate(target, prop, {t: value, ...}, ease="smooth" or [eases])` | Several keyframes |
-| `mk.GlowMaterial(color="white", glow=1.0, alpha=1.0, image=None, blend=True, name=...)` | `.alpha`, `.strength`, `.color` sockets, `.mat` |
+| `mk.GlowMaterial(color="white", glow=None, alpha=1.0, image=None, blend=True, name=..., lit=False, roughness=0.6, metallic=0.0)` | `.alpha`, `.strength`, `.color` sockets, `.mat`; `lit=True` = shaded surface |
 | `mk.Palette(name, {"pink": "#...", ...})` | Your own colour names |
 | `mk.EASINGS` | The ease names |
 
