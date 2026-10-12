@@ -74,7 +74,7 @@ motionkit/
 
 ## Requirements
 
-Blender 5.0 or later (tested on 5.0.1; 4.2+ also works). Nothing to install: the examples add the
+Blender 5.0 or later (tested on 5.0.1; the compatibility layer also covers 4.2-4.5, untested). Nothing to install: the examples add the
 kit to Python's path themselves. To use it from your own folder, copy the inner `motionkit/` package
 next to your script or add its parent folder to `sys.path`.
 

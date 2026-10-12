@@ -16,7 +16,7 @@
 
 ## Blender versions
 
-motionkit targets **Blender 5.0+** (tested on 5.0.1) and also runs on 4.2-4.5. Every API difference
+motionkit targets **Blender 5.0+** (tested on 5.0.1). It is written to also run on 4.2-4.5 (untested). Every API difference
 (layered actions, keyframe interpolation, EEVEE engine names, the 5.x compositor node group, glare
 inputs, sequencer `strips`, video output) is handled in `motionkit/_compat.py`. If a future Blender
 release breaks something, that's the only file to change. Run `tests/smoke_test.py` to see what fails.
