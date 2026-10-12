@@ -3,6 +3,25 @@
 Create a gem in Gemini (**Gems › New gem**) and fill in the fields below. Then upload the knowledge
 file. That's all your developers need: they describe a video, and the gem writes the Blender script.
 
+## Step by step
+
+1. Go to **gemini.google.com** and sign in with your work account.
+2. Open **Explore Gems** (or **Gem manager**) in the left sidebar, then **New Gem**.
+3. **Name**: paste the name below. **Description** (if shown): paste the description below.
+4. **Instructions**: paste everything between the two horizontal lines under "Instructions" below.
+5. **Knowledge**: **Add files**, then upload `knowledge/motionkit-knowledge.md`. If it's refused, upload
+   a copy renamed to `motionkit-knowledge.txt`.
+6. **Model**: if you can choose, pick the Thinking model.
+7. **Test** in the Preview pane: `/idea A 6-second sting: "Hello DMS" among stars, a ring draws around it, a flash`.
+   You should get a Shot Script draft; answer *yes* and you should get one script that starts with
+   `import motionkit as mk` and ends with `movie.run()`, plus the run commands.
+8. **Save**. Then **Share** it with your developers (if sharing is off in your Workspace, each developer
+   repeats these steps).
+9. **Use it**: save the code as a `.py` file in `motionkit/examples/` and run
+   `blender -b -P examples/<file>.py -- --still 3`. Paste errors back with `/fix`.
+10. **Keep it current**: after the kit changes, run `python gemini-gem/build_knowledge.py`, then **Edit**
+    the gem, replace the knowledge file, and **Save**.
+
 ---
 
 ## Name
