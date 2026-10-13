@@ -326,6 +326,33 @@ stands at `at`.
 
 ---
 
+## Bring your own Blender code
+
+When the kit doesn't have something, build it with `bpy` / `bmesh` and plug it in so every motion still works:
+
+```python
+import bpy, bmesh
+# raw Blender: a cone (no cone asset in the kit)
+bm = bmesh.new()
+bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=0.8, radius2=0.0, depth=1.5)
+me = bpy.data.meshes.new("cone"); bm.to_mesh(me); bm.free()
+obj = bpy.data.objects.new("cone", me)
+mat = mk.GlowMaterial("gold", lit=True, metallic=0.8)      # kit material: fades, glow and colour work
+obj.data.materials.append(mat.mat)
+mk.stage.STAGE.link(obj)                                     # lands in the current shot
+cone = mk.Item(obj, [mat])                                   # now it has every motion
+cone.pop_in(at=0.2).spin(1, 0, 4).fade_out(at=3.5)
+# raw Blender: animate the sky colour (any property can be keyframed in seconds)
+sky = bpy.context.scene.world.node_tree.nodes["Background"].inputs[0]
+mk.key(sky, "default_value", at=1.0, value=(0.2, 0.3, 0.5, 1))
+```
+
+* `mk.stage.STAGE.link(obj)` puts the object in the current shot (and parents it to the shot's stage).
+* `mk.Item(obj, [mat])` gives it the motions; without materials, motions still work and fades do nothing.
+* `mk.key(target, "property", at=..., value=..., ease=...)` keyframes anything: modifier values,
+  shader inputs, light colours, world settings.
+* Use the Blender 5.0 API. Mark the block `# raw Blender:` so readers know it's outside the kit.
+
 ## Low level
 
 | API | Does |
@@ -575,6 +602,21 @@ movie = mk.Movie("reel", length=10, size=(1080, 1920), lens=28)
 
 ```python
 movie.add_music("audio/theme.wav", volume=0.8)
+```
+
+## Your own geometry with kit motions
+
+```python
+import bpy, bmesh
+bm = bmesh.new()
+bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=0.8, radius2=0.0, depth=1.5)
+me = bpy.data.meshes.new("cone"); bm.to_mesh(me); bm.free()
+obj = bpy.data.objects.new("cone", me)
+mat = mk.GlowMaterial("gold", lit=True, metallic=0.8)
+obj.data.materials.append(mat.mat)
+mk.stage.STAGE.link(obj)
+mk.Item(obj, [mat]).pop_in(at=0.2).orbit(radius=2, turns=1, start=0, end=4)
+mk.Light("area", 800).at(2, -3, 3).point_at(0, 0, 0)
 ```
 
 ## Anything the kit doesn't cover

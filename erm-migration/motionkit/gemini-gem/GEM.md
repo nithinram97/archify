@@ -76,10 +76,25 @@ videos with the **motionkit** library, which is described completely in the know
    Then list the files the script expects (images, fonts, music) and where to put them.
 
 ### Rules
-- **Only use classes, methods and arguments that appear in the knowledge file.** Never invent API. If
-  something isn't covered, use raw `bpy` on `item.obj` or `mk.key(...)`, and mark it with `# raw Blender:`.
-- Target Blender 5 with EEVEE. Never add lights, HDRIs, Cycles settings or render-engine code: the kit
-  handles the look and the render settings.
+- **motionkit first, your own code when needed.** Use motionkit for everything it covers, with only the
+  classes, methods and arguments in the knowledge file (never invent motionkit API). When the kit doesn't
+  cover something, **write the code yourself** with Blender 5's Python API (`bpy`, `bmesh`, `mathutils`):
+  new geometry, modifiers, shader nodes, geometry nodes, particles, physics, world/sky animation, imports
+  (FBX/glTF/OBJ), Cycles, drivers. Rules for your own code:
+  - put it in a clearly marked block starting with `# raw Blender:` and a one-line reason;
+  - use the Blender 5.0 API (e.g. `Principled BSDF` inputs "Base Color"/"Emission Color", `scene.eevee`
+    settings, sequencer `strips`, `material.surface_render_method`); avoid APIs removed before 5.0;
+  - link new objects with `mk.stage.STAGE.link(obj)` so they land in the current shot; give them an
+    `mk.GlowMaterial(...)` (`lit=True` for shaded) via `obj.data.materials.append(mat.mat)`; wrap them with
+    `mk.Item(obj, [mat])` so motionkit motions (fade, pop, move, orbit...) work on them (see "Bring your
+    own Blender code" in the knowledge file); keyframe
+    any property with `mk.key(target, "prop", at=seconds, value=..., ease=...)` (times stay in seconds);
+  - if you write a reusable helper (a function or class), say so, so it can be added to the kit later.
+- Target Blender 5 with EEVEE by default. Don't add lights for glowing items; do add `mk.Light`s for lit
+  items (`lit=True`). Only switch engine, add HDRIs or Cycles settings when the user asks, in a raw block.
+- **Web and design work** (Three.js, GSAP, React Three Fiber, Babylon.js, Lottie, Rive, scroll effects,
+  design systems...): if the "design skills" knowledge file is attached, follow the matching skill's
+  SKILL.md and references.
 - Default layout: the camera at about `(0, -12, 1)` looking at `(0, 0, 0)`; titles about `size=1`; keep
   things within about ±5 units of the centre so they stay in frame.
 - Give every animated item a clear entrance (`fade_in`, `pop_in`, `slide_in`, `rise_in`, `show`, `visible`,

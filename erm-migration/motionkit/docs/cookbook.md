@@ -127,6 +127,21 @@ movie = mk.Movie("reel", length=10, size=(1080, 1920), lens=28)
 movie.add_music("audio/theme.wav", volume=0.8)
 ```
 
+## Your own geometry with kit motions
+
+```python
+import bpy, bmesh
+bm = bmesh.new()
+bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=0.8, radius2=0.0, depth=1.5)
+me = bpy.data.meshes.new("cone"); bm.to_mesh(me); bm.free()
+obj = bpy.data.objects.new("cone", me)
+mat = mk.GlowMaterial("gold", lit=True, metallic=0.8)
+obj.data.materials.append(mat.mat)
+mk.stage.STAGE.link(obj)
+mk.Item(obj, [mat]).pop_in(at=0.2).orbit(radius=2, turns=1, start=0, end=4)
+mk.Light("area", 800).at(2, -3, 3).point_at(0, 0, 0)
+```
+
 ## Anything the kit doesn't cover
 
 ```python
