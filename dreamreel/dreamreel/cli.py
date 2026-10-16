@@ -75,15 +75,54 @@ def cmd_check(a):
                             "error": f"{type(e).__name__}: {msg}"})
         print("@@JSON " + json.dumps(out))
         return
-    total = 0.0
+    built = {}
     for path in paths:
         s = film.build(p, path)
         print(s.summary())
-        total += s.length + sum(c[1] for c in s.cards)
+        built[s.name] = (s.length, sum(c[1] for c in s.cards), s.transition)
         print()
-    print(f"{p.title}: {len(paths)} scene(s), {total:.1f} s")
+    if a.scene:
+        length, cards, _ = next(iter(built.values()))
+        print(f"{p.title}: 1 scene, {length + cards:.1f} s")
+    else:
+        total, lines = _edit_plan(p.edit_list(), built)
+        print(f"{p.title}: {len(paths)} scene(s), {len(lines)} clip(s) in the edit, about {total:.1f} s")
+        for line in lines:
+            print("  " + line)
     for extra in p.unlisted() if not a.scene else []:
         print(f"note: {os.path.basename(extra)} is not in film.toml's scenes list, so it isn't in the film")
+
+
+def _edit_plan(edit, built):
+    """Roughly how long the cut film is, and one line per clip (the edit decision list)."""
+    from . import plugins
+    total, lines = 0.0, []
+    for e in edit:
+        names = [e["scene"]] if "scene" in e else list(e.get("split", []))
+        if not names or any(n not in built for n in names):
+            continue
+        length, cards, own = built[names[0]]
+        start = float(e.get("from") or 0.0)
+        end = min(float(e.get("to") or built[n][0]) for n in names)
+        trans = dict(own or {}) if not start else {}
+        if e.get("transition"):
+            trans = {"name": e["transition"], "duration": e.get("duration")}
+        elif e.get("duration") is not None:
+            trans["duration"] = e["duration"]
+        cls = plugins.get("transition", trans.get("name") or "cut")
+        dur = trans.get("duration")
+        dur = cls.default_duration if dur is None else float(dur)
+        here = (cards if not start and "scene" in e else 0.0) + max(0.0, end - start)
+        if lines and cls.overlap:
+            here -= dur
+        if lines and (e.get("audio") or "").lower() == "l":
+            here -= float(e.get("audio_seconds", 0.8))
+        how = "start" if not lines else cls.name + (f" {dur:g}s" if cls.name != "cut" else "")
+        span = f"{start:g}-{end:g}s" if start or e.get("to") else f"{end:.1f}s"
+        lines.append(f"{total:6.1f}s  {' | '.join(names):<24} {span:<10} {how}"
+                     + (f", audio {e['audio']}" if e.get("audio") else ""))
+        total += here
+    return total, lines
 
 
 def cmd_still(a):
@@ -372,6 +411,33 @@ EXTEND_TEMPLATES = {
         pos = (head.x + f.x * 1.6, head.y + f.y * 1.6, 0.25)   # low, in front, looking up
         return d.add(self.name, t, [c], pos, head, lens=24, fstop=4.0, label=f"{name}({{c.name}})")
 ''', 'do = "shot", shot = "{name}" in a beat'),
+    "transition": ('''class {cls}(dr.Transition):
+    """{desc}"""
+    description = "{desc}"
+    overlap = True            # True: plays over the end of one scene and the start of the next
+    default_duration = 0.8
+
+    def apply(self, ed, a, b, start, frames, color=None, direction=None):
+        # a, b: the outgoing and incoming clips (their .strips are video strips). start: b's first frame.
+        # ed.fade(strip, f0, f1, a0, a1), ed.move(strip, f0, f1, offset, to, scale, scale_to),
+        # ed.wipe(...), ed.color(f0, f1, colour, channel) are the building blocks.
+        for s in b.strips:
+            ed.fade(s, start, start + frames, 0.0, 1.0)
+            ed.move(s, start, start + frames, (0, -ed.H * 0.1), (0, 0), scale=1.1, scale_to=1.0)
+''', 'transition = "{name}" in a scene file, or in a film.toml [[edit]] entry'),
+    "screen": ('''class {cls}(dr.ScreenEffect):
+    """{desc}"""
+    description = "{desc}"
+    default_duration = 1.0
+    default_color = "black"
+
+    def apply(self, ed, f0, frames, color):
+        # Something over the whole picture from frame f0 for `frames` frames; return the strip.
+        c = ed.color(f0, f0 + frames, color, channel=ed.top - 2)
+        for k in range(0, frames, 4):            # a flicker
+            ed.key(c, "blend_alpha", f0 + k, 0.8 if k % 8 == 0 else 0.0)
+        return c
+''', 'do = "screen", effect = "{name}" in a beat'),
     "voice": ('''class {cls}(dr.VoiceEngine):
     """{desc}"""
     description = "{desc}"

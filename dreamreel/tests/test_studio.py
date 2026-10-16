@@ -101,6 +101,25 @@ def main():
             assert tomllib.load(f)["scenes"][-1] == "040_den_talk"
         assert call(base, "GET", "/files/film.toml")[0] == 403
         assert call(base, "POST", "/api/jobs", {"kind": "shell", "cmd": "rm -rf /"})[0] == 400
+
+        # a film with an [[edit]] list: the studio follows it and keeps it up to date
+        with open(os.path.join(film, "film.toml"), "rb") as f:
+            ft = tomllib.load(f)
+        ft.pop("scenes", None)
+        ft["edit"] = [{"scene": "020_gran", "to": 3.0}, {"scene": "010_empty_jar", "transition": "whip"},
+                      {"scene": "020_gran", "from": 3.0}, {"split": ["010_empty_jar", "040_den_talk"]}]
+        with open(os.path.join(film, "film.toml"), "w") as f:
+            f.write(server.to_toml(ft))
+        _, st = call(base, "GET", "/api/state")
+        assert [x["file"] for x in st["scenes"] if x["in_film"]][:3] == ["020_gran.toml", "010_empty_jar.toml",
+                                                                         "040_den_talk.toml"], st["scenes"]
+        assert call(base, "PUT", "/api/film", {"scenes": ["010_empty_jar"]})[0] == 409
+        _, r = call(base, "POST", "/api/scenes", {"name": "Coda", "set": "den", "cast": []})
+        assert call(base, "DELETE", "/api/scenes/040_den_talk.toml")[0] == 200
+        with open(os.path.join(film, "film.toml"), "rb") as f:
+            edit = tomllib.load(f)["edit"]
+        assert edit[-1] == {"scene": os.path.splitext(r["file"])[0]} and len(edit) == 4, edit
+        assert edit[2]["from"] == 3.0 and edit[1]["transition"] == "whip"
         httpd.shutdown()
         print("OK")
     finally:

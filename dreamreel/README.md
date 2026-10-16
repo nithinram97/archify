@@ -113,10 +113,18 @@ and moves from the mood of each moment.
 
 ![Sixteen shots of the same moment](docs/media/shots.jpg)
 
+## Editing like an editor
+
+Scenes join with cuts, fades, dissolves, wipes, irises, clock wipes, pushes, whip pans, zooms or
+flashes, set per scene or in the film's edit list. The edit list also does cross-cutting (play part
+of a scene, cut away, come back), J and L cuts and split screens. Inside a scene, slow motion (with
+speed ramps), freeze frames and jump cuts retime the animation itself, so slow motion is smooth,
+and screen effects fade, flash or dip the picture. Changing the edit never re-renders a scene.
+
 ## Everything is extensible
 
 Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,
-actions, props, set kinds, camera shots and voice engines. A film can add its own in its
+actions, props, set kinds, camera shots and moves, transitions, screen effects and voice engines. A film can add its own in its
 `extensions/` folder (`dreamreel extend prop campfire` starts one). New classes immediately work
 in cast, set and scene files and show up in the studio's menus. When a film needs something
 dreamreel doesn't have, you or your AI agent add it as a class instead of working around it.

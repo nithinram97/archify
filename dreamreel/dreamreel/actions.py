@@ -228,6 +228,58 @@ class TitleCard(Action):
         s.title_card(text, duration=float(duration))
 
 
+class SlowMotion(Action):
+    scope = "scene"
+    label = "slow motion"
+    description = "The next moments play slowly (put the action after it)"
+    sentence = "slow motion {seconds} s at {speed}x"
+    params = [Param("seconds", "number", default=2.0, min=0.2, max=20, step=0.1, label="For (story seconds)"),
+              Param("speed", "number", default=0.3, min=0.05, max=4, step=0.05, label="Speed (1 = normal)"),
+              Param("ramp", "number", default=0.3, min=0, max=3, step=0.1, label="Ease in/out (s)"),
+              Param("after", "number", default=0.0, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, seconds=2.0, speed=0.3, ramp=0.3, after=0.0):
+        s.slow_motion(float(seconds), float(speed), float(ramp), float(after))
+
+
+class FreezeFrame(Action):
+    scope = "scene"
+    label = "freeze frame"
+    description = "Everything stops for a moment, then carries on"
+    sentence = "freeze {seconds} s"
+    params = [Param("seconds", "number", default=1.5, min=0.2, max=20, step=0.1),
+              Param("after", "number", default=0.0, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, seconds=1.5, after=0.0):
+        s.freeze(float(seconds), float(after))
+
+
+class JumpCut(Action):
+    scope = "scene"
+    label = "jump cut"
+    description = "Cut a stretch of story out: the picture jumps ahead"
+    sentence = "jump cut {seconds} s"
+    params = [Param("seconds", "number", default=2.0, min=0.2, max=60, step=0.1, label="Cut out (s)"),
+              Param("after", "number", default=0.5, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, seconds=2.0, after=0.5):
+        s.jump_cut(float(seconds), float(after))
+
+
+class Screen(Action):
+    scope = "scene"
+    label = "screen effect"
+    description = "Fade out, fade in, flash, dip or black out the picture"
+    sentence = "screen: {effect}"
+    params = [Param("effect", "screen", required=True, default="fade_out"),
+              Param("duration", "number", min=0.1, max=10, step=0.1, label="Seconds"),
+              Param("color", "color", label="Colour"),
+              Param("after", "number", default=0.0, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, effect="fade_out", duration=None, color=None, after=0.0):
+        s.screen(effect, duration, color, float(after))
+
+
 class Shot(Action):
     scope = "scene"
     label = "camera shot"

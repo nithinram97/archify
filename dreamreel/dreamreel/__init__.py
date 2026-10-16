@@ -36,4 +36,5 @@ from .actions import Action  # noqa: F401,E402
 from .voices import VoiceEngine  # noqa: F401,E402
 from .scene import BeatError, Scene  # noqa: F401,E402
 from .look import COLORS  # noqa: F401,E402
-from . import actions, gestures, parts, props  # noqa: F401,E402
+from .editing import Editor, ScreenEffect, Transition  # noqa: F401,E402
+from . import actions, editing, gestures, parts, props, timewarp  # noqa: F401,E402

@@ -49,12 +49,30 @@ class Project:
     def set_names(self):
         return sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(self.root, "sets", "*.toml")))
 
+    def edit_list(self):
+        """The film's edit: a list of entries {scene, from, to, transition, ...} or {split: [a, b], ...}.
+        From film.toml `edit` if there is one, else `scenes` (names or tables), else every scene file."""
+        raw = self.film.get("edit") or self.film.get("scenes")
+        if not raw:
+            return [{"scene": os.path.splitext(os.path.basename(f))[0]} for f in self._all_scene_files()]
+        out = []
+        for e in raw:
+            e = {"scene": e} if isinstance(e, str) else dict(e)
+            if "scene" in e:
+                e["scene"] = os.path.splitext(e["scene"])[0]
+            out.append(e)
+        return out
+
     def scenes(self):
-        """Scene script paths in film order (film.toml `scenes`, else by file name)."""
-        order = self.film.get("scenes")
-        if order:
-            return [self._scene_file(s) for s in order]
-        return self._all_scene_files()
+        """Scene file paths used by the film, in order of first appearance."""
+        seen, out = set(), []
+        for e in self.edit_list():
+            for stem in ([e["scene"]] if "scene" in e else e.get("split", [])):
+                path = self._scene_file(stem)
+                if path not in seen:
+                    seen.add(path)
+                    out.append(path)
+        return out
 
     def _all_scene_files(self):
         d = os.path.join(self.root, "scenes")

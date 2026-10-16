@@ -1,4 +1,5 @@
 """Building a scene from its script, rendering it, and cutting scenes together into the film."""
+import glob
 import hashlib
 import json
 import os
@@ -38,7 +39,24 @@ def scene_hash(proj, path, quality):
     for f in files:
         with open(f, "rb") as fh:
             h.update(fh.read())
+    h.update(_library_hash().encode())
     return h.hexdigest()[:16]
+
+
+_LIB = None
+
+
+def _library_hash():
+    """dreamreel's own code: a new version (or a local edit) re-renders scenes."""
+    global _LIB
+    if _LIB is None:
+        h = hashlib.sha256()
+        pkg = os.path.dirname(os.path.abspath(__file__))
+        for f in sorted(glob.glob(os.path.join(pkg, "*.py"))):
+            with open(f, "rb") as fh:
+                h.update(fh.read())
+        _LIB = h.hexdigest()
+    return _LIB
 
 
 def _apply_quality(s, quality, percent):
@@ -117,6 +135,7 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     print(f"[dreamreel] rendering {name}: {s.bscene.frame_end} frames", flush=True)
     bpy.ops.render.render(animation=True)
     meta = s.metadata()
+    meta["size"] = [int(r.resolution_x * r.resolution_percentage / 100), int(r.resolution_y * r.resolution_percentage / 100)]
     meta["hash"] = digest
     meta["video"] = out
     with open(meta_path, "w") as f:
@@ -125,60 +144,150 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     return meta
 
 
-def assemble(proj, metas, quality="final", subtitles=True):
-    """Cut the rendered scenes together with title cards, subtitles, captions, voices and music."""
+def assemble(proj, metas, quality="final", subtitles=True, edit=None):
+    """Cut the film together: clips from the rendered scenes in edit-list order, title cards, transitions,
+    screen effects, subtitles, captions, voices and music."""
+    from . import plugins
+    from .editing import Clip, Editor
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
     film = proj.film
     fps = int(film.get("fps", 24))
     sc.render.fps = fps
-    sc.render.resolution_x, sc.render.resolution_y = film.get("resolution", (1920, 1080))
-    sc.render.resolution_percentage = 100 if quality == "final" else 50
-    strips = _compat.sequence_strips(sc)
-    frame = 1
-    W = sc.render.resolution_x
+    # the canvas is exactly the size the scenes were rendered at, so clips are never rescaled
+    size = next((m["size"] for m in metas if m.get("size")), None)
+    if size:
+        sc.render.resolution_x, sc.render.resolution_y = size
+        sc.render.resolution_percentage = 100
+    else:
+        sc.render.resolution_x, sc.render.resolution_y = film.get("resolution", (1920, 1080))
+        sc.render.resolution_percentage = 100 if quality == "final" else 50
+    ed = Editor(sc, fps)
+    by_name = {m["name"]: m for m in metas}
+    if edit is None:
+        edit = proj.edit_list()
+        if len(metas) == 1 and len(edit) != 1:      # rendering one scene on its own
+            edit = [{"scene": metas[0]["name"]}]
+    clips = []
+    cursor = 1
+    channel = 2
+    sounds = 0
 
-    def text(content, f0, f1, channel, y=0.08, size=0.045, box=True):
-        st = strips.new_effect(name="text", type="TEXT", channel=channel, frame_start=f0, length=max(1, f1 - f0))
-        st.text = content
-        st.font_size = int(size * sc.render.resolution_y)
-        st.location = (0.5, y)
-        st.anchor_x, st.anchor_y = "CENTER", "BOTTOM" if y < 0.5 else "CENTER"
-        st.color = (1, 1, 1, 1)
-        if hasattr(st, "use_shadow"):
-            st.use_shadow = True
-        if box and hasattr(st, "use_box"):
-            st.use_box = True
-            st.box_color = (0, 0, 0, 0.55)
-            if hasattr(st, "box_margin"):
-                st.box_margin = 0.012
-        return st
+    def place_movie(meta, start, from_s, to_s, chan):
+        mv = ed.strips.new_movie(name=meta["name"], filepath=meta["video"], channel=chan, frame_start=int(start),
+                                 fit_method="ORIGINAL")
+        f_from, f_to = int(round(from_s * fps)), int(round(to_s * fps))
+        mv.frame_offset_start = f_from
+        mv.frame_offset_end = max(0, mv.frame_duration - f_to)
+        mv.frame_start = int(start) - f_from
+        mv.blend_type = "ALPHA_OVER"
+        return mv
 
-    for meta in metas:
-        for content, dur, color in meta.get("cards", []):
-            n = int(dur * fps)
-            col = strips.new_effect(name="card", type="COLOR", channel=1, frame_start=frame, length=n)
-            from .look import rgb
-            col.color = rgb(color)
-            text(content, frame, frame + n, 2, y=0.5, size=0.07, box=False)
-            frame += n
-        mv = strips.new_movie(name=meta["name"], filepath=meta["video"], channel=1, frame_start=frame)
-        length = mv.frame_final_duration
+    def overlays(meta, start, from_s, to_s, audio_from=None, audio_to=None):
+        nonlocal sounds
+        off = start - from_s * fps
+        a_from = from_s if audio_from is None else audio_from
+        a_to = to_s if audio_to is None else audio_to
         if subtitles:
-            for t0, t1, who, line in meta["subtitles"]:
-                text(line, frame + int(t0 * fps), frame + int(t1 * fps), 3)
+            for t0, t1, who, line in meta.get("subtitles", []):
+                if from_s <= t0 < to_s:
+                    ed.text(line, off + t0 * fps, off + min(t1, to_s) * fps, ed.top + 2)
         for t0, t1, content in meta.get("captions", []):
-            text(content, frame + int(t0 * fps), frame + int(t1 * fps), 4, y=0.86, size=0.05)
-        for i, (t0, wav) in enumerate(meta.get("audio", [])):
-            strips.new_sound(name="voice", filepath=wav, channel=5 + i % 2, frame_start=frame + int(t0 * fps))
-        frame += length
+            if from_s <= t0 < to_s:
+                ed.text(content, off + t0 * fps, off + min(t1, to_s) * fps, ed.top + 3, y=0.86, size=0.05)
+        for t0, wav in meta.get("audio", []):
+            if a_from <= t0 < a_to:
+                ed.strips.new_sound(name="voice", filepath=wav, channel=ed.top + 5 + sounds % 4,
+                                    frame_start=int(off + t0 * fps))
+                sounds += 1
+        for t, fx, dur, color in meta.get("screen", []):
+            if from_s <= t < to_s:
+                plugins.get("screen", fx)().apply(ed, int(off + t * fps), ed.frames(dur), color)
+
+    for i, entry in enumerate(edit):
+        # how this clip comes in: the edit entry, else the scene's own setting, else a cut
+        first_meta = by_name.get(entry.get("scene")) or by_name.get((entry.get("split") or [None])[0])
+        if first_meta is None:
+            continue
+        trans = dict((first_meta.get("transition") or {}) if entry.get("from", 0) in (0, None) else {})
+        for k in ("transition", "duration", "color", "direction"):
+            if entry.get(k) is not None:
+                trans["name" if k == "transition" else k] = entry[k]
+        # title cards come first, as their own clips
+        if entry.get("from", 0) in (0, None) and "scene" in entry:
+            for content, dur, color in first_meta.get("cards", []):
+                n = ed.frames(dur)
+                col = ed.color(cursor, cursor + n, color, channel=channel)
+                ed.text(content, cursor, cursor + n, channel + 1, y=0.5, size=0.07, box=False)
+                card = Clip("card", cursor, n, [col], channel=channel)
+                if clips:
+                    plugins.get("transition", "cut")().apply(ed, clips[-1], card, cursor, 0)
+                clips.append(card)
+                cursor += n
+        tr_cls = plugins.get("transition", trans.get("name") or "cut")
+        dur = trans.get("duration")
+        n = ed.frames(tr_cls.default_duration if dur is None else float(dur)) if tr_cls.name != "cut" else 0
+        prev = clips[-1] if clips else None
+        overlap = n if (tr_cls.overlap and prev is not None) else 0
+        if prev is not None:
+            n = min(n, prev.length - 1) if overlap else n
+            overlap = min(overlap, n)
+        start = cursor - overlap
+        chan = (prev.channel + 1 if overlap else 2) if prev is not None else 2
+        if chan >= ed.top - 3:
+            chan = 2
+        audio = (entry.get("audio") or "").lower()
+        lead = float(entry.get("audio_seconds", 0.8)) if audio in ("j", "l") else 0.0
+        if prev is not None and audio == "l" and prev.kind == "scene":
+            # the previous clip's picture ends early; its sound carries on under this one
+            cut = min(ed.frames(lead), prev.length - 1)
+            for s in prev.strips:
+                s.frame_final_end = max(s.frame_final_start + 1, s.frame_final_end - cut)
+            prev.length -= cut
+            start -= cut
+        if "split" in entry:
+            metas_ = [by_name[s] for s in entry["split"] if s in by_name]
+            length_s = min(float(entry.get("to") or m["length"]) for m in metas_)
+            from_s = float(entry.get("from") or 0.0)
+            strips_ = []
+            for k, m in enumerate(metas_):
+                mv = place_movie(m, start, from_s, length_s, chan + k)
+                if entry.get("layout", "side_by_side") == "top_bottom":
+                    mv.crop.min_y = mv.crop.max_y = int(ed.H / 4)
+                    mv.transform.offset_y = ed.H / 4 * (1 if k == 0 else -1)
+                else:
+                    mv.crop.min_x = mv.crop.max_x = int(ed.W / 4)
+                    mv.transform.offset_x = ed.W / 4 * (-1 if k == 0 else 1)
+                strips_.append(mv)
+                overlays(m, start, from_s, length_s)
+            clip = Clip("split", start, int((length_s - from_s) * fps), strips_, metas_[0], from_s, chan + len(metas_) - 1)
+        else:
+            meta = by_name[entry["scene"]]
+            from_s = float(entry.get("from") or 0.0)
+            to_s = float(entry.get("to") or meta["length"])
+            pic_from = from_s + (lead if audio == "j" else 0.0)
+            mv = place_movie(meta, start, pic_from, to_s, chan)
+            if audio == "j":   # this clip's sound starts before its picture
+                overlays(meta, start - lead * fps, from_s, to_s, audio_from=from_s)
+            else:
+                overlays(meta, start - (pic_from - from_s) * fps, pic_from, to_s)
+            clip = Clip("scene", start, int(round((to_s - pic_from) * fps)), [mv], meta, pic_from, chan)
+        if prev is not None:
+            tr_cls().apply(ed, prev, clip, start, n, color=trans.get("color"), direction=trans.get("direction"))
+        clips.append(clip)
+        cursor = clip.end
+        label = entry.get("scene") or " | ".join(entry.get("split", []))
+        print(f"[dreamreel] edit {len(clips):3d}: {(start - 1) / fps:7.2f}s  {label:<24} "
+              f"{tr_cls.name if prev is not None else 'start'}{f' ({n / fps:.1f}s)' if n and prev is not None else ''}",
+              flush=True)
     music = film.get("music")
     if music:
-        m = strips.new_sound(name="music", filepath=os.path.join(proj.root, music["file"]), channel=8, frame_start=1)
+        m = ed.strips.new_sound(name="music", filepath=os.path.join(proj.root, music["file"]), channel=ed.top + 10,
+                                frame_start=1)
         m.volume = music.get("volume", 0.35)
-        if m.frame_final_end > frame:
-            m.frame_final_end = frame
-    sc.frame_start, sc.frame_end = 1, frame - 1
+        if m.frame_final_end > cursor:
+            m.frame_final_end = cursor
+    sc.frame_start, sc.frame_end = 1, max(2, cursor - 1)
     r = sc.render
     _compat.set_video_output(r)
     r.ffmpeg.audio_codec = "AAC"

@@ -232,6 +232,9 @@ class Studio:
         files = sorted(f for f in os.listdir(d) if f.endswith((".toml", ".py"))) if os.path.isdir(d) else []
         stems = {os.path.splitext(f)[0]: f for f in files}
         order = film.get("scenes")
+        if film.get("edit"):   # an edit list (cross-cutting, split screens): its scenes, in first-use order
+            order = list(dict.fromkeys(n for e in film["edit"] if isinstance(e, dict)
+                                       for n in ([e["scene"]] if "scene" in e else e.get("split", []))))
         listed = [stems.get(os.path.splitext(s)[0], s if s.endswith((".toml", ".py")) else s + ".toml")
                   for s in order] if order else files
         out = [{"file": f, "in_film": True, "exists": f in files} for f in listed]
@@ -448,6 +451,9 @@ class Handler(BaseHTTPRequestHandler):
         if what == "film" and method == "PUT":
             b = self._body()
             film = st.film()
+            if "scenes" in b and film.get("edit"):
+                return self._error("This film's scene order comes from the [[edit]] list in film.toml "
+                                   "(cross-cutting, split screens). Change the order there, or ask your AI agent.", 409)
             for k in ("title", "fps", "resolution", "scenes", "music", "voices"):
                 if k in b:
                     if b[k] in (None, "", []) and k in film:
@@ -484,7 +490,10 @@ class Handler(BaseHTTPRequestHandler):
                 spec = {"set": b.get("set") or "", "cast": cast, "beats": []}
                 st.write(os.path.join("scenes", fn), to_toml(spec, f"# Scene: {b.get('name', '')}. Written by dreamreel studio."))
                 film = st.film()
-                if film.get("scenes"):
+                if film.get("edit"):
+                    film["edit"] = film["edit"] + [{"scene": os.path.splitext(fn)[0]}]
+                    st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
+                elif film.get("scenes"):
                     film["scenes"] = film["scenes"] + [os.path.splitext(fn)[0]]
                     st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
                 return self._json({"ok": True, "file": fn})
@@ -510,8 +519,11 @@ class Handler(BaseHTTPRequestHandler):
                 if method == "DELETE":
                     os.remove(st.path(rel))
                     film = st.film()
-                    if film.get("scenes"):
-                        stem = os.path.splitext(fn)[0]
+                    stem = os.path.splitext(fn)[0]
+                    if film.get("edit"):
+                        film["edit"] = [e for e in film["edit"] if e.get("scene") != stem and stem not in e.get("split", [])]
+                        st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
+                    elif film.get("scenes"):
                         film["scenes"] = [s for s in film["scenes"] if os.path.splitext(s)[0] != stem]
                         st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
                     return self._json({"ok": True})

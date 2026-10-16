@@ -125,6 +125,10 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | gesture | gesture, target |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
+| slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |
+| freeze_frame (no who) | seconds, after: everything stops, then carries on |
+| jump_cut (no who) | seconds, after: that much story is cut out and the picture jumps ahead |
+| screen (no who) | effect (fade_out, fade_in, flash, dip, blackout), duration, color, after |
 | shot (no who) | shot, of, other, angle, side, move, amount, to, handheld, dutch, lens, duration (see Camera) |
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
@@ -166,6 +170,61 @@ handheld = true
 | `duration` | seconds before the automatic camera takes over again |
 
 Faces get headroom and lead room (space on the side they're looking towards) automatically.
+
+## Editing: transitions, time and the edit list
+
+How a scene comes in after the one before it goes at the top of its scene file:
+
+```toml
+transition = "dissolve"
+transition_duration = 1.0      # seconds (each transition has its own default)
+transition_color = "black"     # fade, flash
+transition_direction = "left"  # wipe, push, whip: left, right, up, down; iris: out (opens) or in
+```
+
+| Transition | Use it for |
+|---|---|
+| cut | the default; also smash cuts and match cuts (the content makes the difference) |
+| fade | out to a colour and in again: the end of a chapter, a long time passing |
+| dissolve | one scene melting into the next: time passing, memories, montage |
+| wipe | the next scene sweeps across: adventure serials, comedy |
+| iris | a circle opening (or closing, `in`) on the picture: cartoons, old films |
+| clock | a clock-hand sweep: time passing |
+| push | the next scene shoves the old one off the screen |
+| whip | a fast whip pan between places: energy, "meanwhile" |
+| zoom | zooming through into the next scene |
+| flash | a flash of white (or any colour) at the cut: shocks, memories, action |
+
+Time effects (`slow_motion`, `freeze_frame`, `jump_cut`) change the scene's own animation, so slow
+motion is truly smooth; put them just before the action they affect. Voices, subtitles, captions
+and camera cuts move with them. Screen effects (`screen`) are done in the edit, like transitions.
+
+`film.toml` lists the scenes in order (`scenes = [...]`). For more control, use an edit list
+instead: each `[[edit]]` entry is one clip, and the same scene can appear more than once.
+
+```toml
+[[edit]]
+scene = "010_kitchen"
+to = 8.0                       # only up to 8 s in: cut away (cross-cutting)
+
+[[edit]]
+scene = "020_street"
+transition = "whip"            # overrides the scene file's own transition (also duration,
+direction = "right"            # color, direction)
+
+[[edit]]
+scene = "010_kitchen"
+from = 8.0                     # back to the kitchen where we left it
+audio = "l"                    # L-cut: the previous clip's sound runs on under this picture
+audio_seconds = 0.8            # (j: this clip's sound starts before its picture)
+
+[[edit]]
+split = ["030_her", "040_him"] # split screen: a phone call, two places at once
+layout = "side_by_side"        # or "top_bottom"
+```
+
+`dreamreel check` prints the edit list and the film's length. Transitions never re-render scenes,
+so trying a different one is quick.
 
 ## Commands
 

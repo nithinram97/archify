@@ -71,6 +71,10 @@ class Scene:
         self.end_time = 0.0
         self._group = None
         self._beat = None        # index of the beat being played (scene files), for the studio
+        self.warps = []          # time effects (slow motion, freezes, jump cuts), applied when finishing
+        self.screen_fx = []      # (time, effect, duration, colour) done to the picture in the edit
+        self.time_fx = []        # (story start, story end, label) of the time effects, for the timeline
+        self.transition = None   # how this scene comes in after the previous one (see editing.py)
         self.fixed_length = length
         self.time_of_day = time_of_day
         self.voices = Voices(self.project.root if self.project else None,
@@ -183,6 +187,9 @@ class Scene:
         cast = spec.get("cast", [])
         if cast:
             s.cast(*cast)
+        if spec.get("transition"):
+            s.transition = {"name": spec["transition"], "duration": spec.get("transition_duration"),
+                            "color": spec.get("transition_color"), "direction": spec.get("transition_direction")}
         s.run_beats(spec.get("beats", []))
         return s
 
@@ -253,6 +260,40 @@ class Scene:
         t = self.clock if at is None else at
         self.captions.append((t, t + duration, text))
         self.end_time = max(self.end_time, t + duration)
+        return self
+
+    # ------------------------------------------------------------------ time and picture effects
+    def slow_motion(self, seconds=2.0, speed=0.3, ramp=0.3, after=0.0):
+        """The next `seconds` of story play at `speed` (0.3 = slow motion, 2 = fast), easing in and out
+        over `ramp` seconds. Doesn't move the scene clock: put the action to slow down after it."""
+        from . import timewarp
+        t = self.clock + after
+        self.warps += timewarp.slow_motion(t, seconds, speed, ramp)
+        self.time_fx.append((t, t + seconds, f"[{'SLOW MOTION' if speed < 1 else 'FAST'} x{speed:g}]"))
+        return self
+
+    def freeze(self, seconds=1.5, after=0.0):
+        """Everything stops for `seconds` (a freeze frame), then carries on."""
+        from . import timewarp
+        self.warps.append(timewarp.Freeze(self.clock + after, seconds))
+        self.time_fx.append((self.clock + after, None, f"[FREEZE {seconds:g}s]"))
+        return self
+
+    def jump_cut(self, seconds=2.0, after=0.0):
+        """Cut `seconds` of story out, `after` seconds from now: the picture jumps ahead."""
+        from . import timewarp
+        self.warps.append(timewarp.Jump(self.clock + after, seconds))
+        self.time_fx.append((self.clock + after, None, f"[JUMP CUT -{seconds:g}s]"))
+        return self
+
+    def screen(self, effect="fade_out", duration=None, color=None, after=0.0):
+        """Do something to the whole picture: fade_out, fade_in, flash, dip, blackout."""
+        from . import plugins as _p
+        fx = _p.get("screen", effect)
+        t = self.clock + after
+        dur = fx.default_duration if duration is None else float(duration)
+        self.screen_fx.append((t, effect, dur, color or fx.default_color))
+        self.end_time = max(self.end_time, t + dur)
         return self
 
     def title_card(self, text, duration=2.5, color="black"):
@@ -397,9 +438,29 @@ class Scene:
             c.prepare(L)
             c._alive(L)
         self.cut.build()
+        if self.warps:
+            self._apply_warps()
         self.bscene.frame_start = 1
-        self.bscene.frame_end = keys.CLOCK.frame(L) - 1
+        self.bscene.frame_end = keys.CLOCK.frame(self.length) - 1   # time effects may have changed it
         self.bscene.frame_set(1)
+
+    def _apply_warps(self):
+        from . import timewarp
+        m = timewarp.apply(self.warps)
+        for e in self.events:
+            e["t0"], e["t1"] = m(e["t0"]), m(e["t1"])
+        self.subtitles = [(m(a), m(b), who, line) for a, b, who, line in self.subtitles]
+        self.captions = [(m(a), m(b), text) for a, b, text in self.captions]
+        self.screen_fx = [(m(t), fx, d, c) for t, fx, d, c in self.screen_fx]
+        self.time_fx = [(m(a), m(b) if b is not None else None, label) for a, b, label in self.time_fx]
+        for shot in self.cut.final:
+            shot.at = m(shot.at)
+        story_end = max(self.end_time, self.clock)
+        self.end_time = self.clock = m(story_end)
+        if self.fixed_length:
+            self.fixed_length = m(self.fixed_length)
+        self.warps_applied = [type(w).__name__.lower() for w in self.warps]
+        self.warps = []
 
     def summary(self):
         """A text timeline of the scene: what a director (human or AI) checks before rendering."""
@@ -420,6 +481,10 @@ class Scene:
             rows.append((t, f"[CUT] {label}"))
         for t0, t1, text in self.captions:
             rows.append((t0, f"[CAPTION] {text}"))
+        for t0, t1, label in self.time_fx:
+            rows.append((t0, label + (f" until {t1:.1f}s" if t1 is not None else "")))
+        for t, fx, d, c in self.screen_fx:
+            rows.append((t, f"[SCREEN] {fx} ({d:g}s)"))
         for t, text in sorted(rows, key=lambda r: r[0]):
             lines.append(f"  {t:6.2f}s  {text}")
         warnings = self.check()
@@ -443,6 +508,11 @@ class Scene:
             rows.append({"t": round(t, 2), "kind": "cut", "shot": label})
         for t0, t1, text in self.captions:
             rows.append({"t": round(t0, 2), "end": round(t1, 2), "kind": "caption", "text": text})
+        for t0, t1, label in self.time_fx:
+            rows.append({"t": round(t0, 2), "end": round(t1, 2) if t1 is not None else None, "kind": "time",
+                         "text": label})
+        for t, fx, d, c in self.screen_fx:
+            rows.append({"t": round(t, 2), "end": round(t + d, 2), "kind": "screen", "effect": fx})
         rows.sort(key=lambda r: (r["t"], r["kind"] != "cut"))
         return {"length": self.length, "set": self.set.name if self.set else None,
                 "cast": [c.name for c in self.actors.values()], "events": rows, "warnings": self.check(),
@@ -469,4 +539,6 @@ class Scene:
             "cards": [list(c) for c in self.cards],
             "audio": [[e["t0"], e["audio"].path] for e in self.events if e["kind"] == "say" and e.get("audio")],
             "shots": self.cut.describe(),
+            "screen": [list(x) for x in self.screen_fx],
+            "transition": self.transition,
         }

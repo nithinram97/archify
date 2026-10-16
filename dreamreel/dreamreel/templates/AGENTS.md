@@ -9,7 +9,7 @@ dreamreel studio (`dreamreel studio`), so keep the files tidy and readable.
 
 | File | What it is |
 |---|---|
-| `film.toml` | title, fps, resolution, scene order (`scenes = [...]`), music, `voice_engine` |
+| `film.toml` | title, fps, resolution, scene order (`scenes = [...]` or an `[[edit]]` list), music, `voice_engine` |
 | `cast/<name>.toml` | one character each: `type` (`toy`, `creature`, or one from extensions) and its look |
 | `sets/<name>.toml` | one place each: `kind` (`room`, `outdoor`, ...), its settings, `[[props]]`, `[marks]` |
 | `scenes/NNN_name.toml` | one scene each: `set`, `cast`, and `[[beats]]` in order |
@@ -80,6 +80,18 @@ wrong; an insert shows the thing everyone is talking about; a dolly zoom is a sh
 See REFERENCE.md "Camera" for every option. New framings (`dr.ShotType`) and moves
 (`dr.CameraMove`) can be added in extensions.
 
+## Editing
+
+Every join between scenes is a choice. Cut by default; a scene file's `transition` says how it
+comes in when the join means something: `dissolve` or `clock` for time passing, `fade` for the end
+of a chapter, `whip` or `push` between places, `iris` for a cartoon feel, `flash` for a shock.
+Use `slow_motion`, `freeze_frame` and `jump_cut` beats sparingly, for the moments that deserve
+them, and `screen` beats (fade_out at the end of the film, a flash for an explosion).
+
+For cross-cutting, returning to a scene, J and L cuts and split screens, give `film.toml` an
+`[[edit]]` list (REFERENCE.md "Editing"). `dreamreel check` prints the resulting edit list; changing
+transitions or the edit never re-renders a scene.
+
 ## When something isn't there: extend dreamreel
 
 Never fake a missing feature with coordinates or workarounds in beats. Add it as a class in
@@ -87,7 +99,7 @@ Never fake a missing feature with coordinates or workarounds in beats. Add it as
 
 ```bash
 dreamreel extend gesture dance        # also: character, body, hair, extra, mood, action, move,
-dreamreel extend prop campfire        #       prop, set, shot, voice
+dreamreel extend prop campfire        #       prop, set, shot, transition, screen, voice
 ```
 
 That writes a commented starting point. Then:
@@ -101,7 +113,7 @@ That writes a commented starting point. Then:
 - Subclass the nearest existing class and override only what differs (a `Character` build step,
   a `BodyPlan.skeleton`, a `Set.build_environment`...). Read the docstring at the top of the
   module you extend: plugins.py, character.py, creatures.py, parts.py, gestures.py, actions.py,
-  props.py, sets.py, camera.py, voices.py.
+  props.py, sets.py, camera.py, editing.py, voices.py.
 - Check it: `dreamreel plugins` lists it, then use it in a file, `dreamreel check`, and render a
   frame to look at it.
 - A scene can also be a Python script (`scenes/NNN_name.py`) for something beats can't say yet,

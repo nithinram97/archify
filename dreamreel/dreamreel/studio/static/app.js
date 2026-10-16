@@ -729,7 +729,35 @@ function sceneHeader(file, spec, chk) {
           const used = gone.filter((k) => (spec.beats || []).some((b) => b.who === k));
           if (used.length && !confirm(`${used.map(nameOf).join(", ")} still has beats in this scene. Remove anyway?`)) { render(); return; }
           spec.cast = v; scheduleSave(file); render();
-        }))) : null);
+        })),
+      transitionFields(spec, change)) : null);
+}
+
+// how the scene comes in after the one before it (a transition plugin, plus the options it uses)
+function transitionFields(spec, change) {
+  const all = plug("transition");
+  if (!all.length) return null;
+  const t = plugOf("transition", spec.transition || "cut") || { uses: [], name: "cut" };
+  const out = [h("label", { class: "field" }, h("span", {}, "Comes in with"),
+    select(all.map((x) => [x.name, x.label]), spec.transition || "cut", (v) => {
+      change("transition", v === "cut" ? undefined : v);
+    }, { label: "Transition" }))];
+  if (t.name !== "cut") {
+    out.push(h("label", { class: "field" }, h("span", {}, "Seconds"),
+      h("input", { type: "number", min: 0.1, max: 5, step: 0.1, style: "width:96px", value: spec.transition_duration ?? "",
+        placeholder: String(t.default_duration ?? ""), "aria-label": "Transition seconds",
+        onchange: (e) => change("transition_duration", e.target.value === "" ? undefined : +e.target.value) })));
+    if ((t.uses || []).includes("direction")) {
+      const dirs = t.name === "iris" ? ["out", "in"] : ["left", "right", "up", "down"];
+      out.push(h("label", { class: "field" }, h("span", {}, "Direction"),
+        select(dirs, spec.transition_direction || dirs[0], (v) => change("transition_direction", v === dirs[0] ? undefined : v), { label: "Direction" })));
+    }
+    if ((t.uses || []).includes("color")) {
+      out.push(h("div", { class: "field", style: "grid-column: span 2" }, h("span", {}, "Colour"),
+        colorPicker(spec.transition_color || "", (v) => change("transition_color", v || undefined))));
+    }
+  }
+  return out;
 }
 
 function capsOf(who) {
