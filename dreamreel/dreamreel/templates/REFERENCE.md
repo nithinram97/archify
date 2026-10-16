@@ -159,6 +159,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | drop | thing (it falls to the floor) |
 | hold | thing, hand: holding it from this moment; a thing in the set, or a new item (`scalpel`) |
 | grab | thing = a small character (a frog, a cat): carried like a thing, put down the same way |
+| perform | motion, speed, mirror, in_place, start, end, how: play a motion-capture clip (see Motion library) |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
 | slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |
@@ -217,6 +218,29 @@ handheld = true
 | `duration` | seconds before the automatic camera takes over again |
 
 Faces get headroom and lead room (space on the side they're looking towards) automatically.
+
+## Motion library: `motions/`
+
+Put motion-capture clips in `motions/` (`.bvh`; `.fbx`, `.glb` too), or `dreamreel motions --add
+FILE --name NAME --tags walk`. `dreamreel motions` lists them. Any toy figure (or creature with two
+arms and two legs) can `perform` a clip: it is retargeted to their body (arm and leg directions,
+lean, head, hip height and travel, scaled to their size), whatever the source calls its joints
+(CMU, Mixamo, SMPL...). `mirror = true` swaps left and right; `in_place = true` keeps them on the spot.
+
+Clips tagged `walk` or `run` (by file name, or in `motions/library.toml`) are used for walking: the
+one closest to the speed needed is looped along the path.
+
+```toml
+# motions/library.toml (optional)
+[cartwheel]
+file = "49_07.bvh"
+start = 1.0          # seconds into the file
+end = 4.5
+tags = ["acrobatics"]
+```
+
+dreamreel doesn't include third-party motion capture. Free sources include the CMU Graphics Lab
+Motion Capture Database (BVH) and Mixamo (FBX); check each one's licence for your film.
 
 ## Looks: `style`
 

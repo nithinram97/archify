@@ -60,10 +60,13 @@ before a line. Camera choices follow film idioms in the spirit of *The Virtual C
 
 ## Where this is going
 
-- Motion library: offline *motion matching* (Clavet and Büttner, Ubisoft, GDC 2016; *Learned Motion
-  Matching*, Holden et al. 2020) over clips you import, retargeted to any dreamreel body. dreamreel
-  can't ship third-party motion capture (Mixamo forbids redistribution; CMU's and AMASS's terms are
-  research-oriented), so the library imports what you download.
+- Motion library (motion.py): clips you import are retargeted by joint role to any two-armed,
+  two-legged body. Walks pick the library clip closest to the speed needed and loop it at a detected
+  clean cycle, a first step towards full *motion matching* (Clavet and Büttner, Ubisoft, GDC 2016;
+  *Learned Motion Matching*, Holden et al. 2020), which would search every frame of every clip for
+  the best continuation. dreamreel can't ship third-party motion capture (Mixamo forbids
+  redistribution; CMU's and AMASS's terms are research-oriented), so the library imports what you
+  download.
 - Lip sync with separate jaw and lip axes, after JALI (Edwards, Landreth, Fiume and Singh,
   SIGGRAPH 2016), using the phonemes the voice engine already knows.
 - Text-to-motion models (such as MDM, ICLR 2023) as an optional add-on.

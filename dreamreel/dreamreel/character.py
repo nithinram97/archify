@@ -485,6 +485,8 @@ class Character(Plugin):
         """Animate the body while the root travels along `path` (a Stride): legs, arms, bounce.
         The toy swings its rigid legs and arms; other bodies plant feet (see creatures.py)."""
         ws, end, H = path.start, path.end, self.H
+        if self._library_walk(path, run):
+            return
         eff = getattr(self, "_effort", None) or acting.Effort()
         ex = self.scene.exaggeration
         A = _deg(38 if run else 26) * (1 + (eff.swing() - 1) * ex)
@@ -516,6 +518,26 @@ class Character(Plugin):
         settle = 0.08 * ex * (1 + max(0.0, -eff.flow))
         key(self.body, "rotation_euler", end, (-lean - settle, 0, 0))
         key(self.body, "rotation_euler", end + 0.3, (0, 0, 0))
+
+    def _library_walk(self, path, run):
+        """Walk with a clip from the motion library if it has one (tagged walk or run): the clip
+        closest to the speed needed, looped and played along the path (simple motion matching)."""
+        from . import motion
+        lib = motion.library(self.scene)
+        if not lib.entries or not motion.can_perform(self) or self.holding:
+            return False
+        clips = lib.tagged("run" if run else "walk") or (lib.tagged("jog") if run else [])
+        if not clips:
+            return False
+        _, _, hip_h = motion._rest(self)
+        need = path.total / max(1e-6, path.end - path.start) / hip_h       # hip heights per second
+        clip = min(clips, key=lambda cl: abs(math.log(max(1e-3, cl.speed()) / max(1e-3, need))))
+        rate = need / max(1e-3, clip.speed())
+        motion.walk_cycle(self, clip, path, path.start, path.end, rate)
+        for obj in (self.body, *self.arms.values(), *self.legs.values()):
+            key(obj, "rotation_euler", path.end + 0.3, (0, 0, 0))
+        key(self.hips, "location", path.end + 0.3, (0, 0, self.hip_z))
+        return True
 
     def run_to(self, where, **kw):
         return self.walk_to(where, speed="run", **kw)
@@ -753,6 +775,20 @@ class Character(Plugin):
         end = acting.shape(curves, t, end, acting.effort_of(self, t, how), self.scene.exaggeration)
         self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
         return self._end(end, wait)
+
+    # ------------------------------------------------------------------ motion capture (motion.py)
+    def perform(self, motion_name, speed=1.0, mirror=False, in_place=False, at=None, wait=True, how=None,
+                start=None, end=None):
+        """Play a motion-capture clip from the film's motion library (motions/), retargeted to this body."""
+        from . import motion
+        clip = motion.library(self.scene).get(motion_name)
+        t = self._start(at)
+        eff = acting.effort_of(self, t, how)
+        sp = float(speed or 1.0) / max(0.5, eff.tempo())
+        t1 = motion.perform(self, clip, t, speed=sp, mirror=bool(mirror), in_place=bool(in_place),
+                            start=float(start or 0.0), end=end)
+        self.scene._event("perform", self, t, t1, motion=motion_name)
+        return self._end(t1, wait)
 
     # ------------------------------------------------------------------ handling things (handling.py)
     def _hand(self, hand=None, holding=None):

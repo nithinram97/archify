@@ -14,6 +14,10 @@ Since then:
   street, rooms that furnish themselves, seven times of day and eight kinds of weather.
 - Looks: eight visual styles (toy, toon, anime, clay, paper, storybook, noir, realistic) for a
   whole film or a single scene.
+- Acting: effort (Laban) shapes every gesture and walk; anticipation, follow-through springs,
+  squash and stretch; cutting on action.
+- Handling things: pick up, carry, give, put down, drop, grab small characters.
+- Motion library: BVH/FBX clips retargeted to any two-armed, two-legged body; library walk cycles.
 
 Next, roughly in order:
 

@@ -341,6 +341,8 @@ function paramField(p, value, onChange, ctx = {}) {
       break;
     case "mark": el = select(marks.map((m) => [m, "📍 " + m]), value, onChange, opt("—")); break;
     case "seat": el = select(setInfo.seats.map((m) => [m, "🪑 " + m]), value, onChange, opt("—")); break;
+    case "motion": el = select((info().motions || []).map((m) => [m, "🎞 " + m]), value ?? "", onChange,
+      { label: p.label, blank: (info().motions || []).length ? "—" : "(add clips to motions/)" }); break;
     case "surface": el = select((setInfo.surfaces || []).map((m) => [m, m]), value ?? "", onChange, opt("(the floor)")); break;
     case "thing": {
       const things = [...(setInfo.things || []).map((m) => [m, "✋ " + m]), ...choicesOf("item").filter(([n]) => !(setInfo.things || []).includes(n)).map(([n, l]) => [n, "＋ a new " + l])];

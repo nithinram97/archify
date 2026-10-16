@@ -41,7 +41,7 @@ def cmd_new(a):
         fh.write("@AGENTS.md\n")
     with open(os.path.join(a.dir, ".gitignore"), "w") as fh:
         fh.write("renders/\naudio/voices/\n")
-    for sub in ("audio/music", "audio/sfx", "renders", "extensions"):
+    for sub in ("audio/music", "audio/sfx", "renders", "extensions", "motions"):
         os.makedirs(os.path.join(a.dir, sub), exist_ok=True)
     print(f"Created {a.dir}. Next:\n  cd {a.dir}\n  dreamreel check\n  dreamreel contact 010\n"
           f"Or open the folder in an AI coding agent (Claude Code, Codex, ...) and describe your film: "
@@ -252,7 +252,10 @@ def cmd_info(a):
             "voices": list(voices.SUGGESTED), "voice_engine": voices.pick_engine() is not None,
         },
         "sets": {},
+        "motions": [],
     }
+    from . import motion as _motion
+    info["motions"] = _motion.Library(p.root).names()
     for name in p.set_names():
         try:
             scene_mod._reset_blender()
@@ -263,6 +266,39 @@ def cmd_info(a):
         except Exception as e:
             info["sets"][name] = {"error": f"{type(e).__name__}: {e}", "marks": [], "seats": []}
     print("@@JSON " + json.dumps(info))
+
+
+def cmd_motions(a):
+    """List the film's motion library, or import a clip into it."""
+    import shutil
+    from . import motion
+    p = _project()
+    lib_dir = os.path.join(p.root, "motions")
+    if a.add:
+        os.makedirs(lib_dir, exist_ok=True)
+        name = a.name or os.path.splitext(os.path.basename(a.add))[0]
+        ext = os.path.splitext(a.add)[1].lower()
+        dest = os.path.join(lib_dir, name + ext)
+        clip = motion.load(a.add, name=name)          # check it can be read and retargeted first
+        shutil.copyfile(a.add, dest)
+        if a.tags:
+            toml = os.path.join(lib_dir, "library.toml")
+            with open(toml, "a") as fh:
+                tags = ", ".join(f'"{t.strip()}"' for t in a.tags.split(",") if t.strip())
+                fh.write(f'\n[{name}]\nfile = "{os.path.basename(dest)}"\ntags = [{tags}]\n')
+        print(f"added {os.path.relpath(dest, p.root)}: {clip.length:.1f} s. Use it with do = \"perform\", motion = \"{name}\"")
+        return
+    lib = motion.Library(p.root)
+    if not lib.names():
+        print("No motions yet. Put .bvh or .fbx clips in motions/ (or: dreamreel motions --add FILE).")
+        return
+    for n in lib.names():
+        try:
+            c = lib.get(n)
+            loop = f", loop {c.find_loop()[0] / c.fps:.2f}-{c.find_loop()[1] / c.fps:.2f} s" if c.tags & {"walk", "run", "jog"} else ""
+            print(f"  {n:20} {c.length:6.1f} s  tags: {', '.join(sorted(c.tags)) or '-'}{loop}")
+        except Exception as e:
+            print(f"  {n:20} can't be used: {e}")
 
 
 def cmd_plugins(a):
@@ -624,6 +660,11 @@ def main(argv=None):
     pg.add_argument("-v", "--verbose", action="store_true", help="show each one's settings")
     pg.set_defaults(fn=cmd_plugins)
 
+    mo = sub.add_parser("motions", help="the film's motion library (motion capture clips)")
+    mo.add_argument("--add", metavar="FILE", help="import a .bvh/.fbx/.glb clip")
+    mo.add_argument("--name")
+    mo.add_argument("--tags", help="comma separated, e.g. walk or dance")
+    mo.set_defaults(fn=cmd_motions)
     ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
     ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))
     ex.add_argument("name")

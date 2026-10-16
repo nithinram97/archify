@@ -145,6 +145,12 @@ after a big moment so it reads. `exaggeration` (film.toml) sets how cartoony the
 New manners are classes (`dr.Manner.define("drunkenly", weight=-0.4, time=-0.5, space=-1, flow=-1)`).
 See docs on acting in dreamreel's repository for the principles behind it.
 
+## Motion capture
+
+If `motions/` has clips (`dreamreel motions`), use `perform` for movement procedural gestures can't
+do: dances, acrobatics, fights, falls. Walks use the library's walk and run clips automatically.
+Never add clips yourself from the internet without the film maker's say: licences differ.
+
 ## Handling things
 
 Things on tables, counters and benches can be picked up, carried, handed over and put down

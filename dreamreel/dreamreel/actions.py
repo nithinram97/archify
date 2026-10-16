@@ -190,6 +190,21 @@ class DoGesture(Action):
         who.do(gesture, target=target, how=how)
 
 
+class Perform(Action):
+    label = "performs"
+    description = "Play a motion-capture clip from the film's motion library (motions/)"
+    sentence = "{who} performs {motion}"
+    needs = ("arms",)
+    params = [Param("motion", "motion", required=True, label="Motion"),
+              Param("speed", "number", default=1.0, min=0.2, max=3, step=0.1),
+              Param("mirror", "bool", default=False, label="Mirror (left is right)"),
+              Param("in_place", "bool", default=False, label="On the spot"),
+              Param("start", "number", label="From (s)"), Param("end", "number", label="To (s)"), HOW]
+
+    def run(self, s, who, motion, speed=1.0, mirror=False, in_place=False, start=None, end=None, how=None):
+        who.perform(motion, speed=speed, mirror=mirror, in_place=in_place, start=start, end=end, how=how)
+
+
 class Hold(Action):
     label = "is holding"
     description = "Holding something from this moment (a thing in the set, or a new item such as a scalpel)"
