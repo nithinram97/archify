@@ -1130,8 +1130,8 @@ class Creature(Character):
             self.wave(self.skel.tail, ws, end, period=T, amp_deg=10, axis="Z")
 
     # ------------------------------------------------------------------ verbs that need feet
-    def place(self, where, facing=None, at=None):
-        super().place(where, facing=facing, at=at)
+    def place(self, where, facing=None, at=None, on=None):
+        super().place(where, facing=facing, at=at, on=on)
         self.plant_feet(0.0 if at is None else at)
         return self
 

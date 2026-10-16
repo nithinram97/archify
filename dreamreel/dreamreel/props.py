@@ -109,6 +109,7 @@ class Table(Prop):
             for sy in (-1, 1):
                 shapes.box(name + ".leg", 0.06, 0.06, h - 0.05, c, at=(pos.x + sx * (w / 2 - 0.08), pos.y + sy * (d / 2 - 0.08), 0), bevel=0.01)
         s.block(pos, w, d)
+        s.add_surface(name, pos, h)
         s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
         for side, label in ((-1, "left"), (1, "right")):
             s.marks[f"{name}-{label}"] = Mark(f"{name}-{label}", (pos.x + side * (w / 2 + 0.35), pos.y),
@@ -242,6 +243,7 @@ class Counter(Prop):
         for item in p.get("items", []):
             s.place_item(item, pos, 0.6, w)
         s.block(pos, w, 0.6)
+        s.add_surface(name, pos, 0.6)
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.7), facing=math.pi)
         return None
 
@@ -478,6 +480,7 @@ class Desk(Prop):
             shapes.box(name + ".side", 0.04, d, h - 0.04, c, at=(pos.x + sx * (w / 2 - 0.02), pos.y, 0), bevel=0.005)
         shapes.box(name + ".drawers", 0.4, d - 0.05, h * 0.55, c, at=(pos.x + w / 2 - 0.24, pos.y, h * 0.4), bevel=0.01)
         s.block(pos, w, d)
+        s.add_surface(name, pos, h)
         for item in p.get("items", []):
             s.place_item(item, pos, h, w)
         toward = 1 if p.get("facing", "back") == "back" else -1     # the sitter faces the back wall or the camera
@@ -637,7 +640,7 @@ class Car(Prop):
 
 # ---------------------------------------------------------------------- a science lab
 def _metal(color="#c9ced3"):
-    return look.plastic(color, 0.25, 0.0)
+    return look.metal(color, 0.28)
 
 
 class Tray(Item):
@@ -653,8 +656,7 @@ class Tray(Item):
         shapes.box("tray.wax", 0.43, 0.29, 0.008, look.matte("#2f3436", 0.35), at=(x, y, z + 0.012), bevel=0)
         s.focus.setdefault("tray", Vector((x, y, z + 0.03)))
         s.add_mark("tray", (x, y - 0.55), facing="back")
-        s.surfaces = getattr(s, "surfaces", {})
-        s.surfaces["tray"] = (x, y, z + 0.02)
+        s.add_surface("tray", (x, y), z + 0.02)
 
 
 class ToolCup(Item):
@@ -734,6 +736,7 @@ class LabBench(Prop):
         for item in p.get("items", []):
             s.place_item(item, pos, h, w)
         s.block(pos, w, d)
+        s.add_surface(name, pos, h)
         s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
         for side, label in ((-1, "left"), (1, "right")):
             s.marks[f"{name}-{label}"] = Mark(f"{name}-{label}", (pos.x + side * (w / 2 + 0.35), pos.y),

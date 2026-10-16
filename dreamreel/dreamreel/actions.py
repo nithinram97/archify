@@ -124,10 +124,11 @@ class Place(Action):
     label = "is standing at"
     description = "Already standing somewhere when the scene starts"
     sentence = "{who} is standing at {where}"
-    params = [Param("where", "target", required=True, label="At"), Param("facing", "target", label="Facing")]
+    params = [Param("where", "target", required=True, label="At"), Param("facing", "target", label="Facing"),
+              Param("on", "surface", label="On top of")]
 
-    def run(self, s, who, where, facing=None):
-        who.place(where, facing=facing)
+    def run(self, s, who, where, facing=None, on=None):
+        who.place(where, facing=facing, on=on)
 
 
 class Sit(Action):

@@ -324,11 +324,21 @@ class Character(Plugin):
         return self.scene._resolve(where, t, me=self)
 
     # ------------------------------------------------------------------ staging
-    def place(self, where, facing=None, at=None):
-        """Put the character somewhere instantly (use at the start of a scene)."""
+    def place(self, where, facing=None, at=None, on=None):
+        """Put the character somewhere instantly (use at the start of a scene). `on`: the top of a
+        table, bench or tray (a set's surfaces) to stand on instead of the floor."""
         t = 0.0 if at is None else at
-        p = self._point(where, t)
-        key(self.root, "location", t, (p.x, p.y, 0), "cut")
+        z = 0.0
+        if on is not None:
+            surf = self.scene.set.surfaces.get(on) if self.scene.set else None
+            if surf is None:
+                known = sorted(self.scene.set.surfaces) if self.scene.set else []
+                raise ValueError(f"nothing called {on!r} to stand on. Surfaces: {known}")
+            p = Vector(surf[:2])
+            z = surf[2]
+        else:
+            p = self._point(where, t)
+        key(self.root, "location", t, (p.x, p.y, z), "cut")
         self._key_heading(t, self._facing_value(facing, p, t, where), "cut")
         return self
 

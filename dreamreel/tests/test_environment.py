@@ -109,7 +109,11 @@ def main():
     assert s.set.ceiling_h and s.set.panels
     assert any(o.name.startswith("strip light") for o in bpy.data.objects)
     assert {"lab_bench", "shelves", "blackboard"} <= {p.split("-")[0] for p in s.set.props}
-    assert "tray" in s.set.marks
+    assert "tray" in s.set.marks and "tray" in s.set.surfaces
+    frog = s.cast(frog=dict(type="creature", body="frog", size=0.4))
+    frog.place("tray", on="tray")
+    assert abs(frog.root.location.z - s.set.surfaces["tray"][2]) < 1e-6
+    assert all(abs(t.location.z - s.set.surfaces["tray"][2]) < 0.05 for t in frog.feet.values()), "feet on the tray"
     s.cut.shot("establishing", at=0.0, angle="high")
     s.cut.build()
     for sh in s.cut.final:

@@ -78,6 +78,19 @@ def matte(color, rough=0.8):
     return plastic(color, rough=rough, coat=0.0)
 
 
+def metal(color="#c9ced3", rough=0.3):
+    """Steel, aluminium, chrome (rough=0.1), brass (a gold colour)."""
+    k = ("metal", rgb(color), rough)
+    if k in _cache and _cache[k].name in bpy.data.materials:
+        return _cache[k]
+    mat = plastic(color, rough=rough, coat=0.0).copy()
+    mat.name = f"metal {color}"
+    _set(mat.node_tree.nodes.get("Principled BSDF"), "Metallic", 1.0)
+    mat.metallic = 1.0
+    _cache[k] = mat
+    return mat
+
+
 def glass(color="white"):
     k = ("glass", rgb(color))
     if k in _cache and _cache[k].name in bpy.data.materials:

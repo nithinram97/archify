@@ -341,6 +341,7 @@ function paramField(p, value, onChange, ctx = {}) {
       break;
     case "mark": el = select(marks.map((m) => [m, "📍 " + m]), value, onChange, opt("—")); break;
     case "seat": el = select(setInfo.seats.map((m) => [m, "🪑 " + m]), value, onChange, opt("—")); break;
+    case "surface": el = select((setInfo.surfaces || []).map((m) => [m, m]), value ?? "", onChange, opt("(the floor)")); break;
     case "prop": el = select(setInfo.props || [], value, onChange, opt("—")); break;
     case "character": el = select(people, value ?? "", onChange, opt(p.name === "to" ? "(whoever is nearest)" : "(no one)")); break;
     case "target":

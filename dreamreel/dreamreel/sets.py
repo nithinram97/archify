@@ -85,6 +85,7 @@ class Set(Plugin):
         self.sway = []       # (object, how much) that move in the wind: trees, plants
         self.glows = []      # (material, kind, strength): windows that show the sky, lit windows at night
         self.windows = []    # (x, y, z) of windows in rooms: daylight comes in through them
+        self.surfaces = {}   # name -> (x, y, height): tops of tables and benches a character can be on
         self.build_environment()
         for p in self.spec.get("props", []):
             self.add_prop(p)
@@ -182,6 +183,10 @@ class Set(Plugin):
             facing = self.seat_facing({"facing": facing}, Vector(at[:2]))
         self.marks[name] = Mark(name, at, facing)
         return self.marks[name]
+
+    def add_surface(self, name, at, height):
+        """Something a (small) character can stand on: a table top, a bench, a tray."""
+        self.surfaces[name] = (float(at[0]), float(at[1]), float(height))
 
     def add_seat(self, name, at, facing, height, front):
         """A place to sit at `at` (x, y), seat height `height`, got into from `front`."""

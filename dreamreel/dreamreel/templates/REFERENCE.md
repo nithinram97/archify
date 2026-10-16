@@ -145,7 +145,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | run_to | where |
 | fly_to | where, height, land (needs wings) |
 | enter | where (appears there; hidden before) |
-| place | where, facing (standing there from the start) |
+| place | where, facing, on (standing there from the start; `on` = a table, bench, desk, counter or tray top) |
 | sit | seat, already (true: sitting from the start). Bodies without arms lie down there |
 | lie_down, stand, leave | |
 | turn_to, look_at | target |
