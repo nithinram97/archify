@@ -1,0 +1,29 @@
+set = "room"
+cast = ["hero"]
+
+[[beats]]
+who = "hero"
+do = "enter"
+where = "door"
+
+[[beats]]
+who = "hero"
+do = "walk_to"
+where = "center"
+facing = "camera"
+
+[[beats]]
+who = "hero"
+do = "gesture"
+gesture = "wave"
+
+[[beats]]
+who = "hero"
+do = "say"
+line = "Hello! This is my first film."
+mood = "happy"
+
+[[beats]]
+who = "hero"
+do = "sit"
+seat = "sofa"

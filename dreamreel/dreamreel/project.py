@@ -4,7 +4,9 @@
       film.toml            title, frame rate, resolution, scene order, music
       cast/<name>.toml     one file per character (how they look and sound)
       sets/<name>.toml     one file per place (room or outdoor, furniture, marks)
-      scenes/<NNN_name>.py one file per scene (who does what, in order)
+      scenes/<NNN_name>.toml one file per scene: set, cast and beats (who does what, in order);
+                           a scene can also be a Python script (.py) for anything beats can't say
+      extensions/*.py      your own classes: new characters, props, gestures, actions, shots...
       audio/music/ ...     your music and sound effects; audio/voices/ is generated
       renders/             everything dreamreel renders (safe to delete)
 
@@ -51,13 +53,26 @@ class Project:
         """Scene script paths in film order (film.toml `scenes`, else by file name)."""
         order = self.film.get("scenes")
         if order:
-            return [os.path.join(self.root, "scenes", s if s.endswith(".py") else s + ".py") for s in order]
-        return sorted(glob.glob(os.path.join(self.root, "scenes", "*.py")))
+            return [self._scene_file(s) for s in order]
+        return self._all_scene_files()
+
+    def _all_scene_files(self):
+        d = os.path.join(self.root, "scenes")
+        return sorted(glob.glob(os.path.join(d, "*.toml")) + glob.glob(os.path.join(d, "*.py")))
+
+    def _scene_file(self, stem):
+        if stem.endswith((".py", ".toml")):
+            return os.path.join(self.root, "scenes", stem)
+        for ext in (".toml", ".py"):
+            p = os.path.join(self.root, "scenes", stem + ext)
+            if os.path.exists(p):
+                return p
+        return os.path.join(self.root, "scenes", stem + ".toml")
 
     def scene_path(self, name):
         if os.path.exists(name):
             return os.path.abspath(name)
-        every = self.scenes() + sorted(glob.glob(os.path.join(self.root, "scenes", "*.py")))
+        every = self.scenes() + self._all_scene_files()
         for p in every:
             base = os.path.splitext(os.path.basename(p))[0]
             if name in (base, base.split("_", 1)[0], base.split("_", 1)[-1]):
@@ -67,7 +82,7 @@ class Project:
     def unlisted(self):
         """Scene files that film.toml's `scenes` list leaves out (they won't be in the film)."""
         listed = set(self.scenes())
-        return [p for p in sorted(glob.glob(os.path.join(self.root, "scenes", "*.py"))) if p not in listed]
+        return [p for p in self._all_scene_files() if p not in listed]
 
     def renders(self, *parts):
         path = os.path.join(self.root, "renders", *parts)
@@ -93,6 +108,10 @@ def current():
 
 
 def activate(project, scene_name=None):
+    """Make `project` the current film and load its extensions."""
     global _current, CURRENT_SCENE_NAME
     _current = project
     CURRENT_SCENE_NAME = scene_name
+    if project is not None:
+        from . import plugins
+        plugins.load_extensions(project.root)

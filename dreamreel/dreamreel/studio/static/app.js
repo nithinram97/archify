@@ -43,9 +43,8 @@ function toast(msg) {
 
 function fail(e) { toast(e.message || String(e)); console.error(e); }
 
-const q = (s) => JSON.stringify(String(s));              // a Python string literal
 const pretty = (s) => String(s).replace(/[-_]/g, " ");
-const sceneLabel = (file) => pretty(file.replace(/\.py$/, "").replace(/^\d+_/, ""));
+const sceneLabel = (file) => pretty(file.replace(/\.(py|toml)$/, "").replace(/^\d+_/, ""));
 const sceneNum = (file) => file.split("_")[0];
 const fileUrl = (path, mtime) => `/files/${path}${mtime ? "?t=" + Math.round(mtime) : ""}`;
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -65,8 +64,9 @@ const S = {
   setSel: null,
   checks: {},             // scene file -> check result (or {error})
   playhead: {},           // scene file -> seconds
-  sceneText: {},          // scene file -> text as last loaded/saved
-  draft: {},              // scene file -> unsaved text
+  sceneSpec: {},          // scene file -> its beats and settings, as loaded and edited
+  selBeat: {},            // scene file -> selected beat index (new beats go after it)
+  newBeat: {},            // scene file -> the beat being composed
   castDraft: {},          // key -> spec being edited
   setDraft: {},           // key -> spec being edited
   watch: new Map(),       // job id -> callback when finished
@@ -161,7 +161,7 @@ function render() {
   const film = S.state.project.film;
   const items = [
     ["story", "🎬", "Story"], ["cast", "🧸", "Cast"], ["sets", "🏠", "Sets"],
-    ["film", "⚙️", "Film"], ["screening", "🍿", "Screening room"],
+    ["film", "⚙️", "Film"], ["screening", "🍿", "Screening room"], ["toolbox", "🧰", "Toolbox"],
   ];
   const nav = h("nav", { class: "nav", "aria-label": "Sections" },
     h("div", { class: "brand" }, reelIcon(), "dreamreel"),
@@ -171,7 +171,7 @@ function render() {
     h("div", { class: "spacer" }),
     h("div", { class: "hint" }, "Everything you make is saved as plain files in ",
       h("code", {}, S.state.project.root.split("/").slice(-1)[0]), "."));
-  const views = { story: storyView, cast: castView, sets: setsView, film: filmView, screening: screeningView };
+  const views = { story: storyView, cast: castView, sets: setsView, film: filmView, screening: screeningView, toolbox: toolboxView };
   const main = h("main", { class: "main" }, (views[S.view] || storyView)());
   app.replaceChildren(h("div", { class: "shell" }, nav, main));
 }
@@ -250,7 +250,8 @@ function select(options, value, onChange, { blank, label } = {}) {
       const [v, t] = Array.isArray(o) ? o : [o, pretty(o)];
       return h("option", { value: v, selected: v === value ? true : null }, t);
     }));
-  el.value = value ?? "";
+  if ((value !== undefined && value !== null && value !== "") || blank !== undefined) el.value = value ?? "";
+  if (el.selectedIndex < 0 && el.options.length) el.selectedIndex = 0;
   el.addEventListener("change", () => onChange(el.value));
   return el;
 }
@@ -266,26 +267,135 @@ function seg(options, value, onChange) {
   return wrap;
 }
 
+// ------------------------------------------------------------------ plugin schemas
+// Every feature (character types, hair, props, actions, shots...) is a class in dreamreel; `dreamreel info`
+// describes each one and its settings. The forms below are built from those descriptions, so features
+// added in a film's extensions/ folder appear here without any change to the studio.
+const plug = (kind) => (info().plugins && info().plugins[kind]) || [];
+const plugOf = (kind, name) => plug(kind).find((p) => p.name === name);
+const choicesOf = (kind) => plug(kind).map((p) => [p.name, p.label]);
+const nameOf = (k) => (S.state.cast[k] && S.state.cast[k].name) || k;
+const clone = (o) => JSON.parse(JSON.stringify(o || {}));
+
+function multiChips(options, values, onChange) {
+  const set = new Set(values || []);
+  return h("div", { class: "chips" }, options.map((o) => {
+    const [v, t] = Array.isArray(o) ? o : [o, pretty(o)];
+    return h("button", { class: "chip" + (set.has(v) ? " on" : ""), "aria-pressed": set.has(v) ? "true" : "false",
+      onclick: (e) => { set.has(v) ? set.delete(v) : set.add(v); e.target.classList.toggle("on"); onChange([...set]); } }, t);
+  }));
+}
+
+// a control for one setting; ctx = { cast: keys in the scene, who, setInfo, name }
+function paramField(p, value, onChange, ctx = {}) {
+  const cat = catalog();
+  const setInfo = ctx.setInfo || { marks: [], seats: [], props: [] };
+  const places = new Set(cat.places);
+  const marks = [...setInfo.marks.filter((m) => !places.has(m)), ...setInfo.marks.filter((m) => places.has(m))];
+  const people = (ctx.cast || []).filter((k) => k !== ctx.who).map((k) => [k, "👤 " + nameOf(k)]);
+  const opt = (blank) => (p.required ? { label: p.label } : { blank, label: p.label });
+  let el;
+  switch (p.type) {
+    case "text":
+      el = h("input", { type: "text", class: p.name === "line" ? "say-line" : "", value: value ?? "", placeholder: p.label,
+        oninput: (e) => onChange(e.target.value) });
+      break;
+    case "number":
+      el = h("input", { type: "number", min: p.min, max: p.max, step: p.step ?? "any", value: value ?? p.default ?? "",
+        style: "width:96px", "aria-label": p.label, oninput: (e) => onChange(e.target.value === "" ? undefined : +e.target.value) });
+      break;
+    case "bool":
+      el = h("label", { class: "row small" }, h("input", { type: "checkbox", checked: value ?? p.default ?? false,
+        onchange: (e) => onChange(e.target.checked) }), ctx.inline ? p.label : "");
+      break;
+    case "color": el = colorPicker(value ?? p.default ?? "", onChange); break;
+    case "skin": el = colorPicker(value ?? p.default ?? "skin2", onChange, { skins: true }); break;
+    case "choice": {
+      const num = typeof (p.choices || [])[0] === "number";
+      const conv = (x) => (num ? +x : x);
+      const ch = p.choices.map(String);
+      const v = String(value ?? p.default ?? ch[0]);
+      el = ch.length <= 4 && !ctx.inline ? seg(ch, v, (x) => onChange(conv(x))) : select(ch, v, (x) => onChange(conv(x)), { label: p.label });
+      break;
+    }
+    case "choices": el = multiChips(p.choices, value, onChange); break;
+    case "extras": el = multiChips(choicesOf("extra"), value, onChange); break;
+    case "items": el = multiChips(choicesOf("item"), value, onChange); break;
+    case "hair": el = select(choicesOf("hair"), value ?? p.default, onChange, { label: p.label }); break;
+    case "mood": el = select(choicesOf("mood"), value ?? (p.required ? p.default : ""), onChange, opt("(same mood)")); break;
+    case "gesture": el = select(choicesOf("gesture"), value ?? p.default, onChange, { label: p.label }); break;
+    case "shot": el = select(choicesOf("shot"), value ?? p.default, onChange, { label: p.label }); break;
+    case "voice": el = voiceField(value, onChange, ctx); break;
+    case "place": el = select(cat.places, value ?? p.default ?? ctx.defaultPlace ?? "center", onChange, { label: p.label }); break;
+    case "facing":
+      el = select([["camera", "the camera"], ["left", "left"], ["right", "right"], ["back", "the back"],
+        ...marks.filter((m) => !places.has(m)).map((m) => [m, "📍 " + m])], value ?? p.default ?? "camera", onChange, { label: p.label });
+      break;
+    case "mark": el = select(marks.map((m) => [m, "📍 " + m]), value, onChange, opt("—")); break;
+    case "seat": el = select(setInfo.seats.map((m) => [m, "🪑 " + m]), value, onChange, opt("—")); break;
+    case "prop": el = select(setInfo.props || [], value, onChange, opt("—")); break;
+    case "character": el = select(people, value ?? "", onChange, opt(p.name === "to" ? "(whoever is nearest)" : "(no one)")); break;
+    case "target":
+      el = select([...people, ...marks.map((m) => [m, "📍 " + m]), ["camera", "🎥 the camera"]], value ?? "", onChange, opt("(no one)"));
+      break;
+    default:
+      el = h("input", { type: "text", value: value ?? "", oninput: (e) => onChange(e.target.value) });
+  }
+  // a required menu shows its first choice: store it, so what you see is what's saved
+  if (el.tagName === "SELECT" && (value === undefined || value === null || value === "") && el.value) onChange(el.value, true);
+  return el;
+}
+
+function voiceField(value, onChange, ctx) {
+  const cat = catalog();
+  const inp = h("input", { type: "text", list: "voices", value: value || "", placeholder: cat.voices[0], oninput: (e) => onChange(e.target.value) });
+  return h("div", { class: "row" }, inp, h("datalist", { id: "voices" }, cat.voices.map((v) => h("option", { value: v }))),
+    h("button", { class: "btn sm", disabled: cat.voice_engine ? null : true, title: cat.voice_engine ? "" : "Voices need Piper: pip install piper-tts",
+      onclick: () => job({ kind: "voice", voice: inp.value || cat.voices[0], text: `Hi, I'm ${ctx.name || "here"}. Nice to meet you!` },
+        (j) => { const out = j.outputs[0]; if (out) new Audio(fileUrl(out, Date.now() / 1000)).play(); }) }, "▶ Hear"),
+    cat.voice_engine ? null : h("span", { class: "muted small" }, "Voices need ", h("code", {}, "pip install piper-tts")));
+}
+
+// lay out a plugin's settings: small controls in a grid, wide ones (colours, chips) on their own rows
+function paramForm(params, values, onChange, ctx = {}, skip = []) {
+  const wide = new Set(["color", "skin", "extras", "items", "choices", "voice"]);
+  const small = [], big = [];
+  for (const p of params) {
+    if (skip.includes(p.name)) continue;
+    const field = paramField(p, values[p.name], (v, quiet) => onChange(p.name, v, quiet), ctx);
+    const box = p.type === "bool" ? h("label", { class: "field row" }, field, p.label) : h(wide.has(p.type) ? "div" : "label", { class: "field" }, h("span", {}, p.label), field);
+    (wide.has(p.type) ? big : small).push(box);
+  }
+  return h("div", { class: "stack" }, small.length ? h("div", { class: "fields" }, small) : null, big);
+}
+
 // ------------------------------------------------------------------ CAST
 function castView() {
   const cast = S.state.cast;
   const keys = Object.keys(cast);
   if (S.castSel && !cast[S.castSel] && !S.castDraft[S.castSel]) S.castSel = null;
-  const grid = h("div", { class: "cast-grid" },
-    keys.map((k) => {
-      const spec = S.castDraft[k] || cast[k];
-      return h("div", { class: "cast-card" + (S.castSel === k ? " on" : ""), tabindex: 0, role: "button",
-        onclick: () => { S.castSel = k; render(); }, onkeydown: (e) => e.key === "Enter" && (S.castSel = k, render()) },
-        h("div", { class: "fig", html: figureSVG(spec, colors()) }),
-        h("div", { class: "nm" }, spec.name || k));
-    }),
-    h("div", { class: "cast-card add", tabindex: 0, role: "button", onclick: newCharacter }, h("div", { style: "font-size:28px" }, "+"), "New character"));
   return h("div", {},
     h("div", { class: "page-head" },
-      h("div", {}, h("h1", {}, "Cast"), h("p", {}, "Who's in your film. Pick a look; the drawing updates as you go.")),
+      h("div", {}, h("h1", {}, "Cast"), h("p", {}, "Who's in your film. Pick a look; toy figures are drawn live as you go.")),
       keys.length ? h("button", { class: "btn", onclick: () => job({ kind: "cast" }, () => toast("Cast photo ready in the Screening room")) }, "📸 Cast photo") : null),
-    grid,
+    h("div", { class: "cast-grid" },
+      keys.map((k) => {
+        const spec = S.castDraft[k] || cast[k];
+        return h("div", { class: "cast-card" + (S.castSel === k ? " on" : ""), tabindex: 0, role: "button",
+          onclick: () => { S.castSel = k; render(); }, onkeydown: (e) => e.key === "Enter" && ((S.castSel = k), render()) },
+          h("div", { class: "fig" }, characterPicture(k, spec)), h("div", { class: "nm" }, spec.name || k),
+          (spec.type && spec.type !== "toy") ? h("div", { class: "small muted" }, (plugOf("character", spec.type) || {}).label || spec.type) : null);
+      }),
+      h("div", { class: "cast-card add", tabindex: 0, role: "button", onclick: newCharacter }, h("div", { style: "font-size:28px" }, "+"), "New character")),
     S.castSel ? castEditor(S.castSel) : null);
+}
+
+function characterPicture(key, spec) {
+  const t = plugOf("character", spec.type || "toy") || {};
+  if (t.drawing === "toy") return h("div", { html: figureSVG(spec, colors()) });
+  const r = renderOf(`renders/stills/cast_${key}.png`);
+  if (r) return h("img", { src: fileUrl(r.path, r.mtime), alt: spec.name || key, style: "object-fit:cover;border-radius:10px" });
+  return h("div", { class: "avatar" }, (spec.name || key).slice(0, 1).toUpperCase());
 }
 
 function newCharacter() {
@@ -293,8 +403,7 @@ function newCharacter() {
   if (!name) return;
   const key = slug(name).replace(/-/g, "_") || "character";
   if (S.state.cast[key]) { toast("There's already a character called " + key); return; }
-  S.castDraft[key] = { name: name.trim(), body: "bean", skin: "skin2", hair: "short", hair_color: "brown",
-    top: "teal", bottom: "navy", shoes: "charcoal", extras: [] };
+  S.castDraft[key] = { name: name.trim(), skin: "skin2", hair: "short", hair_color: "brown", top: "teal", bottom: "navy" };
   S.castSel = key;
   saveCharacter(key).then(render);
 }
@@ -308,20 +417,22 @@ async function saveCharacter(key) {
 }
 
 function castEditor(key) {
-  const cat = catalog();
-  const saved = S.state.cast[key] || {};
-  const spec = S.castDraft[key] || (S.castDraft[key] = JSON.parse(JSON.stringify(saved)));
-  const figBox = h("div", { html: figureSVG(spec, colors()) });
+  const spec = S.castDraft[key] || (S.castDraft[key] = clone(S.state.cast[key]));
+  const types = plug("character");
+  const tdef = plugOf("character", spec.type || "toy") || types[0];
+  const live = tdef && tdef.drawing === "toy";
+  const figBox = h("div", {}, characterPicture(key, spec));
   const redraw = () => {
-    figBox.innerHTML = figureSVG(spec, colors());
-    const card = document.querySelectorAll(".cast-card.on .fig")[0];
-    if (card) card.innerHTML = figureSVG(spec, colors());
+    if (!live) return;
+    figBox.replaceChildren(characterPicture(key, spec));
+    const card = $(".cast-card.on .fig");
+    if (card) card.replaceChildren(characterPicture(key, spec));
   };
-  const set = (k) => (v) => { spec[k] = v; redraw(); };
   const portrait = renderOf(`renders/stills/cast_${key}.png`);
-  const extras = new Set(spec.extras || []);
-  const voice = h("input", { type: "text", list: "voices", value: spec.voice || "", placeholder: cat.voices[0],
-    oninput: (e) => (spec.voice = e.target.value) });
+  const form = paramForm(tdef ? tdef.params : [], spec, (k, v) => {
+    if (v === undefined) delete spec[k]; else spec[k] = v;
+    redraw();
+  }, { name: spec.name || key });
   return h("div", { class: "card", style: "margin-top:16px" },
     h("div", { class: "card-head" },
       h("h2", {}, spec.name || key),
@@ -334,38 +445,17 @@ function castEditor(key) {
           job({ kind: "cast", names: [key] }, () => toast("Portrait rendered")); } }, "📸 Save & render portrait"),
         h("button", { class: "btn primary", onclick: () => saveCharacter(key).catch(fail) }, "Save"))),
     h("div", { class: "editor-split" },
-      h("div", { class: "figure-big" }, figBox,
-        portrait ? h("img", { src: fileUrl(portrait.path, portrait.mtime), alt: "Rendered portrait",
-          onclick: () => lightbox(fileUrl(portrait.path, portrait.mtime)) }) : null,
-        h("span", { class: "muted small" }, portrait ? "Drawing (live) and last render" : "Live drawing. Render a portrait to see the real thing.")),
+      h("div", { class: "figure-big" }, live ? figBox : null,
+        portrait && (live || true) ? h("img", { src: fileUrl(portrait.path, portrait.mtime), alt: "Rendered portrait",
+          onclick: () => lightbox(fileUrl(portrait.path, portrait.mtime)) }) : (!live ? figBox : null),
+        h("span", { class: "muted small" }, live ? (portrait ? "Drawing (live) and last render" : "Live drawing. Render a portrait to see the real thing.")
+          : "Render a portrait to see this character.")),
       h("div", { class: "stack" },
-        h("div", { class: "fields" },
-          h("label", { class: "field" }, "Name", h("input", { type: "text", value: spec.name || "",
-            oninput: (e) => { spec.name = e.target.value; } })),
-          h("label", { class: "field" }, `Height (${(spec.height || 1).toFixed(2)})`,
-            h("input", { type: "range", min: 0.7, max: 1.3, step: 0.05, value: spec.height || 1,
-              oninput: (e) => { spec.height = +e.target.value; e.target.previousSibling.textContent = `Height (${(+e.target.value).toFixed(2)})`; redraw(); } })),
-          h("label", { class: "field" }, "Body", seg(cat.bodies, spec.body || "bean", set("body"))),
-          h("label", { class: "field" }, "Outfit", seg(cat.outfits, spec.outfit || "shirt", set("outfit"))),
-          h("label", { class: "field" }, "Eyes", seg(cat.eyes, spec.eyes || "normal", set("eyes"))),
-          h("label", { class: "field" }, "Hair", select(cat.hair, spec.hair || "short", set("hair")))),
-        h("label", { class: "field" }, "Skin", colorPicker(spec.skin || "skin2", set("skin"), { skins: true })),
-        h("label", { class: "field" }, "Hair colour", colorPicker(spec.hair_color || "brown", set("hair_color"))),
-        h("label", { class: "field" }, spec.outfit === "dress" ? "Dress" : "Top", colorPicker(spec.top || "blue", set("top"))),
-        spec.outfit === "dress" ? null : h("label", { class: "field" }, "Trousers", colorPicker(spec.bottom || "navy", set("bottom"))),
-        h("label", { class: "field" }, "Shoes", colorPicker(spec.shoes || "charcoal", set("shoes"))),
-        h("div", { class: "field" }, h("span", {}, "Extras"),
-          h("div", { class: "chips" }, cat.extras.map((x) => h("button", { class: "chip" + (extras.has(x) ? " on" : ""),
-            "aria-pressed": extras.has(x) ? "true" : "false",
-            onclick: (e) => { extras.has(x) ? extras.delete(x) : extras.add(x); spec.extras = [...extras];
-              e.target.classList.toggle("on"); redraw(); } }, pretty(x))))),
-        h("div", { class: "field" }, h("span", {}, "Voice"),
-          h("div", { class: "row" }, voice,
-            h("datalist", { id: "voices" }, cat.voices.map((v) => h("option", { value: v }))),
-            h("button", { class: "btn sm", disabled: !cat.voice_engine ? true : null, title: cat.voice_engine ? "" : "Install voices: pip install piper-tts",
-              onclick: () => job({ kind: "voice", voice: voice.value || cat.voices[0], text: `Hi, I'm ${spec.name || key}. Nice to meet you!` },
-                (j) => { const out = j.outputs[0]; if (out) new Audio(fileUrl(out, Date.now() / 1000)).play(); }) }, "▶ Hear"),
-            !cat.voice_engine ? h("span", { class: "muted small" }, "Voices need ", h("code", {}, "pip install piper-tts")) : null)))));
+        types.length > 1 ? h("label", { class: "field" }, h("span", {}, "Kind of character"),
+          select(types.map((t) => [t.name, t.label + (t.source !== "built-in" ? " ✦" : "")]), spec.type || "toy",
+            (v) => { if (v === "toy") delete spec.type; else spec.type = v; render(); }, { label: "Kind" }),
+          tdef && tdef.description ? h("span", { class: "muted small", style: "font-weight:400" }, tdef.description) : null) : null,
+        form)));
 }
 
 // ------------------------------------------------------------------ SETS
@@ -375,12 +465,12 @@ function setsView() {
   if (!S.setSel || (!sets[S.setSel] && !S.setDraft[S.setSel])) S.setSel = keys[0] || null;
   return h("div", {},
     h("div", { class: "page-head" },
-      h("div", {}, h("h1", {}, "Sets"), h("p", {}, "The places where scenes happen. Put furniture in the room; characters can walk to it, sit on it and talk next to it.")),
+      h("div", {}, h("h1", {}, "Sets"), h("p", {}, "The places where scenes happen. Put things in them; characters can walk to them, sit on them and talk next to them.")),
       h("button", { class: "btn", onclick: newSet }, "+ New set")),
     h("div", { class: "story" },
       h("div", { class: "list-rows card", style: "padding:8px" },
         keys.map((k) => h("button", { class: S.setSel === k ? "on" : "", onclick: () => { S.setSel = k; render(); } },
-          h("span", {}, pretty(k)), h("span", { class: "muted small" }, sets[k].kind || "room"))),
+          h("span", {}, pretty(k)), h("span", { class: "muted small" }, (plugOf("set", sets[k].kind || "room") || {}).label || sets[k].kind))),
         !keys.length ? h("div", { class: "muted small", style: "padding:8px" }, "No sets yet.") : null),
       S.setSel ? setEditor(S.setSel) : h("div", { class: "empty" }, "Make a set to get started.")));
 }
@@ -390,103 +480,70 @@ function newSet() {
   if (!name) return;
   const key = slug(name).replace(/-/g, "_");
   if (!key) return;
-  const outdoor = confirm("Is it outdoors? (OK = outdoors, Cancel = a room)");
-  S.setDraft[key] = outdoor
-    ? { kind: "outdoor", ground: "grass", trees: 6, props: [{ type: "bench", place: "back" }] }
-    : { kind: "room", size: "medium", walls: "cream", floor: "wood", props: [{ type: "door", place: "back-left" }] };
+  S.setDraft[key] = { kind: "room", props: [{ type: "door", place: "back-left" }] };
   S.setSel = key;
   saveSet(key);
 }
 
 async function saveSet(key) {
   const spec = S.setDraft[key];
-  spec.props = (spec.props || []).map((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v !== "" && v !== null && !(Array.isArray(v) && !v.length))));
+  const empty = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length);
+  spec.props = (spec.props || []).map((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => !empty(v))));
+  if (spec.marks && !Object.keys(spec.marks).length) delete spec.marks;
   await api("PUT", `/api/sets/${key}`, { spec }).catch(fail);
   delete S.setDraft[key];
   await refresh();
   toast("Saved set " + pretty(key));
 }
 
-const PROP_OPTIONS = {
-  table: ["chairs", "items", "width", "color"], counter: ["items", "width", "color"], sofa: ["facing", "width", "color"],
-  chair: ["facing", "color"], bench: ["facing", "color"], door: ["color"], window: ["view"], plant: ["color"],
-  bookshelf: ["width", "color"], fridge: ["color"], lamp: [], rug: ["color", "width"], tree: ["scale"],
-  streetlamp: [], house: ["color", "roof"],
-};
-
 function setEditor(key) {
   const cat = catalog();
-  const saved = S.state.sets[key] || {};
-  const spec = S.setDraft[key] || (S.setDraft[key] = JSON.parse(JSON.stringify(saved)));
+  const spec = S.setDraft[key] || (S.setDraft[key] = clone(S.state.sets[key]));
   spec.props = spec.props || [];
-  spec.marks = spec.marks || {};
-  const outdoor = spec.kind === "outdoor";
-  const setInfo = info().sets[key] || { marks: [], seats: [] };
-  if (S.selProp === undefined || S.selProp >= spec.props.length) S.selProp = spec.props.length ? 0 : null;
+  const kind = plugOf("set", spec.kind || "room") || plug("set")[0];
+  const outdoor = (spec.kind || "room") !== "room";
+  const setInfo = info().sets[key] || { marks: [], seats: [], props: [] };
+  if (S.selProp === undefined || S.selProp === null || S.selProp >= spec.props.length) S.selProp = spec.props.length ? 0 : null;
   if (!S.selCell) S.selCell = "center";
-  const saveBtn = h("button", { class: "btn", onclick: () => saveSet(key) }, "Save");
-  const rerender = () => { render(); dirty2(); };
-  const dirty2 = () => { const b = $("#set-save"); if (b) { b.classList.add("primary"); b.textContent = "Save changes"; } };
-  saveBtn.id = "set-save";
+  const dirty = () => { const b = $("#set-save"); if (b) { b.classList.add("primary"); b.textContent = "Save changes"; } };
+  const rerender = () => { render(); dirty(); };
+  const placeOf = (p) => p.place || (plugOf("prop", p.type) || {}).default_place || "center";
 
-  const places = [["back-left", "back", "back-right"], ["left", "center", "right"], ["front-left", "front", "front-right"]];
+  const grid = [["back-left", "back", "back-right"], ["left", "center", "right"], ["front-left", "front", "front-right"]];
   const stage = h("div", { class: "stage" + (outdoor ? " outdoor" : "") },
     h("div", { class: "wall" }, outdoor ? "far away" : "back wall"),
-    places.flat().map((pl) => h("div", { class: "cell" + (S.selCell === pl ? " on" : ""),
+    grid.flat().map((pl) => h("div", { class: "cell" + (S.selCell === pl ? " on" : ""),
       onclick: (e) => { if (e.target.classList.contains("prop")) return; S.selCell = pl; render(); } },
       h("span", { class: "pl" }, pl),
-      spec.props.map((p, i) => (p.place || defaultPlace(p.type)) === pl ? h("span", {
+      spec.props.map((p, i) => placeOf(p) === pl ? h("span", {
         class: "prop" + (S.selProp === i ? " on" : ""), onclick: () => { S.selProp = i; S.selCell = pl; render(); } },
-        pretty(p.name || p.type), p.chairs ? ` + ${p.chairs} chairs` : "") : null))),
+        pretty(p.name || (plugOf("prop", p.type) || {}).label || p.type), p.chairs ? ` + ${p.chairs} chairs` : "") : null))),
     h("div", { class: "cam" }, "🎥 camera side"));
 
-  const addType = select(cat.props, "", (v) => {
+  const addType = select(plug("prop").map((p) => [p.name, p.label + (p.source !== "built-in" ? " ✦" : "")]), "", (v) => {
     if (!v) return;
     spec.props.push({ type: v, place: S.selCell });
     S.selProp = spec.props.length - 1;
     rerender();
-  }, { blank: `+ Add to ${S.selCell}…`, label: "Add furniture" });
+  }, { blank: `+ Add to ${S.selCell}…`, label: "Add something" });
 
   const p = S.selProp !== null ? spec.props[S.selProp] : null;
+  const pdef = p ? plugOf("prop", p.type) : null;
   const propPanel = p ? h("div", { class: "card", style: "background:var(--panel-2)" },
-    h("div", { class: "card-head" }, h("h3", {}, pretty(p.name || p.type)),
+    h("div", { class: "card-head" }, h("div", {}, h("h3", {}, pretty(p.name || (pdef || {}).label || p.type)),
+      pdef && pdef.description ? h("div", { class: "small muted" }, pdef.description) : null),
       h("button", { class: "btn sm danger ghost", onclick: () => { spec.props.splice(S.selProp, 1); S.selProp = null; rerender(); } }, "Remove")),
-    h("div", { class: "fields" },
-      h("label", { class: "field" }, "Where", select(cat.places, p.place || defaultPlace(p.type), (v) => { p.place = v; S.selCell = v; rerender(); })),
-      (PROP_OPTIONS[p.type] || []).includes("chairs") ? h("label", { class: "field" }, "Chairs", seg([["0", "none"], ["1", "1"], ["2", "2"]], String(p.chairs || 0), (v) => { p.chairs = +v || undefined; rerender(); })) : null,
-      (PROP_OPTIONS[p.type] || []).includes("facing") ? h("label", { class: "field" }, "Facing", select(["camera", "left", "right", "back", ...setInfo.marks.filter((m) => !cat.places.includes(m))], p.facing || "camera", (v) => { p.facing = v; dirty2(); })) : null,
-      (PROP_OPTIONS[p.type] || []).includes("width") ? h("label", { class: "field" }, "Width (m)", h("input", { type: "number", step: 0.1, min: 0.4, max: 4, value: p.width || "", placeholder: "default", oninput: (e) => { p.width = e.target.value ? +e.target.value : undefined; dirty2(); } })) : null,
-      (PROP_OPTIONS[p.type] || []).includes("scale") ? h("label", { class: "field" }, "Size", h("input", { type: "number", step: 0.1, min: 0.5, max: 2.5, value: p.scale || "", placeholder: "1", oninput: (e) => { p.scale = e.target.value ? +e.target.value : undefined; dirty2(); } })) : null,
-      h("label", { class: "field" }, "Name (optional)", h("input", { type: "text", value: p.name || "", placeholder: p.type, oninput: (e) => { p.name = slug(e.target.value) || undefined; dirty2(); } }))),
-    (PROP_OPTIONS[p.type] || []).includes("items") ? h("div", { class: "field", style: "margin-top:12px" }, h("span", {}, "On top"),
-      h("div", { class: "chips" }, cat.table_items.map((it) => {
-        const on = (p.items || []).includes(it);
-        return h("button", { class: "chip" + (on ? " on" : ""), onclick: () => {
-          p.items = on ? p.items.filter((x) => x !== it) : [...(p.items || []), it]; rerender(); } }, pretty(it));
-      }))) : null,
-    (PROP_OPTIONS[p.type] || []).includes("color") ? h("div", { class: "field", style: "margin-top:12px" }, h("span", {}, "Colour"),
-      colorPicker(p.color || "", (v) => { p.color = v; dirty2(); })) : null,
-    (PROP_OPTIONS[p.type] || []).includes("view") ? h("div", { class: "field", style: "margin-top:12px" }, h("span", {}, "Outside the window"),
-      colorPicker(p.view || "sky", (v) => { p.view = v; dirty2(); })) : null)
-    : h("p", { class: "muted small" }, "Pick a place on the floor plan, then add furniture to it.");
+    pdef ? paramForm(pdef.params, p, (k, v, quiet) => {
+      if (v === undefined) delete p[k]; else p[k] = k === "name" ? slug(String(v)) || undefined : v;
+      if (k === "place") { S.selCell = v; if (!quiet) rerender(); } else if (!quiet) dirty();
+    }, { setInfo, defaultPlace: placeOf(p) }) : h("div", { class: "banner err" }, `Unknown kind of thing: ${p.type}`))
+    : h("p", { class: "muted small" }, "Pick a place on the floor plan, then add something to it.");
 
   const mapImg = renderOf(`renders/stills/plan_${key}.png`);
   const viewImg = renderOf(`renders/stills/view_${key}.png`);
-  const marksBox = h("div", { class: "stack" },
-    h("h3", {}, "Spots characters can go to"),
-    setInfo.error ? h("div", { class: "banner err" }, setInfo.error) : null,
-    h("div", { class: "chips" }, setInfo.marks.map((m) => h("span", { class: "chip static" }, m))),
-    setInfo.seats.length ? h("p", { class: "small muted", style: "margin:0" }, "Seats: ", setInfo.seats.join(", ")) : null,
-    h("p", { class: "small muted", style: "margin:0" }, "Save to update this list. Add your own spot:"),
-    h("div", { class: "row" },
-      ...Object.entries(spec.marks).map(([n, pl]) => h("span", { class: "chip static" }, `${n} → ${pl} `,
-        h("button", { class: "btn sm ghost", "aria-label": `remove ${n}`, onclick: () => { delete spec.marks[n]; rerender(); } }, "×"))),
-      (() => {
-        const nm = h("input", { type: "text", placeholder: "spot name", style: "width:130px" });
-        const pl = select(cat.places, "center", () => {}, { label: "place" });
-        return [nm, pl, h("button", { class: "btn sm", onclick: () => { const n = slug(nm.value); if (!n) return; spec.marks[n] = pl.value; rerender(); } }, "Add spot")];
-      })()));
-
+  spec.marks = spec.marks || {};
+  const nm = h("input", { type: "text", placeholder: "spot name", style: "width:130px" });
+  const pl = select(cat.places, "center", () => {}, { label: "place" });
   return h("div", { class: "stack" },
     h("div", { class: "card" },
       h("div", { class: "card-head" }, h("h2", {}, pretty(key)),
@@ -494,28 +551,27 @@ function setEditor(key) {
           h("button", { class: "btn danger ghost", onclick: async () => { if (!confirm(`Delete the set ${key}?`)) return; await api("DELETE", `/api/sets/${key}`).catch(fail); delete S.setDraft[key]; S.setSel = null; refresh(); } }, "Delete"),
           h("button", { class: "btn", onclick: async () => { await saveSet(key); job({ kind: "plan", set: key }, () => toast("Map ready")); } }, "🗺️ Map"),
           h("button", { class: "btn", onclick: async () => { await saveSet(key); job({ kind: "view", set: key }, () => toast("Picture ready")); } }, "📷 Picture"),
-          saveBtn)),
-      h("div", { class: "fields" },
-        h("label", { class: "field" }, "Kind", seg([["room", "Room"], ["outdoor", "Outdoors"]], spec.kind || "room", (v) => { spec.kind = v; rerender(); })),
-        !outdoor ? h("label", { class: "field" }, "Size", seg(cat.sizes, spec.size || "medium", (v) => { spec.size = v; dirty2(); })) : null,
-        !outdoor ? h("label", { class: "field" }, "Floor", select(cat.floors, spec.floor || "wood", (v) => { spec.floor = v; dirty2(); })) : null,
-        outdoor ? h("label", { class: "field" }, "Ground", select(cat.floors, spec.ground || "grass", (v) => { spec.ground = v; dirty2(); })) : null,
-        outdoor ? h("label", { class: "field" }, "Trees", h("input", { type: "number", min: 0, max: 30, value: spec.trees ?? 6, oninput: (e) => { spec.trees = +e.target.value; dirty2(); } })) : null,
-        outdoor ? h("label", { class: "field" }, "Hills", h("input", { type: "number", min: 0, max: 10, value: spec.hills ?? 3, oninput: (e) => { spec.hills = +e.target.value; dirty2(); } })) : null,
-        outdoor ? h("label", { class: "field row" }, h("input", { type: "checkbox", checked: spec.path !== false, onchange: (e) => { spec.path = e.target.checked; dirty2(); } }), "Footpath") : null),
-      !outdoor ? h("div", { class: "field", style: "margin-top:12px" }, h("span", {}, "Walls"), colorPicker(spec.walls || "cream", (v) => { spec.walls = v; dirty2(); })) : null),
+          h("button", { class: "btn", id: "set-save", onclick: () => saveSet(key) }, "Save"))),
+      h("div", { class: "stack" },
+        h("label", { class: "field" }, h("span", {}, "Kind of place"),
+          select(plug("set").map((k) => [k.name, k.label + (k.source !== "built-in" ? " ✦" : "")]), spec.kind || "room",
+            (v) => { spec.kind = v; rerender(); }, { label: "Kind" }),
+          kind && kind.description ? h("span", { class: "muted small", style: "font-weight:400" }, kind.description) : null),
+        kind ? paramForm(kind.params, spec, (k, v, quiet) => { if (v === undefined) delete spec[k]; else spec[k] = v; if (!quiet) dirty(); }) : null)),
     h("div", { class: "card" },
       h("div", { class: "card-head" }, h("h3", {}, "Floor plan"), addType),
       h("div", { class: "editor-split", style: "grid-template-columns: minmax(0,1fr) minmax(0,1fr)" }, stage, propPanel)),
-    h("div", { class: "card" }, marksBox),
-    (mapImg || viewImg) ? h("div", { class: "pics" },
-      viewImg ? pic(viewImg, "Picture") : null, mapImg ? pic(mapImg, "Map with spot names") : null) : null);
-}
-
-function defaultPlace(type) {
-  return { door: "back-left", window: "back-right", counter: "back-right", fridge: "back-right", sofa: "back",
-    bookshelf: "back", plant: "back-right", lamp: "back-left", tree: "back-left", streetlamp: "back-right",
-    house: "back" }[type] || "center";
+    h("div", { class: "card stack" },
+      h("h3", {}, "Spots characters can go to"),
+      setInfo.error ? h("div", { class: "banner err" }, setInfo.error) : null,
+      h("div", { class: "chips" }, setInfo.marks.map((m) => h("span", { class: "chip static" }, m))),
+      setInfo.seats.length ? h("p", { class: "small muted", style: "margin:0" }, "Seats: ", setInfo.seats.join(", ")) : null,
+      h("p", { class: "small muted", style: "margin:0" }, "Save to update this list. Add your own spot:"),
+      h("div", { class: "row" },
+        Object.entries(spec.marks).map(([n, place]) => h("span", { class: "chip static" }, `${n} → ${place} `,
+          h("button", { class: "btn sm ghost", "aria-label": `remove ${n}`, onclick: () => { delete spec.marks[n]; rerender(); } }, "×"))),
+        nm, pl, h("button", { class: "btn sm", onclick: () => { const n = slug(nm.value); if (!n) return; spec.marks[n] = pl.value; rerender(); } }, "Add spot"))),
+    (mapImg || viewImg) ? h("div", { class: "pics" }, viewImg ? pic(viewImg, "Picture") : null, mapImg ? pic(mapImg, "Map with spot names") : null) : null);
 }
 
 function pic(r, caption) {
@@ -526,7 +582,7 @@ function pic(r, caption) {
     h("figcaption", { class: "cap" }, h("span", {}, caption), h("span", {}, new Date(r.mtime * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))));
 }
 
-// ------------------------------------------------------------------ STORY (scenes)
+// ------------------------------------------------------------------ STORY (scenes made of beats)
 function storyView() {
   const scenes = S.state.scenes;
   const real = scenes.filter((s) => s.exists);
@@ -534,44 +590,45 @@ function storyView() {
   localStorage.setItem("dr.scene", S.scene || "");
   return h("div", {},
     h("div", { class: "page-head" },
-      h("div", {}, h("h1", {}, "Story"), h("p", {}, "Your film, scene by scene. Write what happens; dreamreel acts it out and films it.")),
+      h("div", {}, h("h1", {}, "Story"), h("p", {}, "Your film, scene by scene. Say what happens, beat by beat; dreamreel acts it out and films it.")),
       h("div", { class: "row" },
         h("button", { class: "btn", onclick: () => job({ kind: "previz" }, (j) => j.status === "done" && (toast("Previz ready"), (S.screening = j.outputs.find((o) => o.endsWith(".mp4") && !o.includes("/previz/"))), go("screening"))) }, "▶ Previz the film"),
         h("button", { class: "btn primary", onclick: () => job({ kind: "render" }, (j) => j.status === "done" && (toast("Film rendered"), go("screening"))) }, "🎞️ Render the film"))),
     h("div", { class: "story" },
-      h("div", { class: "stack" }, h("div", { class: "scene-list" }, scenes.map((s, i) => sceneItem(s, i, scenes))), newSceneForm()),
+      h("div", { class: "stack" }, h("div", { class: "scene-list" }, scenes.map((s) => sceneItem(s, scenes))), newSceneForm()),
       S.scene ? sceneEditor(S.scene) : h("div", { class: "empty" }, "No scenes yet. Make your first one on the left.")));
 }
 
-function sceneItem(s, i, scenes) {
+const stemOf = (f) => f.replace(/\.(toml|py)$/, "");
+
+function sceneItem(s, scenes) {
   const chk = S.checks[s.file];
   const meta = chk && !chk.error ? `${fmtT(chk.length)} · ${chk.events.filter((e) => e.kind === "say").length} lines` : (s.set ? pretty(s.set) : "");
+  const order = () => scenes.filter((x) => x.in_film && x.exists).map((x) => stemOf(x.file));
   const move = async (d) => {
-    const film = S.state.project.film;
-    const order = scenes.filter((x) => x.in_film).map((x) => x.file.replace(/\.py$/, ""));
-    const name = s.file.replace(/\.py$/, "");
-    const k = order.indexOf(name);
-    if (k < 0 || k + d < 0 || k + d >= order.length) return;
-    [order[k], order[k + d]] = [order[k + d], order[k]];
-    await api("PUT", "/api/film", { scenes: order }).catch(fail);
+    const o = order();
+    const k = o.indexOf(stemOf(s.file));
+    if (k < 0 || k + d < 0 || k + d >= o.length) return;
+    [o[k], o[k + d]] = [o[k + d], o[k]];
+    await api("PUT", "/api/film", { scenes: o }).catch(fail);
     refresh();
   };
   const toggle = async (on) => {
-    const order = scenes.filter((x) => x.in_film && (on || x.file !== s.file)).map((x) => x.file.replace(/\.py$/, ""));
-    if (on) order.push(s.file.replace(/\.py$/, ""));
-    await api("PUT", "/api/film", { scenes: order }).catch(fail);
+    const o = order().filter((x) => on || x !== stemOf(s.file));
+    if (on) o.push(stemOf(s.file));
+    await api("PUT", "/api/film", { scenes: o }).catch(fail);
     refresh();
   };
   if (!s.exists) {
-    return h("div", { class: "scene-item out" },
-      h("span", { class: "num" }, sceneNum(s.file)),
+    return h("div", { class: "scene-item out" }, h("span", { class: "num" }, sceneNum(s.file)),
       h("div", { class: "grow" }, h("div", { class: "t" }, sceneLabel(s.file)), h("div", { class: "meta" }, "file missing")),
       h("button", { class: "btn sm", onclick: () => toggle(false) }, "Remove"));
   }
   return h("div", { class: "scene-item" + (S.scene === s.file ? " on" : "") + (s.in_film ? "" : " out"), tabindex: 0, role: "button",
     onclick: (e) => { if (e.target.closest(".ord, input")) return; S.scene = s.file; render(); } },
     h("span", { class: "num" }, sceneNum(s.file)),
-    h("div", { class: "grow" }, h("div", { class: "t" }, sceneLabel(s.file)), h("div", { class: "meta" }, chk && chk.error ? "⚠️ needs a fix" : meta)),
+    h("div", { class: "grow" }, h("div", { class: "t" }, sceneLabel(s.file), s.kind === "script" ? " 📜" : ""),
+      h("div", { class: "meta" }, chk && chk.error ? "⚠️ needs a fix" : meta)),
     h("input", { type: "checkbox", checked: s.in_film, title: "In the film", "aria-label": "In the film", onchange: (e) => toggle(e.target.checked) }),
     s.in_film ? h("div", { class: "ord" }, h("button", { title: "Earlier", "aria-label": "Move earlier", onclick: () => move(-1) }, "▲"), h("button", { title: "Later", "aria-label": "Move later", onclick: () => move(1) }, "▼")) : null);
 }
@@ -587,7 +644,6 @@ function newSceneForm() {
       const r = await api("POST", "/api/scenes", { name: name.value, set: setSel.value, cast: [...cast] });
       S.scene = r.file;
       await refresh();
-      runCheck(r.file);
     } catch (e) { fail(e); }
   };
   return h("details", { class: "card" },
@@ -596,322 +652,162 @@ function newSceneForm() {
       h("label", { class: "field" }, "What happens", name),
       h("label", { class: "field" }, "Where", setSel),
       h("div", { class: "field" }, h("span", {}, "Who's in it"),
-        h("div", { class: "chips" }, Object.entries(S.state.cast).map(([k, c]) => h("button", { class: "chip",
-          onclick: (e) => { cast.has(k) ? cast.delete(k) : cast.add(k); e.target.classList.toggle("on"); } }, c.name || k)))),
+        multiChips(Object.keys(S.state.cast).map((k) => [k, nameOf(k)]), [], (v) => { cast.clear(); v.forEach((x) => cast.add(x)); })),
       h("button", { class: "btn primary", onclick: create }, "Create scene")));
 }
 
-// ---------- scene script parsing (just enough to offer the right choices)
-function parseScene(text) {
-  const setM = text.match(/dr\.Scene\(\s*["']([^"']+)["']/);
-  const castRe = /^([ \t]*)([A-Za-z_][\w \t,]*?)\s*=\s*s\.cast\(([^)]*)\)[ \t]*$/m;
-  const m = text.match(castRe);
-  let cast = [];
-  if (m) {
-    const vars = m[2].split(",").map((v) => v.trim()).filter(Boolean);
-    const keys = [...m[3].matchAll(/["']([^"']+)["']/g)].map((x) => x[1]);
-    cast = keys.map((k, i) => ({ key: k, v: vars[i] || k }));
-  }
-  return { set: setM ? setM[1] : null, cast, castMatch: m };
+// ---------- editing one scene
+const saveTimers = {};
+function scheduleSave(file, now) {
+  clearTimeout(saveTimers[file]);
+  const status = $("#save-status");
+  if (status) status.textContent = "saving…";
+  saveTimers[file] = setTimeout(async () => {
+    try {
+      await api("PUT", `/api/scenes/${file}`, { spec: S.sceneSpec[file] });
+      const st = $("#save-status");
+      if (st) st.textContent = "saved";
+      runCheck(file);
+    } catch (e) { fail(e); }
+  }, now ? 0 : 700);
 }
 
-const ACTIONS = {
-  say: { label: "says", fields: ["line", "mood", "to"] },
-  walk_to: { label: "walks to", fields: ["where", "speed"] },
-  run_to: { label: "runs to", fields: ["where"] },
-  enter: { label: "comes in at", fields: ["where"] },
-  place: { label: "is standing at", fields: ["where", "facing"] },
-  sit: { label: "sits on", fields: ["seat", "already"] },
-  stand: { label: "stands up", fields: [] },
-  turn_to: { label: "turns to", fields: ["target"] },
-  look_at: { label: "looks at", fields: ["target"] },
-  feel: { label: "feels", fields: ["mood!"] },
-  do: { label: "does", fields: ["gesture", "target?"] },
-  leave: { label: "leaves", fields: [] },
-};
-const SCENE_ACTIONS = {
-  wait: { label: "pause", fields: ["seconds"] },
-  caption: { label: "caption on screen", fields: ["text"] },
-  title_card: { label: "title card before the scene", fields: ["text"] },
-  "cut.wide": { label: "camera: wide shot", fields: [] },
-  "cut.medium": { label: "camera: medium shot of", fields: ["char"] },
-  "cut.close_up": { label: "camera: close-up of", fields: ["char"] },
-  "cut.two_shot": { label: "camera: two-shot of", fields: ["char", "char2"] },
-  "cut.over_shoulder": { label: "camera: over the shoulder of", fields: ["char", "on"] },
-};
-
-function composer(file, ta, onInsert) {
-  const cat = catalog();
-  const text = ta.value;
-  const parsed = parseScene(text);
-  const setInfo = (parsed.set && info().sets[parsed.set]) || { marks: [], seats: [] };
-  const castKeys = Object.keys(S.state.cast);
-  const C = S.composer;
-  if (!C.who || (C.who !== "_scene" && !castKeys.includes(C.who))) C.who = parsed.cast[0] ? parsed.cast[0].key : castKeys[0] || "_scene";
-  const isScene = C.who === "_scene";
-  const acts = isScene ? SCENE_ACTIONS : ACTIONS;
-  if (!acts[C.action]) C.action = Object.keys(acts)[0];
-  const vals = (C.vals = C.vals || {});
-  const others = parsed.cast.filter((c) => c.key !== C.who);
-  const nameOf = (k) => (S.state.cast[k] && S.state.cast[k].name) || k;
-
-  const charOpts = (incl) => parsed.cast.filter((c) => incl || c.key !== C.who).map((c) => ["@" + c.key, nameOf(c.key)]);
-  const places = new Set(cat.places);
-  const marks = [...setInfo.marks.filter((m) => !places.has(m)), ...setInfo.marks.filter((m) => places.has(m))];
-  const targetOpts = [...others.map((c) => ["@" + c.key, "👤 " + nameOf(c.key)]), ...marks.map((m) => [m, "📍 " + m])];
-  const field = (f) => {
-    const opt = f.endsWith("?");
-    const name = f.replace(/[?!]$/, "");
-    const bind = (v) => (vals[name] = v);
-    switch (name) {
-      case "line": case "text": {
-        const inp = h("input", { type: "text", class: "say-line", placeholder: name === "line" ? "What do they say?" : "Text", value: vals[name] || "",
-          oninput: (e) => bind(e.target.value), onkeydown: (e) => e.key === "Enter" && add() });
-        return inp;
-      }
-      case "mood": return select(cat.moods, vals.mood ?? (f.endsWith("!") ? "happy" : ""), bind, f.endsWith("!") ? { label: "mood" } : { blank: "(same mood)", label: "mood" });
-      case "to": return select(charOpts(false), vals.to || "", bind, { blank: others.length ? "(to whoever is nearest)" : "(to nobody)", label: "to" });
-      case "where": return select(targetOpts, vals.where || (marks[0] || ""), bind, { label: "where" });
-      case "target": return select([...targetOpts, ["camera", "🎥 the camera"]], vals.target || (targetOpts[0] || [""])[0], bind, opt ? { blank: "(no one)", label: "target" } : { label: "target" });
-      case "facing": return select([...targetOpts, ["camera", "🎥 the camera"]], vals.facing || "", bind, { blank: "(facing anywhere)", label: "facing" });
-      case "speed": return select(cat.speeds, vals.speed || "normal", bind, { label: "speed" });
-      case "seat": return select(setInfo.seats, vals.seat || setInfo.seats[0], bind, { label: "seat" });
-      case "already": return h("label", { class: "row small" }, h("input", { type: "checkbox", checked: vals.already, onchange: (e) => bind(e.target.checked) }), "already sitting when the scene starts");
-      case "gesture": return select(cat.gestures, vals.gesture || "wave", bind, { label: "gesture" });
-      case "seconds": return h("input", { type: "number", min: 0.2, step: 0.1, value: vals.seconds || 1, style: "width:90px", oninput: (e) => bind(e.target.value) });
-      case "char": return select(charOpts(true), vals.char || ("@" + ((parsed.cast[0] || {}).key || "")), bind, { label: "character" });
-      case "char2": case "on": return select(charOpts(true), vals[name] || ("@" + ((parsed.cast[1] || parsed.cast[0] || {}).key || "")), bind, { label: "character" });
-    }
-    return null;
-  };
-
-  const add = () => {
-    const vOf = (k) => { const c = parsed.cast.find((x) => x.key === k); return c ? c.v : k.replace(/-/g, "_"); };
-    const tgt = (t) => (t && t.startsWith("@") ? vOf(t.slice(1)) : q(t));
-    const a = C.action;
-    const fs = acts[a].fields.map((f) => f.replace(/[?!]$/, ""));
-    const get = (k, d) => (vals[k] !== undefined && vals[k] !== "" ? vals[k] : d);
-    let line;
-    if (isScene) {
-      if (a === "wait") line = `s.wait(${+get("seconds", 1) || 1})`;
-      else if (a === "caption" || a === "title_card") { if (!get("text")) return toast("Type the text first"); line = `s.${a}(${q(get("text"))})`; }
-      else if (a === "cut.wide") line = "s.cut.wide()";
-      else if (a === "cut.two_shot") line = `s.cut.two_shot(${tgt(get("char", "@" + (parsed.cast[0] || {}).key))}, ${tgt(get("char2", "@" + (parsed.cast[1] || {}).key))})`;
-      else if (a === "cut.over_shoulder") line = `s.cut.over_shoulder(${tgt(get("char", "@" + (parsed.cast[0] || {}).key))}, on=${tgt(get("on", "@" + (parsed.cast[1] || {}).key))})`;
-      else line = `s.${a}(${tgt(get("char", "@" + (parsed.cast[0] || {}).key))})`;
-    } else {
-      const v = vOf(C.who);
-      const args = [];
-      if (a === "say") {
-        if (!get("line")) return toast("Type what they say first");
-        args.push(q(get("line")));
-        if (get("mood")) args.push(`mood=${q(get("mood"))}`);
-        if (get("to")) args.push(`to=${tgt(get("to"))}`);
-      } else if (fs.includes("where")) {
-        args.push(tgt(get("where", marks[0])));
-        if (a === "walk_to" && get("speed", "normal") !== "normal") args.push(`speed=${q(get("speed"))}`);
-        if (a === "place" && get("facing")) args.push(`facing=${tgt(get("facing"))}`);
-      } else if (a === "sit") {
-        if (!setInfo.seats.length) return toast("This set has nothing to sit on. Add a chair, sofa or bench.");
-        args.push(q(get("seat", setInfo.seats[0])));
-        if (get("already")) args.push("already=True");
-      } else if (a === "feel") args.push(q(get("mood", "happy")));
-      else if (a === "do") { args.push(q(get("gesture", "wave"))); if (get("target")) args.push(`target=${tgt(get("target"))}`); }
-      else if (a === "turn_to" || a === "look_at") args.push(tgt(get("target", (targetOpts[0] || ["camera"])[0])));
-      line = `${v}.${a}(${args.join(", ")})`;
-    }
-    onInsert(line, isScene ? null : C.who);
-    if (vals.line) vals.line = "";
-    if (vals.text) vals.text = "";
-  };
-
-  const whoSel = select([...castKeys.map((k) => [k, "👤 " + nameOf(k)]), ["_scene", "🎬 The scene"]], C.who,
-    (v) => { C.who = v; C.action = v === "_scene" ? "wait" : "say"; rebuild(); }, { label: "who" });
-  const actSel = select(Object.entries(acts).map(([k, a]) => [k, a.label]), C.action, (v) => { C.action = v; rebuild(); }, { label: "action" });
-  const box = h("div", { class: "composer" });
-  const rebuild = () => box.replaceWith(composer(file, ta, onInsert));
-  box.append(...[
-    h("div", { class: "row" },
-      h("strong", { class: "small" }, "Add a line:"), whoSel, actSel,
-      ...acts[C.action].fields.map(field),
-      h("button", { class: "btn primary sm", onclick: add }, "Add ⏎")),
-    !isScene && parsed.cast.length && !parsed.cast.find((c) => c.key === C.who)
-      ? h("div", { class: "small muted", style: "margin-top:6px" }, `${nameOf(C.who)} isn't in this scene yet; adding a line brings them in.`) : null].filter(Boolean));
-  return box;
+async function loadScene(file) {
+  const r = await api("GET", `/api/scenes/${file}`);
+  if (r.script) S.sceneSpec[file] = { script: true };
+  else S.sceneSpec[file] = r.spec;
+  render();
+  if (!S.checks[file]) runCheck(file);
 }
 
 function sceneEditor(file) {
-  const meta = S.state.scenes.find((s) => s.file === file);
-  const wrap = h("div", { class: "stack" });
-  const ta = h("textarea", { class: "code", spellcheck: "false", "aria-label": "Scene script" });
-  const gutter = h("div", { class: "gutter", "aria-hidden": "true" });
-  const saveBtn = h("button", { class: "btn" }, "Save");
-  const status = h("span", { class: "small muted" });
+  const spec = S.sceneSpec[file];
+  if (!spec) { loadScene(file).catch(fail); return h("div", { class: "empty" }, "Opening…"); }
   const chk = S.checks[file];
-
-  const drawGutter = () => {
-    const n = ta.value.split("\n").length;
-    codeWrap.style.setProperty("--code-h", `${Math.max(240, Math.min(560, n * 20.8 + 60))}px`);
-    const errLine = chk && chk.line;
-    gutter.innerHTML = Array.from({ length: n }, (_, i) => (i + 1 === errLine ? `<span class="err">${i + 1}</span>` : i + 1)).join("\n");
-    gutter.scrollTop = ta.scrollTop;
-  };
-  const isDirty = () => ta.value !== S.sceneText[file];
-  const markDirty = () => {
-    S.draft[file] = ta.value;
-    saveBtn.classList.toggle("primary", isDirty());
-    status.replaceChildren(isDirty() ? h("span", {}, h("span", { class: "dirty-dot" }), " not saved") : "");
-  };
-  ta.addEventListener("input", () => { drawGutter(); markDirty(); });
-  ta.addEventListener("scroll", () => { gutter.scrollTop = ta.scrollTop; S.view_ed = { file, scroll: ta.scrollTop }; });
-  ta.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); save(true); }
-    if (e.key === "Tab") { e.preventDefault(); insertText(ta, "    "); }
-  });
-  const save = async (check) => {
-    try {
-      await api("PUT", `/api/scenes/${file}`, { text: ta.value });
-      S.sceneText[file] = ta.value;
-      delete S.draft[file];
-      markDirty();
-      if (check) runCheck(file);
-    } catch (e) { fail(e); }
-  };
-  saveBtn.addEventListener("click", () => save(true));
-
-  const load = async () => {
-    if (S.draft[file] !== undefined) { ta.value = S.draft[file]; }
-    else {
-      const r = await api("GET", `/api/scenes/${file}`);
-      S.sceneText[file] = r.text;
-      ta.value = r.text;
-    }
-    drawGutter(); markDirty();
-    if (S.view_ed && S.view_ed.file === file) { ta.scrollTop = S.view_ed.scroll; gutter.scrollTop = ta.scrollTop; }
-    if (S.lastCaret && S.lastCaret.file === file) ta.setSelectionRange(S.lastCaret.pos, S.lastCaret.pos);
-    composerSlot.replaceChildren(composer(file, ta, insertLine));
-    if (!S.checks[file]) runCheck(file);
-  };
-
-  const insertLine = (line, whoKey) => {
-    // bring the character into the scene if needed
-    if (whoKey) ensureCast(ta, whoKey);
-    const val = ta.value;
-    let pos = ta.selectionEnd;
-    if (document.activeElement !== ta && S.lastCaret && S.lastCaret.file === file) pos = S.lastCaret.pos;
-    if (pos === undefined || pos === null || pos > val.length || (!S.lastCaret && document.activeElement !== ta)) pos = val.length;
-    // insert after the line the caret is on, keeping its indentation
-    let end = val.indexOf("\n", pos);
-    if (end < 0) end = val.length;
-    const start = val.lastIndexOf("\n", end - 1) + 1;
-    const cur = val.slice(start, end);
-    let indent = (cur.match(/^\s*/) || [""])[0];
-    if (/:\s*$/.test(cur)) indent += "    ";
-    let insert = (cur.trim() === "" && end === val.length ? "" : "\n") + indent + line;
-    if (end === val.length && !val.endsWith("\n") && cur.trim() === "") insert = indent + line;
-    ta.focus();
-    ta.setSelectionRange(end, end);
-    insertText(ta, insert);
-    S.lastCaret = { file, pos: ta.selectionEnd };
-    drawGutter(); markDirty();
-    save(true);
-  };
-  ta.addEventListener("blur", () => (S.lastCaret = { file, pos: ta.selectionEnd }));
-
-  const together = () => {
-    let { selectionStart: a, selectionEnd: b, value: v } = ta;
-    a = v.lastIndexOf("\n", a - 1) + 1;
-    let e = v.indexOf("\n", b - (b > a && v[b - 1] === "\n" ? 1 : 0));
-    if (e < 0) e = v.length;
-    const block = v.slice(a, e);
-    if (!block.trim()) return toast("Select the lines that should happen at the same time");
-    const ind = (block.match(/^\s*/) || [""])[0];
-    const out = `${ind}with s.together():\n` + block.split("\n").map((l) => (l.trim() ? "    " + l : l)).join("\n");
-    ta.focus(); ta.setSelectionRange(a, e); insertText(ta, out);
-    drawGutter(); markDirty();
-  };
-
-  const composerSlot = h("div", {});
-  const codeWrap = h("div", { class: "code-wrap" }, gutter, ta);
-  const tl = chk && !chk.error ? timeline(file, chk) : null;
-  const errBanner = chk && chk.error ? h("div", { class: "banner err", role: "alert" },
-    h("div", {}, h("strong", {}, chk.line ? `Line ${chk.line}: ` : ""), chk.error.replace(/^[A-Za-z]+Error: /, ""),
-      chk.line ? h("div", {}, h("button", { class: "btn sm", style: "margin-top:6px", onclick: () => goToLine(ta, chk.line) }, "Show me")) : null)) : null;
-  const warns = chk && chk.warnings && chk.warnings.length ? h("div", { class: "banner warn" }, "⚠️ ", chk.warnings.join("; ")) : null;
-  const t = S.playhead[file] ?? null;
-  const stem = file.replace(/\.py$/, "");
-  const contact = renderOf(`renders/stills/${stem}_contact.png`);
-  const stills = rendersFor(`renders/stills/${stem}_`).filter((r) => !r.path.endsWith("_contact.png")).slice(0, 3);
-  const previz = renderOf(`renders/previz/${stem}.mp4`);
-  const final = renderOf(`renders/final/${stem}.mp4`);
-
-  wrap.append(...[
-    h("div", { class: "card" },
-      h("div", { class: "card-head" },
-        h("div", {}, h("h2", {}, `${sceneNum(file)} · ${sceneLabel(file)}`),
-          h("div", { class: "small muted" }, meta && meta.set ? `Set: ${pretty(meta.set)}` : "", chk && !chk.error ? ` · ${fmtT(chk.length)} · ${chk.cast.join(", ")}` : "")),
-        h("div", { class: "row" }, status,
-          h("button", { class: "btn ghost danger sm", onclick: async () => { if (!confirm(`Delete scene ${file}?`)) return; await api("DELETE", `/api/scenes/${file}`).catch(fail); S.scene = null; refresh(); } }, "Delete"),
-          h("button", { class: "btn sm", title: "Select some lines first", onclick: together }, "⇉ At the same time"),
-          h("button", { class: "btn sm", onclick: () => { insertLine("s.wait(1)"); } }, "⏸ Pause"),
-          saveBtn)),
-      composerSlot,
-      h("div", { style: "height:10px" }),
-      codeWrap,
-      h("p", { class: "small muted", style: "margin:8px 0 0" }, "Each line happens after the one before. ",
-        h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), " saves and checks. Lines are added after the cursor.")),
-    errBanner, warns,
-    h("div", { class: "card" },
-      h("div", { class: "card-head" }, h("h3", {}, "Timeline"),
-        h("div", { class: "row" },
-          h("button", { class: "btn sm", onclick: () => save(true) }, "↻ Check"),
-          h("button", { class: "btn sm", disabled: t === null ? true : null, onclick: () => job({ kind: "still", scene: file, times: [t] }, () => toast("Frame ready")) },
-            t === null ? "📷 Click the timeline to pick a moment" : `📷 Frame at ${fmtT(t)}`),
-          h("button", { class: "btn sm", onclick: () => job({ kind: "contact", scene: file, count: 6 }, () => toast("Contact sheet ready")) }, "🖼️ Contact sheet"),
-          h("button", { class: "btn sm", onclick: () => job({ kind: "previz", scene: file }, () => toast("Previz ready")) }, "▶ Previz scene"),
-          h("button", { class: "btn sm primary", onclick: () => job({ kind: "render", scene: file }, () => toast("Scene rendered")) }, "🎞️ Render scene"))),
-      tl || h("div", { class: "empty" }, chk ? "Fix the problem above to see the timeline." : "Checking…")),
-    (contact || stills.length || previz || final) ? h("div", { class: "card" }, h("h3", { style: "margin-bottom:10px" }, "Pictures and videos"),
-      h("div", { class: "pics" },
-        final ? pic(final, "Final render") : null, previz ? pic(previz, "Previz") : null,
-        contact ? pic(contact, "Contact sheet") : null, stills.map((r) => pic(r, "Frame at " + r.path.match(/_([\d.]+)s\.png$/)[1].replace(/^0+(?=\d)/, "") + " s")))) : null].filter(Boolean));
-  load().catch(fail);
-  return wrap;
-}
-
-function insertText(ta, text) {
-  ta.focus();
-  if (!document.execCommand || !document.execCommand("insertText", false, text)) {
-    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
-  }
-  ta.dispatchEvent(new Event("input"));
-}
-
-function goToLine(ta, n) {
-  const lines = ta.value.split("\n");
-  const a = lines.slice(0, n - 1).join("\n").length + (n > 1 ? 1 : 0);
-  ta.focus();
-  ta.setSelectionRange(a, a + (lines[n - 1] || "").length);
-  ta.scrollTop = Math.max(0, (n - 5) * 20.8);
-}
-
-function ensureCast(ta, key) {
-  const text = ta.value;
-  const p = parseScene(text);
-  if (p.cast.find((c) => c.key === key)) return;
-  const v = key.replace(/-/g, "_");
-  const cast = [...p.cast, { key, v }];
-  const line = `${cast.map((c) => c.v).join(", ")} = s.cast(${cast.map((c) => q(c.key)).join(", ")})`;
-  if (p.castMatch) {
-    const a = p.castMatch.index;
-    ta.setSelectionRange(a, a + p.castMatch[0].length);
-    insertText(ta, p.castMatch[1] + line);
+  const head = sceneHeader(file, spec, chk);
+  const parts = [head];
+  if (spec.script) {
+    parts.push(h("div", { class: "banner ok" }, "📜 This scene is a script written by a developer or an AI agent, for things beats can't say yet. ",
+      "It plays, previews and renders here like any other scene. To change it, ask your AI agent."));
   } else {
-    const m = text.match(/^.*dr\.Scene\(.*\).*$/m);
-    const at = m ? m.index + m[0].length : text.length;
-    ta.setSelectionRange(at, at);
-    insertText(ta, "\n" + line);
+    parts.push(beatsCard(file, spec, chk));
   }
+  if (chk && chk.error && (spec.script || chk.beat === undefined || chk.beat === null)) {
+    parts.push(h("div", { class: "banner err", role: "alert" }, chk.error));
+  }
+  if (chk && chk.warnings && chk.warnings.length) parts.push(h("div", { class: "banner warn" }, "⚠️ ", chk.warnings.join("; ")));
+  parts.push(timelineCard(file, chk), picturesCard(file));
+  return h("div", { class: "stack" }, parts.filter(Boolean));
+}
+
+function sceneHeader(file, spec, chk) {
+  const meta = S.state.scenes.find((s) => s.file === file) || {};
+  const edit = !spec.script;
+  const sets = Object.keys(S.state.sets);
+  const change = (k, v) => { spec[k] = v; scheduleSave(file); render(); };
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" },
+      h("div", {}, h("h2", {}, `${sceneNum(file)} · ${sceneLabel(file)}`),
+        h("div", { class: "small muted" }, chk && !chk.error ? `${fmtT(chk.length)} · ${chk.cast.join(", ")}` : (meta.set ? `Set: ${pretty(meta.set)}` : ""))),
+      h("div", { class: "row" }, edit ? h("span", { id: "save-status", class: "small muted" }) : null,
+        h("button", { class: "btn ghost danger sm", onclick: async () => { if (!confirm(`Delete scene ${sceneLabel(file)}?`)) return; await api("DELETE", `/api/scenes/${file}`).catch(fail); delete S.sceneSpec[file]; S.scene = null; refresh(); } }, "Delete"))),
+    edit ? h("div", { class: "fields" },
+      h("label", { class: "field" }, h("span", {}, "Where"), select(sets, spec.set, (v) => change("set", v), { label: "Set" })),
+      h("label", { class: "field" }, h("span", {}, "Time of day"), seg(["day", "night"], spec.time_of_day || "day", (v) => change("time_of_day", v === "day" ? undefined : v))),
+      h("div", { class: "field", style: "grid-column: span 2" }, h("span", {}, "Who's in it"),
+        multiChips(Object.keys(S.state.cast).map((k) => [k, nameOf(k)]), spec.cast || [], (v) => {
+          const gone = (spec.cast || []).filter((k) => !v.includes(k));
+          const used = gone.filter((k) => (spec.beats || []).some((b) => b.who === k));
+          if (used.length && !confirm(`${used.map(nameOf).join(", ")} still has beats in this scene. Remove anyway?`)) { render(); return; }
+          spec.cast = v; scheduleSave(file); render();
+        }))) : null);
+}
+
+function actionsFor(who) {
+  return plug("action").filter((a) => (who === "_scene" ? a.scope === "scene" : a.scope !== "scene"));
+}
+
+function beatRow(file, spec, i, chk) {
+  const b = spec.beats[i];
+  const cast = spec.cast || [];
+  const setInfo = info().sets[spec.set] || { marks: [], seats: [], props: [] };
+  const who = b.who || "_scene";
+  const act = plugOf("action", b.do);
+  const sel = S.selBeat[file] === i;
+  const err = chk && chk.beat === i ? chk.error : null;
+  const save = () => scheduleSave(file);
+  const whoSel = select([...cast.map((k) => [k, "👤 " + nameOf(k)]), ["_scene", "🎬 Scene"]], who, (v) => {
+    const wasScene = who === "_scene";
+    if (v === "_scene") { delete b.who; } else b.who = v;
+    if ((v === "_scene") !== wasScene) { const first = actionsFor(v)[0]; Object.keys(b).forEach((k) => k !== "who" && k !== "with_previous" && delete b[k]); b.do = first.name; }
+    save(); render();
+  }, { label: "Who" });
+  const actSel = select(actionsFor(who).map((a) => [a.name, a.label + (a.source !== "built-in" ? " ✦" : "")]), b.do, (v) => {
+    const keep = new Set(["who", "with_previous", "do"]);
+    Object.keys(b).forEach((k) => !keep.has(k) && delete b[k]);
+    b.do = v; save(); render();
+  }, { label: "What" });
+  const fields = act ? act.params.map((p, k) => {
+    const ctx = { cast, who: b.who, setInfo, inline: true };
+    const el = paramField(p, b[p.name], (v, quiet) => { if (v === undefined || v === "") delete b[p.name]; else b[p.name] = v; if (!quiet) save(); }, ctx);
+    return p.type === "bool" ? el : h("span", { class: "bf", title: p.label }, k > 0 && p.type !== "text" ? h("small", { class: "bl" }, p.label.toLowerCase()) : null, el);
+  }) : [h("span", { class: "banner err" }, `Unknown action: ${b.do}`)];
+  const move = (d) => { const j = i + d; if (j < 0 || j >= spec.beats.length) return; [spec.beats[i], spec.beats[j]] = [spec.beats[j], spec.beats[i]]; S.selBeat[file] = j; save(); render(); };
+  return h("div", { class: "beat" + (sel ? " sel" : "") + (err ? " err" : "") + (b.with_previous ? " linked" : ""), id: `beat-${i}`,
+    onclick: (e) => { if (e.target.closest("select, input, button, .chips")) return; S.selBeat[file] = sel ? null : i; render(); } },
+    h("div", { class: "beat-main" },
+      h("span", { class: "num" }, i + 1), whoSel, actSel, h("span", { class: "beat-fields" }, fields)),
+    h("div", { class: "beat-tools" },
+      i > 0 ? h("button", { class: "tool" + (b.with_previous ? " on" : ""), title: "Happens at the same time as the beat above",
+        "aria-pressed": b.with_previous ? "true" : "false", onclick: () => { if (b.with_previous) delete b.with_previous; else b.with_previous = true; save(); render(); } }, "⇉ together") : null,
+      h("button", { class: "tool", title: "Move up", "aria-label": "Move up", onclick: () => move(-1) }, "↑"),
+      h("button", { class: "tool", title: "Move down", "aria-label": "Move down", onclick: () => move(1) }, "↓"),
+      h("button", { class: "tool", title: "Duplicate", "aria-label": "Duplicate", onclick: () => { spec.beats.splice(i + 1, 0, clone(b)); S.selBeat[file] = i + 1; save(); render(); } }, "⧉"),
+      h("button", { class: "tool danger", title: "Delete", "aria-label": "Delete", onclick: () => { spec.beats.splice(i, 1); S.selBeat[file] = null; save(); render(); } }, "✕")),
+    err ? h("div", { class: "beat-err" }, err.replace(/^Beat \d+ \([^)]*\): /, "")) : null);
+}
+
+function beatsCard(file, spec, chk) {
+  spec.beats = spec.beats || [];
+  const cast = spec.cast || [];
+  const nb = S.newBeat[file] || (S.newBeat[file] = { who: cast[0] || "_scene", do: cast[0] ? "say" : "wait" });
+  if (nb.who !== "_scene" && !cast.includes(nb.who)) { nb.who = cast[0] || "_scene"; nb.do = cast[0] ? "say" : "wait"; }
+  const setInfo = info().sets[spec.set] || { marks: [], seats: [], props: [] };
+  const act = plugOf("action", nb.do) || actionsFor(nb.who)[0];
+  const at = S.selBeat[file];
+  const add = () => {
+    const beat = { ...(nb.who !== "_scene" ? { who: nb.who } : {}), do: act.name };
+    for (const p of act.params) if (nb[p.name] !== undefined && nb[p.name] !== "") beat[p.name] = nb[p.name];
+    const missing = act.params.filter((p) => p.required && beat[p.name] === undefined && p.default === undefined);
+    if (missing.length) { toast(`Fill in: ${missing.map((p) => p.label).join(", ")}`); return; }
+    const pos = at !== null && at !== undefined ? at + 1 : spec.beats.length;
+    spec.beats.splice(pos, 0, beat);
+    S.selBeat[file] = at !== null && at !== undefined ? pos : null;
+    for (const p of act.params) if (p.type === "text") delete nb[p.name];
+    scheduleSave(file, true);
+    render();
+    const el = document.getElementById(`beat-${pos}`);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  };
+  const composer = h("div", { class: "composer" },
+    h("div", { class: "row" },
+      h("strong", { class: "small" }, at !== null && at !== undefined ? `Add after beat ${at + 1}:` : "Add a beat:"),
+      select([...cast.map((k) => [k, "👤 " + nameOf(k)]), ["_scene", "🎬 Scene"]], nb.who, (v) => {
+        nb.who = v; const a = actionsFor(v); if (!a.find((x) => x.name === nb.do)) nb.do = a[0].name; render(); }, { label: "Who" }),
+      select(actionsFor(nb.who).map((a) => [a.name, a.label + (a.source !== "built-in" ? " ✦" : "")]), act.name, (v) => { nb.do = v; render(); }, { label: "What" }),
+      act.params.map((p, k) => {
+        const el = paramField(p, nb[p.name], (v) => { nb[p.name] = v; }, { cast, who: nb.who === "_scene" ? null : nb.who, setInfo, inline: true });
+        if (p.type === "text") el.addEventListener("keydown", (e) => e.key === "Enter" && add());
+        return p.type === "bool" ? el : h("span", { class: "bf" }, k > 0 && p.type !== "text" ? h("small", { class: "bl" }, p.label.toLowerCase()) : null, el);
+      }),
+      h("button", { class: "btn primary sm", onclick: add }, "Add ⏎")),
+    !cast.length ? h("div", { class: "small muted", style: "margin-top:6px" }, "Add people to the scene above to give them things to do.") : null);
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "What happens"),
+      h("span", { class: "small muted" }, "Beats play in order. ⇉ together starts a beat with the one above. Click a beat to add after it.")),
+    h("div", { class: "beats" }, spec.beats.length ? spec.beats.map((_, i) => beatRow(file, spec, i, chk))
+      : h("div", { class: "empty" }, "Nothing happens yet. Add the first beat below.")),
+    h("div", { style: "height:10px" }), composer);
 }
 
 const checkSeen = {};  // scene file -> id of the newest check applied (results can arrive out of order)
@@ -922,6 +818,59 @@ async function runCheck(file) {
     const r = (j.result || [])[0];
     S.checks[file] = r || { error: (j.log || []).slice(-6).join("\n") || "The check failed" };
   });
+}
+
+function timelineCard(file, chk) {
+  const t = S.playhead[file] ?? null;
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Timeline"),
+      h("div", { class: "row" },
+        h("button", { class: "btn sm", onclick: () => runCheck(file) }, "↻ Check"),
+        h("button", { class: "btn sm", disabled: t === null ? true : null, onclick: () => job({ kind: "still", scene: file, times: [t] }, () => toast("Frame ready")) },
+          t === null ? "📷 Click the timeline to pick a moment" : `📷 Frame at ${fmtT(t)}`),
+        h("button", { class: "btn sm", onclick: () => job({ kind: "contact", scene: file, count: 6 }, () => toast("Contact sheet ready")) }, "🖼️ Contact sheet"),
+        h("button", { class: "btn sm", onclick: () => job({ kind: "previz", scene: file }, () => toast("Previz ready")) }, "▶ Previz scene"),
+        h("button", { class: "btn sm primary", onclick: () => job({ kind: "render", scene: file }, () => toast("Scene rendered")) }, "🎞️ Render scene"))),
+    chk && !chk.error ? timeline(file, chk) : h("div", { class: "empty" }, chk ? "Fix the problem above to see the timeline." : "Checking…"));
+}
+
+function picturesCard(file) {
+  const stem = stemOf(file);
+  const contact = renderOf(`renders/stills/${stem}_contact.png`);
+  const stills = rendersFor(`renders/stills/${stem}_`).filter((r) => !r.path.endsWith("_contact.png")).slice(0, 3);
+  const previz = renderOf(`renders/previz/${stem}.mp4`);
+  const final = renderOf(`renders/final/${stem}.mp4`);
+  if (!(contact || stills.length || previz || final)) return null;
+  return h("div", { class: "card" }, h("h3", { style: "margin-bottom:10px" }, "Pictures and videos"),
+    h("div", { class: "pics" },
+      final ? pic(final, "Final render") : null, previz ? pic(previz, "Previz") : null,
+      contact ? pic(contact, "Contact sheet") : null,
+      stills.map((r) => pic(r, "Frame at " + r.path.match(/_([\d.]+)s\.png$/)[1].replace(/^0+(?=\d)/, "") + " s"))));
+}
+
+// ------------------------------------------------------------------ TOOLBOX (every feature, from the plugins)
+const KIND_TITLES = [
+  ["character", "Kinds of character"], ["hair", "Hair"], ["extra", "Extras"], ["mood", "Moods"], ["gesture", "Gestures"],
+  ["action", "Things characters and scenes can do"], ["set", "Kinds of place"], ["prop", "Things in sets"], ["item", "Things on tables"],
+  ["shot", "Camera shots"], ["voice", "Voice engines"],
+];
+
+function toolboxView() {
+  const all = info().plugins || {};
+  const custom = Object.values(all).flat().filter((p) => p.source !== "built-in").length;
+  return h("div", {},
+    h("div", { class: "page-head" },
+      h("div", {}, h("h1", {}, "Toolbox"), h("p", {}, "Everything your film can use. Items marked ✦ were added for this film.")),
+      h("button", { class: "btn", onclick: async () => { await api("GET", "/api/info").catch(fail); await refresh(); toast("Toolbox reloaded"); } }, "↻ Reload")),
+    h("div", { class: "banner ok", style: "margin-bottom:14px" },
+      h("div", {}, h("strong", {}, "Need something that isn't here?"), " Ask your AI agent for it (a new prop, gesture, kind of character, camera shot...). ",
+        "It adds it to this film's ", h("code", {}, "extensions"), " folder and it appears in these menus. ",
+        custom ? `This film has ${custom} addition${custom > 1 ? "s" : ""}.` : "")),
+    KIND_TITLES.filter(([k]) => (all[k] || []).length).map(([k, title]) => h("div", { class: "card" },
+      h("h3", { style: "margin-bottom:10px" }, title, " ", h("span", { class: "muted small" }, `(${all[k].length})`)),
+      h("div", { class: "toolbox" }, all[k].map((p) => h("div", { class: "tool-item" + (p.source !== "built-in" ? " custom" : "") },
+        h("div", { class: "ti-name" }, p.label, p.source !== "built-in" ? " ✦" : ""),
+        p.description ? h("div", { class: "small muted" }, p.description) : null))))));
 }
 
 // ---------- the visual timeline
@@ -951,8 +900,18 @@ function timeline(file, chk) {
     const evs = chk.events.filter((e) => e.who === who);
     lane(who, evs.map((e) => {
       const w = Math.max((e.end ?? e.t + 0.6) - e.t, 0.3);
-      const text = e.kind === "say" ? `“${e.line}”` : e.kind === "gesture" ? e.gesture : "walks";
-      return h("div", { class: `tl-b ${e.kind}`, style: `left:${pct(e.t)};width:${pct(w)}`, title: `${fmtT(e.t)} ${who}: ${text}` }, text);
+      const text = e.kind === "say" ? `“${e.line}”` : e.kind === "gesture" ? pretty(e.gesture) : "walks";
+      const hl = e.beat !== null && e.beat !== undefined && S.selBeat[file] === e.beat;
+      return h("div", { class: `tl-b ${e.kind}` + (hl ? " hl" : ""), style: `left:${pct(e.t)};width:${pct(w)}`, title: `${fmtT(e.t)} ${who}: ${text}`,
+        onclick: (ev) => {
+          if (e.beat === null || e.beat === undefined) return;
+          ev.stopPropagation();
+          S.selBeat[file] = e.beat;
+          S.playhead[file] = Math.round(e.t * 10) / 10;
+          render();
+          const el = document.getElementById(`beat-${e.beat}`);
+          if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+        } }, text);
     }));
   }
   const caps = chk.events.filter((e) => e.kind === "caption");
@@ -1034,6 +993,6 @@ function screeningView() {
 
 // ------------------------------------------------------------------ start
 window.addEventListener("beforeunload", (e) => {
-  if (Object.keys(S.draft).some((f) => S.draft[f] !== S.sceneText[f])) { e.preventDefault(); e.returnValue = ""; }
+  if (Object.values(saveTimers).some(Boolean) && $("#save-status") && $("#save-status").textContent === "saving…") { e.preventDefault(); e.returnValue = ""; }
 });
 refresh().then(pollJobs).catch(fail);

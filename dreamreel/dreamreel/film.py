@@ -14,8 +14,11 @@ def build(proj, path):
     name = os.path.splitext(os.path.basename(path))[0]
     project.activate(proj, name)
     scene_mod.CURRENT = None
-    runpy.run_path(path, run_name="__dreamreel__")
-    s = scene_mod.CURRENT
+    if path.endswith(".toml"):
+        s = scene_mod.Scene.from_file(path, name=name)
+    else:
+        runpy.run_path(path, run_name="__dreamreel__")
+        s = scene_mod.CURRENT
     if s is None:
         raise SystemExit(f"{path}: the script never created a dr.Scene(...)")
     s.name = name
@@ -30,6 +33,8 @@ def scene_hash(proj, path, quality):
     files = [os.path.join(proj.root, "film.toml"), path]
     files += [os.path.join(proj.root, "cast", n + ".toml") for n in proj.cast_names()]
     files += [os.path.join(proj.root, "sets", n + ".toml") for n in proj.set_names()]
+    ext = os.path.join(proj.root, "extensions")
+    files += sorted(os.path.join(ext, n) for n in os.listdir(ext) if n.endswith(".py")) if os.path.isdir(ext) else []
     for f in files:
         with open(f, "rb") as fh:
             h.update(fh.read())

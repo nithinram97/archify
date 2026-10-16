@@ -1,4 +1,3 @@
-# An outdoor set (not used by the example scenes; try it in a scene of your own).
 kind = "outdoor"
 ground = "grass"
 trees = 7
@@ -10,3 +9,8 @@ place = "back"
 [[props]]
 type = "streetlamp"
 place = "back-right"
+
+[[props]]
+type = "cake"
+place = "right"
+candles = 6

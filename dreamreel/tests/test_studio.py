@@ -52,7 +52,7 @@ def main():
 
         code, st = call(base, "GET", "/api/state")
         assert code == 200 and st["project"]["film"]["title"] == "The Last Cookie", st
-        assert set(st["cast"]) == {"mia", "tom", "gran"} and "kitchen" in st["info"]["sets"]
+        assert set(st["cast"]) == {"mia", "tom", "gran", "bolt"} and "kitchen" in st["info"]["sets"]
         assert "chair-2" in st["info"]["sets"]["kitchen"]["seats"]
 
         # a new character round-trips through toml
@@ -69,28 +69,36 @@ def main():
         with open(os.path.join(film, "sets", "den.toml"), "rb") as f:
             assert tomllib.load(f) == s_spec
 
-        # new scene, edit, check
+        # new scene as beats, edit, check (no code anywhere)
         code, r = call(base, "POST", "/api/scenes", {"name": "Den talk", "set": "den", "cast": ["zara", "mia"]})
-        assert code == 200 and r["file"] == "030_den_talk.py", r
-        _, text = call(base, "GET", f"/api/scenes/{r['file']}")
-        body = text["text"] + 'zara.sit("sofa", already=True)\nmia.enter("by_door")\n' \
-                              'mia.say("Hi!", mood="happy", to=zara)\n'
-        assert call(base, "PUT", f"/api/scenes/{r['file']}", {"text": body})[0] == 200
-        _, j = call(base, "POST", "/api/jobs", {"kind": "check", "scene": r["file"]})
-        j = wait_job(base, j["id"])
-        res = j["result"][0]
-        assert "error" not in res, res
-        assert any(e["kind"] == "say" and e["line"] == "Hi!" for e in res["events"]), res
-
-        # a broken scene reports the line
-        assert call(base, "PUT", f"/api/scenes/{r['file']}", {"text": body + 'mia.walk_to("nowhere")\n'})[0] == 200
+        assert code == 200 and r["file"] == "040_den_talk.toml", r
+        _, got = call(base, "GET", f"/api/scenes/{r['file']}")
+        spec = got["spec"]
+        spec["beats"] = [{"who": "zara", "do": "sit", "seat": "sofa", "already": True},
+                         {"who": "mia", "do": "enter", "where": "by_door"},
+                         {"who": "mia", "do": "say", "line": "Hi!", "mood": "happy", "to": "zara"},
+                         {"who": "zara", "do": "gesture", "gesture": "wave", "with_previous": True}]
+        assert call(base, "PUT", f"/api/scenes/{r['file']}", {"spec": spec})[0] == 200
         _, j = call(base, "POST", "/api/jobs", {"kind": "check", "scene": r["file"]})
         res = wait_job(base, j["id"])["result"][0]
-        assert res["line"] == body.count("\n") + 1 and "nowhere" in res["error"], res
+        assert "error" not in res, res
+        assert any(e["kind"] == "say" and e["line"] == "Hi!" and e["beat"] == 2 for e in res["events"]), res
+
+        # a broken beat is reported by number
+        spec["beats"].append({"who": "mia", "do": "walk_to", "where": "nowhere"})
+        assert call(base, "PUT", f"/api/scenes/{r['file']}", {"spec": spec})[0] == 200
+        _, j = call(base, "POST", "/api/jobs", {"kind": "check", "scene": r["file"]})
+        res = wait_job(base, j["id"])["result"][0]
+        assert res["beat"] == 4 and "nowhere" in res["error"], res
+
+        # the film's own extensions are offered as features
+        _, info = call(base, "GET", "/api/info")
+        assert any(p["name"] == "robot" and p["source"] != "built-in" for p in info["plugins"]["character"])
+        assert any(p["name"] == "dance" for p in info["plugins"]["gesture"])
 
         # the film order picked up the new scene; files outside renders/ are refused
         with open(os.path.join(film, "film.toml"), "rb") as f:
-            assert tomllib.load(f)["scenes"][-1] == "030_den_talk"
+            assert tomllib.load(f)["scenes"][-1] == "040_den_talk"
         assert call(base, "GET", "/files/film.toml")[0] == 403
         assert call(base, "POST", "/api/jobs", {"kind": "shell", "cmd": "rm -rf /"})[0] == 400
         httpd.shutdown()

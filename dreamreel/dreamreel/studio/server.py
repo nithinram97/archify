@@ -23,11 +23,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
-SCENE_FILE = re.compile(r"^[0-9]{2,4}_[a-z0-9_]{1,40}\.py$")
+SCENE_FILE = re.compile(r"^[0-9]{2,4}_[a-z0-9_]{1,40}\.(toml|py)$")
 
 
 # ---------------------------------------------------------------------- toml writing
 def _toml_value(v):
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{k} = {_toml_value(x)}" for k, x in v.items() if x is not None) + "}"
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, (int, float)):
@@ -223,22 +225,34 @@ class Studio:
         return out
 
     def scenes(self):
+        """Scene files in film order. Beat scenes (.toml) are edited in the studio; script scenes (.py)
+        are written by developers or AI agents and are only checked and rendered here."""
         film = self.film()
         d = os.path.join(self.root, "scenes")
-        files = sorted(f for f in os.listdir(d) if f.endswith(".py")) if os.path.isdir(d) else []
+        files = sorted(f for f in os.listdir(d) if f.endswith((".toml", ".py"))) if os.path.isdir(d) else []
+        stems = {os.path.splitext(f)[0]: f for f in files}
         order = film.get("scenes")
-        listed = [s if s.endswith(".py") else s + ".py" for s in order] if order else files
-        out = []
-        for f in listed:
-            out.append({"file": f, "in_film": True, "exists": f in files})
-        for f in files:
-            if f not in listed:
-                out.append({"file": f, "in_film": False, "exists": True})
+        listed = [stems.get(os.path.splitext(s)[0], s if s.endswith((".toml", ".py")) else s + ".toml")
+                  for s in order] if order else files
+        out = [{"file": f, "in_film": True, "exists": f in files} for f in listed]
+        out += [{"file": f, "in_film": False, "exists": True} for f in files if f not in listed]
         for s in out:
-            if s["exists"]:
-                with open(os.path.join(d, s["file"]), encoding="utf-8") as fh:
-                    text = fh.read()
-                m = re.search(r"dr\.Scene\(\s*[\"']([^\"']+)[\"']", text)
+            s["kind"] = "script" if s["file"].endswith(".py") else "beats"
+            s["set"] = None
+            if not s["exists"]:
+                continue
+            path = os.path.join(d, s["file"])
+            if s["kind"] == "beats":
+                try:
+                    with open(path, "rb") as fh:
+                        spec = tomllib.load(fh)
+                    s["set"] = spec.get("set")
+                    s["beats"] = len(spec.get("beats", []))
+                except tomllib.TOMLDecodeError as e:
+                    s["error"] = str(e)
+            else:
+                with open(path, encoding="utf-8") as fh:
+                    m = re.search(r"dr\.Scene\(\s*[\"']([^\"']+)[\"']", fh.read())
                 s["set"] = m.group(1) if m else None
         return out
 
@@ -259,10 +273,12 @@ class Studio:
                       if f.lower().endswith((".mp3", ".wav", ".ogg", ".flac", ".m4a"))) if os.path.isdir(d) else []
 
     def info(self):
-        """Catalogue + set marks, from `dreamreel info` (cached until a set file changes)."""
-        sets_dir = os.path.join(self.root, "sets")
-        key = tuple((f, os.path.getmtime(os.path.join(sets_dir, f))) for f in sorted(os.listdir(sets_dir))) \
-            if os.path.isdir(sets_dir) else ()
+        """Plugins, catalogue and set marks, from `dreamreel info` (cached until a set or extension changes)."""
+        key = ()
+        for sub in ("sets", "extensions"):  # new set files or extension classes change what's offered
+            d = os.path.join(self.root, sub)
+            if os.path.isdir(d):
+                key += tuple((sub, f, os.path.getmtime(os.path.join(d, f))) for f in sorted(os.listdir(d)))
         with self.info_lock:
             if self.info_cache is not None and self.info_key == key:
                 return self.info_cache
@@ -459,21 +475,16 @@ class Handler(BaseHTTPRequestHandler):
             if method == "POST" and len(parts) == 1:
                 b = self._body()
                 name = re.sub(r"[^a-z0-9_]+", "_", b.get("name", "").strip().lower()).strip("_") or "scene"
-                existing = [s["file"] for s in st.scenes()]
+                existing = [s["file"] for s in st.scenes() if s["exists"]]
                 nums = [int(f.split("_", 1)[0]) for f in existing if f.split("_", 1)[0].isdigit()]
                 num = (max(nums) // 10 + 1) * 10 if nums else 10
-                fn = f"{num:03d}_{name}.py"
+                fn = f"{num:03d}_{name}.toml"
                 cast = [c for c in b.get("cast", []) if NAME.match(c)]
-                set_name = b.get("set") or ""
-                lines = ["import dreamreel as dr", "", f"s = dr.Scene({json.dumps(set_name)})"]
-                if cast:
-                    vars_ = ", ".join(c.replace("-", "_") for c in cast)
-                    lines.append(f"{vars_} = s.cast({', '.join(json.dumps(c) for c in cast)})")
-                lines.append("")
-                st.write(os.path.join("scenes", fn), "\n".join(lines) + "\n")
+                spec = {"set": b.get("set") or "", "cast": cast, "beats": []}
+                st.write(os.path.join("scenes", fn), to_toml(spec, f"# Scene: {b.get('name', '')}. Written by dreamreel studio."))
                 film = st.film()
                 if film.get("scenes"):
-                    film["scenes"] = film["scenes"] + [fn[:-3]]
+                    film["scenes"] = film["scenes"] + [os.path.splitext(fn)[0]]
                     st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
                 return self._json({"ok": True, "file": fn})
             if len(parts) == 2:
@@ -482,16 +493,25 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error("scene files are named like 010_kitchen.py")
                 rel = os.path.join("scenes", fn)
                 if method == "GET":
-                    with open(st.path(rel), encoding="utf-8") as f:
-                        return self._json({"file": fn, "text": f.read()})
+                    if fn.endswith(".py"):
+                        return self._json({"file": fn, "script": True})
+                    with open(st.path(rel), "rb") as f:
+                        return self._json({"file": fn, "spec": tomllib.load(f)})
                 if method == "PUT":
-                    st.write(rel, self._body().get("text", ""))
+                    if fn.endswith(".py"):
+                        return self._error("script scenes are edited outside the studio", 403)
+                    spec = self._body().get("spec", {})
+                    empty = lambda v: v is None or v is False or v == "" or v == []  # noqa: E731
+                    spec["beats"] = [{k: v for k, v in b.items() if not empty(v)} for b in spec.get("beats", [])]
+                    st.write(rel, to_toml(spec, "# Scene written by dreamreel studio. Beats play in order;\n"
+                                                "# with_previous = true starts a beat together with the one before."))
                     return self._json({"ok": True})
                 if method == "DELETE":
                     os.remove(st.path(rel))
                     film = st.film()
                     if film.get("scenes"):
-                        film["scenes"] = [s for s in film["scenes"] if s not in (fn, fn[:-3])]
+                        stem = os.path.splitext(fn)[0]
+                        film["scenes"] = [s for s in film["scenes"] if os.path.splitext(s)[0] != stem]
                         st.write("film.toml", to_toml(film, "# The film: written by dreamreel studio."))
                     return self._json({"ok": True})
 
@@ -523,7 +543,7 @@ class Handler(BaseHTTPRequestHandler):
         scene = b.get("scene")
         if scene is not None and not SCENE_FILE.match(scene):
             return self._error("bad scene")
-        sc = scene[:-3] if scene else None
+        sc = os.path.splitext(scene)[0] if scene else None
         pct = str(int(b.get("percent", 0))) if b.get("percent") else None
         if kind == "check":
             args, label, quick = ["check", "--json"] + ([sc] if sc else []), f"Check {sc or 'film'}", True

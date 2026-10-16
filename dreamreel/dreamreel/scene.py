@@ -1,5 +1,8 @@
 """A scene: one set, some cast members, and what they do, in order.
 
+Scenes are usually data (scenes/<NNN_name>.toml): a set, a cast and a list of beats, each naming an
+action (see actions.py). That's what the studio edits. The same scene in Python:
+
     import dreamreel as dr
 
     s = dr.Scene("kitchen")                 # the set from sets/kitchen.toml
@@ -20,11 +23,24 @@ from contextlib import contextmanager
 import bpy
 from mathutils import Vector
 
-from . import _compat, keys, look, project
+from . import _compat, keys, look, plugins, project
 from .camera import Director
 from .character import Character
 from .sets import Set
 from .voices import Voices
+
+try:
+    import tomllib
+except ImportError:  # pragma: no cover
+    tomllib = None
+
+
+class BeatError(Exception):
+    """A beat in a scene file couldn't be played; `beat` is its index (0-based)."""
+
+    def __init__(self, beat, message):
+        super().__init__(message)
+        self.beat = beat
 
 CURRENT = None  # the Scene being built (the CLI renders it after the script runs)
 
@@ -54,17 +70,18 @@ class Scene:
         self.clock = 0.0
         self.end_time = 0.0
         self._group = None
+        self._beat = None        # index of the beat being played (scene files), for the studio
         self.fixed_length = length
         self.time_of_day = time_of_day
         self.voices = Voices(self.project.root if self.project else None,
-                             enabled=self.film.get("voices", True))
+                             engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True))
         if isinstance(set, dict):
-            self.set = Set(set, name="set")
+            self.set = Set.create(set, name="set")
         elif set:
             spec = self.project.set_spec(set) if self.project else None
             if spec is None:
                 raise ValueError(f"no set called {set!r}: create sets/{set}.toml")
-            self.set = Set(spec, name=set)
+            self.set = Set.create(spec, name=set)
         else:
             self.set = None
         self.cut = Director(self)
@@ -93,7 +110,8 @@ class Scene:
     def _add_actor(self, key_name, spec):
         spec = dict(spec)
         display = spec.pop("name", key_name.capitalize())
-        c = Character(display, scene=self, **spec)
+        cls = plugins.get("character", spec.pop("type", "toy"))
+        c = cls(display, scene=self, **spec)
         c.key = key_name
         self.actors[key_name] = c
         return c
@@ -156,11 +174,84 @@ class Scene:
     def length(self):
         return self.fixed_length or round(max(self.end_time, self.clock) + 1.2, 2)
 
+    # ------------------------------------------------------------------ scenes as data
+    @classmethod
+    def from_spec(cls, spec, name=None):
+        """Build a scene from a scene file's contents: set, cast, time_of_day and beats."""
+        s = cls(spec.get("set"), name=name, time_of_day=spec.get("time_of_day", "day"),
+                length=spec.get("length"))
+        cast = spec.get("cast", [])
+        if cast:
+            s.cast(*cast)
+        s.run_beats(spec.get("beats", []))
+        return s
+
+    @classmethod
+    def from_file(cls, path, name=None):
+        with open(path, "rb") as f:
+            spec = tomllib.load(f)
+        return cls.from_spec(spec, name=name or os.path.splitext(os.path.basename(path))[0])
+
+    def run_beats(self, beats):
+        """Play beats in order. A beat with `with_previous = true` starts together with the one before."""
+        groups = []
+        for i, b in enumerate(beats):
+            if b.get("with_previous") and groups:
+                groups[-1].append((i, b))
+            else:
+                groups.append([(i, b)])
+        for g in groups:
+            if len(g) == 1:
+                self.run_beat(*g[0])
+            else:
+                with self.together():
+                    for i, b in g:
+                        self.run_beat(i, b)
+
+    def run_beat(self, i, beat):
+        b = dict(beat)
+        do = b.pop("do", None)
+        who = b.pop("who", None)
+        at = b.pop("at", None)
+        for k in ("with_previous", "note"):
+            b.pop(k, None)
+        label = f"Beat {i + 1}"
+        try:
+            if not do:
+                raise ValueError("it doesn't say what happens (do = ...)")
+            act = plugins.get("action", do)
+            label = f"Beat {i + 1} ({(who + ' ') if who else ''}{act.label})"
+            actor = None
+            if act.scope == "character":
+                if not who:
+                    raise ValueError("it doesn't say who does it (who = ...)")
+                actor = self.character(who)
+                if actor is None:
+                    raise ValueError(f"{who!r} isn't in this scene's cast {list(self.actors)}")
+            params = {k: v for k, v in b.items() if v not in ("", None)}
+            known = {p.name for p in act.params}
+            extra = set(params) - known
+            if extra:
+                raise ValueError(f"{act.label} doesn't take {sorted(extra)}; it takes {sorted(known)}")
+            missing = [p.name for p in act.params if p.required and p.name not in params and p.default is None]
+            if missing:
+                raise ValueError(f"{act.label} needs {missing}")
+            if at is not None:
+                self.at(float(at))
+            self._beat = i
+            act().run(self, actor, **params)
+            self._beat = None
+        except BeatError:
+            raise
+        except Exception as e:
+            raise BeatError(i, f"{label}: {e}") from e
+
     # ------------------------------------------------------------------ text
     def caption(self, text, at=None, duration=3.0):
         """On-screen text over the picture (not dialogue): 'Meanwhile, next door...'."""
         t = self.clock if at is None else at
         self.captions.append((t, t + duration, text))
+        self.end_time = max(self.end_time, t + duration)
         return self
 
     def title_card(self, text, duration=2.5, color="black"):
@@ -170,7 +261,7 @@ class Scene:
 
     # ------------------------------------------------------------------ bookkeeping
     def _event(self, kind, who, t0, t1, **kw):
-        e = {"kind": kind, "who": who, "t0": t0, "t1": t1, **kw}
+        e = {"kind": kind, "who": who, "t0": t0, "t1": t1, "beat": self._beat, **kw}
         self.events.append(e)
         if kind == "say":
             self.subtitles.append((t0, t1 + 0.2, who.name, kw.get("line", "")))
@@ -216,8 +307,9 @@ class Scene:
         sc.world = world
         world.use_nodes = True
         bg = world.node_tree.nodes.get("Background")
-        outdoor = self.set is not None and self.set.kind == "outdoor"
+        outdoor = self.set is not None and self.set.outdoor
         night = self.time_of_day == "night"
+        custom = self.set is not None and self.set.lighting(self, night)
         sky = "#22305a" if night else ("#a9d2f0" if outdoor else "#f1e6d6")
         bg.inputs["Color"].default_value = look.rgba(sky)
         bg.inputs["Strength"].default_value = 0.25 if night else (0.9 if outdoor else 0.55)
@@ -234,7 +326,9 @@ class Scene:
             obj.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
             return obj
 
-        if outdoor:
+        if custom:
+            pass
+        elif outdoor:
             data = bpy.data.lights.new("sun", "SUN")
             data.energy = 0.6 if night else 3.2
             data.color = look.rgb("#aab8ff" if night else "#fff1dc")
@@ -335,7 +429,8 @@ class Scene:
         self.finish()
         rows = []
         for e in self.events:
-            row = {"t": round(e["t0"], 2), "end": round(e["t1"], 2), "kind": e["kind"], "who": e["who"].name}
+            row = {"t": round(e["t0"], 2), "end": round(e["t1"], 2), "kind": e["kind"], "who": e["who"].name,
+                   "beat": e.get("beat")}
             if e["kind"] == "say":
                 row["line"] = e["line"]
                 row["to"] = e["listener"].name if e.get("listener") else None

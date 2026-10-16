@@ -157,14 +157,36 @@ input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
 .composer select, .composer input[type=text] { background: #fff; }
 .composer .say-line { flex: 1 1 260px; }
 
-.code-wrap { display: grid; grid-template-columns: 44px 1fr; border: 1px solid var(--line); border-radius: 12px;
-  overflow: hidden; background: #fffdf9; height: var(--code-h, 430px); }
-.gutter { background: var(--panel-2); color: #a99683; font: 13px/1.6 var(--mono); text-align: right; padding: 10px 8px 10px 0;
-  overflow: hidden; user-select: none; white-space: pre; }
-.gutter .err { color: #fff; background: var(--danger); border-radius: 4px; padding: 0 3px; }
-textarea.code { border: 0; resize: none; padding: 10px 12px; font: 13px/1.6 var(--mono); background: transparent;
-  outline: none; white-space: pre; overflow: auto; tab-size: 4; }
-.dirty-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gold); display: inline-block; }
+.beats { display: flex; flex-direction: column; gap: 6px; }
+.beat { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 7px 8px 7px 10px; display: flex;
+  flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; cursor: pointer; }
+.beat.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.beat.err { border-color: var(--danger); background: #fff6f4; }
+.beat.linked { margin-left: 26px; border-left: 4px solid var(--teal); }
+.beat-main { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.beat .num { font-weight: 800; color: var(--accent); min-width: 22px; font-size: 13px; }
+.beat select, .beat input[type=text], .beat input[type=number], .composer select, .composer input[type=text],
+.composer input[type=number] { padding: 5px 8px; font-size: 14px; border-radius: 8px; }
+.beat-fields { display: contents; }
+.bf { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.bf:has(.say-line) { flex: 1 1 240px; }
+.bf .say-line { flex: 1; }
+.bl { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.say-line { flex: 1 1 240px; min-width: 140px; }
+.beat-tools { display: flex; gap: 2px; margin-left: auto; }
+.tool { all: unset; cursor: pointer; padding: 4px 7px; border-radius: 7px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.tool:hover { background: var(--panel-2); }
+.tool:focus-visible { outline: 2px solid var(--accent); }
+.tool.on { background: var(--teal-soft); color: #145b52; font-weight: 700; }
+.tool.danger:hover { color: var(--danger); }
+.beat-err { flex-basis: 100%; color: #7d2318; font-size: 13px; font-weight: 600; }
+.avatar { width: 110px; height: 110px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex;
+  align-items: center; justify-content: center; font-size: 44px; font-weight: 800; margin: auto; }
+.cast-card .fig img { height: 100%; }
+.toolbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.tool-item { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.tool-item.custom { border-color: #cdbde6; background: var(--purple-soft); }
+.ti-name { font-weight: 700; }
 
 .banner { border-radius: 10px; padding: 10px 12px; font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
 .banner.err { background: var(--danger-soft); color: #7d2318; }
@@ -189,6 +211,8 @@ textarea.code { border: 0; resize: none; padding: 10px 12px; font: 13px/1.6 var(
 .tl-b.gesture { background: var(--purple-soft); color: #4b3477; border: 1px solid #cdbde6; }
 .tl-b.cut { background: #fff; color: var(--ink); border: 1px solid var(--line); }
 .tl-b.cut:nth-child(even) { background: var(--panel-2); }
+.tl-b { cursor: pointer; }
+.tl-b.hl { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
 .tl-b.caption { background: var(--gold-soft); color: #6e4c06; border: 1px solid #ecd28f; }
 .tl-head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); pointer-events: none; }
 .tl-head::after { content: attr(data-t); white-space: nowrap; position: absolute; top: -2px; left: 4px; font-size: 11px; color: var(--accent);

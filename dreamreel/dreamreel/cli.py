@@ -9,6 +9,8 @@
     dreamreel previz                 fast flat-shaded video of the whole film
     dreamreel render                 the final film (only changed scenes are re-rendered)
     dreamreel studio                 the same, in a friendly app in your browser
+    dreamreel plugins                every feature you can use (built-in and from extensions/)
+    dreamreel extend prop cake       start a new feature as a class in extensions/
 """
 import argparse
 import math
@@ -39,7 +41,7 @@ def cmd_new(a):
         fh.write("@AGENTS.md\n")
     with open(os.path.join(a.dir, ".gitignore"), "w") as fh:
         fh.write("renders/\naudio/voices/\n")
-    for sub in ("audio/music", "audio/sfx", "renders"):
+    for sub in ("audio/music", "audio/sfx", "renders", "extensions"):
         os.makedirs(os.path.join(a.dir, sub), exist_ok=True)
     print(f"Created {a.dir}. Next:\n  cd {a.dir}\n  dreamreel check\n  dreamreel contact 010\n"
           f"Or open the folder in an AI coding agent (Claude Code, Codex, ...) and describe your film: "
@@ -59,6 +61,11 @@ def cmd_check(a):
                 out.append({"scene": s.name, **s.timeline()})
             except BaseException as e:  # report the error for this scene and carry on
                 import traceback
+                from .scene import BeatError
+                if isinstance(e, BeatError):
+                    out.append({"scene": os.path.splitext(os.path.basename(path))[0], "beat": e.beat,
+                                "error": str(e)})
+                    continue
                 line = getattr(e, "lineno", None) if isinstance(e, SyntaxError) else None
                 for fr in traceback.extract_tb(e.__traceback__):
                     if os.path.abspath(fr.filename) == os.path.abspath(path):
@@ -199,31 +206,189 @@ def cmd_studio(a):
 
 
 def cmd_info(a):
-    """Everything a tool needs to offer valid choices: the catalogue, and each set's marks and seats."""
+    """Everything a tool needs to offer valid choices: every plugin with its settings, the colours,
+    and each set's marks and seats."""
     import json
-    from . import character, look, scene as scene_mod, sets, voices
+    from . import look, plugins, scene as scene_mod, sets, voices
     from .sets import ZONES
     p = _project()
     info = {
+        "plugins": plugins.describe_all(),
         "catalog": {
-            "bodies": list(character.BODIES), "hair": list(character.HAIR), "extras": list(character.EXTRAS),
-            "moods": list(character.MOODS), "gestures": list(character.GESTURES), "speeds": list(character.SPEEDS),
-            "props": sets.PROP_TYPES, "places": [z for z in ZONES if z != "centre"], "colors": look.COLORS,
-            "table_items": list(sets.TABLE_ITEMS), "floors": list(sets.FLOORS), "sizes": list(sets.SIZES),
-            "outfits": ["shirt", "dress"], "eyes": ["small", "normal", "big"],
-            "voices": list(voices.SUGGESTED), "voice_engine": voices._piper_available(),
+            "places": [z for z in ZONES if z != "centre"], "colors": look.COLORS,
+            "voices": list(voices.SUGGESTED), "voice_engine": voices.pick_engine() is not None,
         },
         "sets": {},
     }
     for name in p.set_names():
         try:
             scene_mod._reset_blender()
-            st = sets.Set(p.set_spec(name), name=name)
+            st = sets.Set.create(p.set_spec(name), name=name)
             info["sets"][name] = {"kind": st.kind, "marks": sorted(st.marks), "seats": sorted(st.seats),
                                   "props": sorted(st.props)}
         except Exception as e:
             info["sets"][name] = {"error": f"{type(e).__name__}: {e}", "marks": [], "seats": []}
     print("@@JSON " + json.dumps(info))
+
+
+def cmd_plugins(a):
+    """List every feature (built-in and from extensions) with its settings."""
+    from . import plugins
+    _project_optional()
+    for kind in [a.kind] if a.kind else plugins.kinds():
+        print(f"\n{kind}")
+        for cls in plugins.registry(kind).values():
+            d = cls.describe()
+            src = "" if d["source"] == "built-in" else f"   [{d['source']}]"
+            print(f"  {d['name']:<16} {d['description']}{src}")
+            if a.verbose:
+                for prm in d["params"]:
+                    extra = f" one of {prm['choices']}" if prm.get("choices") else ""
+                    dflt = f" = {prm['default']!r}" if "default" in prm else ""
+                    print(f"      {prm['name']} ({prm['type']}){dflt}{extra}")
+
+
+EXTEND_TEMPLATES = {
+    "character": ('''class {cls}(dr.Character):
+    """{desc}"""
+    description = "{desc}"
+    params = dr.Character.params + [Param("accent", "color", default="gold")]
+
+    # Override any build step: build_rig, build_legs, build_body, build_arms, build_head, build_face,
+    # build_hair, build_extras. Keep the attributes later steps and animation use (see character.py).
+    def build_extras(self):
+        super().build_extras()
+        shapes.sphere(f"{{self.name}}.badge", 0.03 * self.H, self.color("accent"), self.body,
+                      at=(0.08 * self.H, -self.body_r * 0.9, self.neck_z - 0.15 * self.H))
+''', 'type = "{name}" in a cast file'),
+    "extra": ('''class {cls}(dr.Extra):
+    """{desc}"""
+    description = "{desc}"
+
+    def build(self, c):
+        # c.neck: parent for things on the head; c.body: on the torso; c.hc / c.hr: head centre / radius
+        shapes.cylinder(f"{{c.name}}.{name}", c.hr * 0.6, c.hr * 0.4, "gold", c.neck, at=c.head_top())
+''', 'extras = ["{name}"] in a cast file'),
+    "hair": ('''class {cls}(dr.Hair):
+    """{desc}"""
+    description = "{desc}"
+
+    def build(self, c, color):
+        self.cap(c, color)                      # the basic cap, then add shapes on c.neck
+        shapes.sphere(f"{{c.name}}.hair", c.hr * 0.5, color, c.neck, at=c.head_top())
+''', 'hair = "{name}" in a cast file'),
+    "mood": ('''class {cls}(dr.Mood):
+    """{desc}"""
+    description = "{desc}"
+    brow_tilt = 12      # degrees; + raises the inner ends, - lowers them
+    brow_lift = 0.01
+    smile = 0.0
+    frown = 0.2
+    eyes = 1.0
+    mouth_open = 0.0
+    head_tilt = 8
+''', 'mood = "{name}" on a say or feel beat'),
+    "gesture": ('''class {cls}(dr.Gesture):
+    """{desc}"""
+    description = "{desc}"
+
+    def perform(self, c, t, target=None):
+        # pose helpers: c.arm_to(side, t, rot), c.arms_rest(t), c.arms_up_at(t), c.nod_at(t), c.tilt_head_at(t),
+        # c.hop_at(t, height, t_up, t_down), c.jump_at(t), c.lean_at(t, side_deg, forward_deg)
+        c.arms_up_at(t + 0.3)
+        c.hop_at(t, 0.05, 0.3, 0.7)
+        c.arms_rest(t + 1.2)
+        return t + 1.2                          # when it ends
+''', 'do = "gesture", gesture = "{name}" in a beat'),
+    "action": ('''class {cls}(dr.Action):
+    """{desc}"""
+    label = "{label}"
+    description = "{desc}"
+    sentence = "{{who}} {label} {{whom}}"
+    params = [Param("whom", "character", required=True, label="Who")]
+
+    def run(self, s, who, whom):
+        who.walk_to(whom)
+        who.do("wave", target=whom)
+''', 'do = "{name}" in a beat'),
+    "prop": ('''class {cls}(dr.Prop):
+    """{desc}"""
+    description = "{desc}"
+    default_place = "center"
+    params = dr.Prop.params + [Param("color", "color", default="red")]
+
+    def build(self, s, name, p):
+        pos = s.spot_for(p, 0.5, 0.5, self.default_place)
+        shapes.box(name, 0.5, 0.5, 0.6, p.get("color", "red"), at=(pos.x, pos.y, 0))
+        s.block(pos, 0.5, 0.5)                              # characters walk round it
+        s.add_mark(name, (pos.x, pos.y - 0.6), facing="back")  # a spot in front of it
+''', '[[props]] type = "{name}" in a set file'),
+    "set": ('''class {cls}(dr.Set):
+    """{desc}"""
+    description = "{desc}"
+    size = (6.0, 4.0)
+    params = [Param("floor_color", "color", default="#c9ccd1")]
+
+    def build_environment(self):
+        W, D = self.width, self.depth
+        shapes.box("floor", W + 0.4, D + 0.4, 0.1, self.spec["floor_color"], at=(0, 0, -0.1), bevel=0)
+''', 'kind = "{name}" in a set file'),
+    "shot": ('''class {cls}(dr.ShotType):
+    """{desc}"""
+    description = "{desc}"
+    subjects = 1
+
+    def frame(self, d, t, of=None, other=None):
+        c = d.character(of)
+        head = c.head_point(t)
+        f = c.forward(t)
+        pos = (head.x + f.x * 1.6, head.y + f.y * 1.6, 0.25)   # low, in front, looking up
+        return d.add(self.name, t, [c], pos, head, lens=24, fstop=4.0, label=f"{name}({{c.name}})")
+''', 'do = "shot", shot = "{name}" in a beat'),
+    "voice": ('''class {cls}(dr.VoiceEngine):
+    """{desc}"""
+    description = "{desc}"
+
+    @classmethod
+    def available(cls):
+        return True
+
+    def speak(self, text, voice, wav_path):
+        raise NotImplementedError("write a 16-bit WAV file of `text` to wav_path")
+''', 'voice_engine = "{name}" in film.toml'),
+}
+
+
+def cmd_extend(a):
+    """Write a starting point for a new class in the film's extensions/ folder."""
+    import re as _re
+    p = _project()
+    name = _re.sub(r"[^a-z0-9_-]", "", a.name.lower().replace(" ", "_"))
+    if not name:
+        raise SystemExit("give the new thing a name, e.g. dreamreel extend prop cake")
+    body, usage = EXTEND_TEMPLATES[a.kind]
+    cls = "".join(w.capitalize() for w in _re.split(r"[_-]", name))
+    desc = a.description or f"A new {a.kind}: {name.replace('_', ' ')}"
+    path = os.path.join(p.root, "extensions", f"{name}.py")
+    if os.path.exists(path):
+        raise SystemExit(f"{os.path.relpath(path, p.root)} already exists")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    head = (f'"""{desc}\n\nUse it with: {usage.format(name=name)}\n"""\n'
+            "import math\n\nfrom mathutils import Vector\n\nimport dreamreel as dr\n"
+            "from dreamreel import look, shapes\nfrom dreamreel.plugins import Param\n\n\n")
+    code = body.format(cls=cls, name=name, desc=desc, label=name.replace("_", " "))
+    first, rest = code.split("\n", 1)
+    with open(path, "w") as f:
+        f.write(head + first + f'\n    name = "{name}"\n' + rest)
+    print(f"{os.path.relpath(path, p.root)}: a {a.kind} called {name!r}. Use it with: {usage.format(name=name)}")
+
+
+def _project_optional():
+    from . import project
+    pr = project.find(os.getcwd())
+    if pr is not None:
+        project.activate(pr)
+    return pr
 
 
 def cmd_voices(a):
@@ -295,8 +460,19 @@ def main(argv=None):
     v.add_argument("--voice")
     v.set_defaults(fn=cmd_voices)
 
-    i = sub.add_parser("info", help="catalogue and set marks as JSON (for tools)")
+    i = sub.add_parser("info", help="every feature and set mark as JSON (for tools)")
     i.set_defaults(fn=cmd_info)
+
+    pg = sub.add_parser("plugins", help="list every feature: characters, props, gestures, actions, shots...")
+    pg.add_argument("kind", nargs="?")
+    pg.add_argument("-v", "--verbose", action="store_true", help="show each one's settings")
+    pg.set_defaults(fn=cmd_plugins)
+
+    ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
+    ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))
+    ex.add_argument("name")
+    ex.add_argument("--description", "-d")
+    ex.set_defaults(fn=cmd_extend)
 
     sd = sub.add_parser("studio", help="open dreamreel studio in your browser")
     sd.add_argument("dir", nargs="?", default=".", help="film folder (or a folder to create films in)")

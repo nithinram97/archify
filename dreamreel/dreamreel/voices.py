@@ -10,8 +10,14 @@ Lines are rendered once and cached in the project's audio/voices folder, keyed b
 so editing one line only re-voices that line. Without Piper the film still works: mouths move
 from the words and the lines appear as subtitles.
 
-Any other engine can be plugged in: write a function (text, voice, wav_path) -> None and pass it
-to `register_engine`.
+Any other engine can be plugged in as a class, then chosen in film.toml with `voice_engine = "..."`:
+
+    class MyTTS(dr.VoiceEngine):
+        @classmethod
+        def available(cls):
+            return True
+        def speak(self, text, voice, wav_path):     # write a 16-bit WAV file
+            ...
 """
 import array
 import hashlib
@@ -21,7 +27,9 @@ import subprocess
 import sys
 import wave
 
-ENGINES = {}
+from .plugins import Plugin
+from . import plugins
+
 VOICE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "voices")
 DEFAULT_VOICE = "en_US-lessac-medium"
 SUGGESTED = (  # a few good Piper voices; hundreds more at https://rhasspy.github.io/piper-samples/
@@ -32,8 +40,17 @@ SUGGESTED = (  # a few good Piper voices; hundreds more at https://rhasspy.githu
 )
 
 
-def register_engine(name, fn):
-    ENGINES[name] = fn
+class VoiceEngine(Plugin):
+    """Turns a line of text into a WAV file in a given voice."""
+    kind = "voice"
+    abstract = True
+
+    @classmethod
+    def available(cls):
+        return True
+
+    def speak(self, text, voice, wav_path):
+        raise NotImplementedError
 
 
 def _piper_available():
@@ -44,17 +61,35 @@ def _piper_available():
         return shutil.which("piper") is not None
 
 
-def _piper(text, voice, wav_path):
-    model = voice if voice.endswith(".onnx") else os.path.join(VOICE_DIR, voice + ".onnx")
-    if not os.path.exists(model):
-        os.makedirs(VOICE_DIR, exist_ok=True)
-        subprocess.run([sys.executable, "-m", "piper.download_voices", "--download-dir", VOICE_DIR, voice],
+class Piper(VoiceEngine):
+    description = "Free, offline voices (pip install piper-tts)"
+
+    @classmethod
+    def available(cls):
+        return _piper_available()
+
+    def speak(self, text, voice, wav_path):
+        model = voice if voice.endswith(".onnx") else os.path.join(VOICE_DIR, voice + ".onnx")
+        if not os.path.exists(model):
+            os.makedirs(VOICE_DIR, exist_ok=True)
+            subprocess.run([sys.executable, "-m", "piper.download_voices", "--download-dir", VOICE_DIR, voice],
+                           check=True, capture_output=True)
+        subprocess.run([sys.executable, "-m", "piper", "-m", model, "-f", wav_path, "--", text],
                        check=True, capture_output=True)
-    subprocess.run([sys.executable, "-m", "piper", "-m", model, "-f", wav_path, "--", text],
-                   check=True, capture_output=True)
 
 
-register_engine("piper", _piper)
+def _piper(text, voice, wav_path):  # kept for the CLI's voice audition
+    Piper().speak(text, voice, wav_path)
+
+
+def pick_engine(name="auto"):
+    """The engine to use: a name from film.toml, or the first available one."""
+    if name and name != "auto":
+        return name if plugins.get("voice", name).available() else None
+    for n, cls in plugins.registry("voice").items():
+        if cls.available():
+            return n
+    return None
 
 
 class Speech:
@@ -90,9 +125,7 @@ class Speech:
 class Voices:
     def __init__(self, project_dir=None, engine="auto", enabled=True):
         self.dir = os.path.join(project_dir, "audio", "voices") if project_dir else None
-        if engine == "auto":
-            engine = "piper" if _piper_available() else None
-        self.engine = engine if enabled else None
+        self.engine = pick_engine(engine) if enabled else None
         self.warned = False
 
     def speak(self, character, line):
@@ -106,7 +139,7 @@ class Voices:
         if not os.path.exists(path):
             tmp = f"{path}.{os.getpid()}.part.wav"  # write aside, then rename: never read half a file
             try:
-                ENGINES[self.engine](line, voice, tmp)
+                plugins.get("voice", self.engine)().speak(line, voice, tmp)
                 os.replace(tmp, path)
             except Exception as e:  # never stop a render for a voice problem
                 if not self.warned:

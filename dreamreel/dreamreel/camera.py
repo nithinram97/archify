@@ -1,5 +1,19 @@
 """The camera, directed in film language.
 
+Shots are classes (`ShotType`), so new ones can be added:
+
+    class LowAngle(dr.ShotType):
+        description = "From the floor looking up: makes someone look big"
+        subjects = 1
+        def frame(self, d, t, of=None, other=None):
+            c = d.character(of)
+            head = c.head_point(t)
+            front = c.forward(t)
+            pos = (head.x + front.x * 1.6, head.y + front.y * 1.6, 0.25)
+            return d.add(self.name, t, [c], pos, head, lens=24, fstop=4.0, label=f"low angle({c.name})")
+
+Built in, from a beat (`do = "shot"`) or from Python:
+
     s.cut.wide()                      # the whole set
     s.cut.medium(mia)                 # waist up
     s.cut.close_up(mia)               # face
@@ -16,8 +30,9 @@ import math
 import bpy
 from mathutils import Vector
 
-from . import keys
+from . import keys, plugins
 from .keys import key
+from .plugins import Param, Plugin
 
 SENSOR = 36.0
 
@@ -86,7 +101,7 @@ class Director:
     def _keep_inside(self, pos, aim):
         """Keep the camera on the open side of a room and out of the walls."""
         st = self.scene.set
-        if st is None or st.kind != "room":
+        if st is None or st.outdoor:
             return pos
         W, D = st.width / 2 - 0.15, st.depth / 2 - 0.15
         p = Vector(pos)
@@ -100,11 +115,43 @@ class Director:
         self.shots.append(Shot(kind, at, subjects, Vector(pos), Vector(aim), lens, fstop, label))
         return self
 
+    # public names for shot classes
+    def character(self, who):
+        c = self._char(who)
+        if c is None:
+            raise ValueError(f"no character called {who!r} in this scene")
+        return c
+
+    def distance_for_height(self, height, lens):
+        return self._dist_for_height(height, lens)
+
+    def distance_for_width(self, width, lens):
+        return self._dist_for_width(width, lens)
+
+    def line_side(self, a, b, t):
+        """Which side of the line between a and b the camera stays on (the 180-degree rule)."""
+        return self._side(a, b, t)
+
+    def add(self, kind, t, subjects, pos, aim, lens=35, fstop=4.0, label=None):
+        """Record a shot starting at t: camera at `pos` looking at `aim`."""
+        return self._add(kind, t, subjects, Vector(pos), Vector(aim), lens, fstop, label or kind)
+
+    def shot(self, name, of=None, other=None, at=None):
+        """Cut to a shot type by name (see dr.registry("shot"))."""
+        self.manual = True
+        st = plugins.get("shot", name)
+        t = self.scene._now() if at is None else at
+        if st.subjects >= 1 and of is None:
+            raise ValueError(f"the {st.label} shot needs a character (of=...)")
+        if st.subjects >= 2 and other is None:
+            raise ValueError(f"the {st.label} shot needs a second character")
+        st().frame(self, t, of=of, other=other)
+        return self
+
     # ------------------------------------------------------------------ shot types
     def wide(self, at=None, height=None):
         """The whole set (or, outdoors, everyone in the scene)."""
-        self.manual = True
-        return self._wide(at, height)
+        return self.shot("wide", at=at)
 
     def _wide(self, at=None, height=None):
         t = self.scene._now() if at is None else at
@@ -121,7 +168,7 @@ class Director:
         xs, ys = [p.x for p in pts], [p.y for p in pts]
         cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
         width = max(4.2, max(xs) - min(xs) + 3.0)
-        if st is not None and st.kind == "room":
+        if st is not None and not st.outdoor:
             width = min(width, st.width * 0.95)
             cx = max(-st.width / 2 + width / 2, min(st.width / 2 - width / 2, cx))
         d = self._dist_for_width(width, lens) + (max(ys) - min(ys)) / 2
@@ -129,15 +176,13 @@ class Director:
         aim = (cx, cy + 0.2, 0.45)
         return self._add("wide", t, chars, pos, aim, lens, 8.0, "wide")
 
-    def medium(self, who, at=None, angle=20):
+    def medium(self, who, at=None):
         """Waist up, slightly to one side of the face."""
-        self.manual = True
-        return self._single(who, at, "medium", 0.62, 45, angle)
+        return self.shot("medium", of=who, at=at)
 
-    def close_up(self, who, at=None, angle=25):
+    def close_up(self, who, at=None):
         """The face fills the frame."""
-        self.manual = True
-        return self._single(who, at, "close_up", 0.42, 60, angle)
+        return self.shot("close_up", of=who, at=at)
 
     def _single(self, who, at, kind, frame_h, lens, angle, toward=None):
         c = self._char(who)
@@ -165,8 +210,7 @@ class Director:
 
     def two_shot(self, a, b, at=None):
         """Both characters, from their side of the line."""
-        self.manual = True
-        return self._two_shot(a, b, at)
+        return self.shot("two_shot", of=a, other=b, at=at)
 
     def _two_shot(self, a, b, at=None):
         a, b = self._char(a), self._char(b)
@@ -183,8 +227,7 @@ class Director:
 
     def over_shoulder(self, past, on, at=None):
         """Over `past`'s shoulder, looking at `on`'s face."""
-        self.manual = True
-        return self._over_shoulder(past, on, at)
+        return self.shot("over_shoulder", of=past, other=on, at=at)
 
     def _over_shoulder(self, past, on, at=None):
         p, o = self._char(past), self._char(on)
@@ -285,3 +328,59 @@ class Director:
 
     def describe(self):
         return [(s.at, s.label) for s in self.shots]
+
+
+class ShotType(Plugin):
+    """A kind of camera shot. `frame(director, t, of, other)` records it with `director.add(...)`."""
+    kind = "shot"
+    abstract = True
+    subjects = 0   # how many characters the shot needs (0, 1 or 2)
+
+    @classmethod
+    def describe_extra(cls):
+        return {"subjects": cls.subjects}
+
+    def frame(self, d, t, of=None, other=None):
+        raise NotImplementedError
+
+
+class Wide(ShotType):
+    description = "The whole action area"
+
+    def frame(self, d, t, of=None, other=None):
+        return d._wide(t)
+
+
+class Medium(ShotType):
+    description = "Waist up"
+    subjects = 1
+
+    def frame(self, d, t, of=None, other=None):
+        return d._single(d.character(of), t, "medium", 0.62, 45, 20)
+
+
+class CloseUp(ShotType):
+    label = "Close-up"
+    description = "The face fills the frame"
+    subjects = 1
+
+    def frame(self, d, t, of=None, other=None):
+        return d._single(d.character(of), t, "close_up", 0.42, 60, 25)
+
+
+class TwoShot(ShotType):
+    label = "Two-shot"
+    description = "Both characters together"
+    subjects = 2
+
+    def frame(self, d, t, of=None, other=None):
+        return d._two_shot(d.character(of), d.character(other), t)
+
+
+class OverShoulder(ShotType):
+    label = "Over the shoulder"
+    description = "Past one character's shoulder onto the other's face"
+    subjects = 2
+
+    def frame(self, d, t, of=None, other=None):
+        return d._over_shoulder(d.character(of), d.character(other), t)
