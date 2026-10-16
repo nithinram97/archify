@@ -324,6 +324,25 @@ class Scene:
                 best = (d, c)
         return best[1] if best else None
 
+    def thing(self, name, create=False):
+        """A thing that can be held, by name: an item in the set, a character, or (with create) a new
+        item of that kind (`scalpel`)."""
+        from .handling import Thing
+        if self.set is not None and name in self.set.things:
+            return self.set.things[name]
+        c = self.character(name)
+        if c is not None:
+            if getattr(c, "_thing", None) is None:
+                c._thing = Thing(c.name, c.root, character=c, grip=c.height() * 0.45)
+            return c._thing
+        if create and name in plugins.names("item"):
+            if self.set is None:
+                raise ValueError("things need a set")
+            return self.set.things[self.set.add_thing(name, (0.0, 0.0, -5.0))]
+        known = (sorted(self.set.things) if self.set else []) + sorted(self.actors)
+        raise ValueError(f"nothing called {name!r} to handle. Things: {known}"
+                         + (f"; new items: {', '.join(plugins.names('item'))}" if create else ""))
+
     def _resolve(self, where, t, me=None, approach=False):
         """A character, mark, prop, place name or (x, y) -> a point on the floor."""
         if isinstance(where, Character) or (isinstance(where, str) and self.character(where) is not None
@@ -333,7 +352,7 @@ class Scene:
             if approach and me is not None:
                 d = me.position(t) - p
                 d = d.normalized() if d.length > 1e-3 else Vector((0, -1))
-                return p + d * 0.75 * max(other.H, me.H)
+                return p + d * (0.62 if approach == "close" else 0.75) * max(other.H, me.H)
             return p
         if isinstance(where, (tuple, list)):
             return Vector(where[:2])
@@ -342,6 +361,9 @@ class Scene:
         if self.set is not None:
             if where in self.set.marks:
                 return self.set.marks[where].at.copy()
+            if where in self.set.things:
+                from .handling import thing_point
+                return thing_point(self, self.set.things[where], t).to_2d()
             if where in self.set.seats:
                 return self.set.seats[where].front.copy()
             raise ValueError(f"no mark called {where!r} in set {self.set.name!r}. Marks: "

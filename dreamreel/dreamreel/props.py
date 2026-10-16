@@ -109,7 +109,7 @@ class Table(Prop):
             for sy in (-1, 1):
                 shapes.box(name + ".leg", 0.06, 0.06, h - 0.05, c, at=(pos.x + sx * (w / 2 - 0.08), pos.y + sy * (d / 2 - 0.08), 0), bevel=0.01)
         s.block(pos, w, d)
-        s.add_surface(name, pos, h)
+        s.add_surface(name, pos, h, (w, d))
         s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
         for side, label in ((-1, "left"), (1, "right")):
             s.marks[f"{name}-{label}"] = Mark(f"{name}-{label}", (pos.x + side * (w / 2 + 0.35), pos.y),
@@ -119,7 +119,7 @@ class Table(Prop):
             s.add_prop({"type": "chair", "at": (pos.x + side * (w / 2 + 0.3), pos.y), "face": (-side, 0), "tucked": True,
                            "color": p.get("chair_color", c)})
         for item in p.get("items", []):
-            s.place_item(item, pos, h, w)
+            s.place_item(item, pos, h, w, on=name, depth=d)
         return top
 
 
@@ -241,9 +241,9 @@ class Counter(Prop):
         for i in range(int(w / 0.55)):
             shapes.sphere(name + ".knob", 0.02, "#e2b53e", at=(pos.x - w / 2 + 0.28 + i * 0.55, pos.y - 0.31, 0.42))
         for item in p.get("items", []):
-            s.place_item(item, pos, 0.6, w)
+            s.place_item(item, pos, 0.6, w, on=name, depth=0.6)
         s.block(pos, w, 0.6)
-        s.add_surface(name, pos, 0.6)
+        s.add_surface(name, pos, 0.6, (w, 0.6))
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.7), facing=math.pi)
         return None
 
@@ -480,9 +480,9 @@ class Desk(Prop):
             shapes.box(name + ".side", 0.04, d, h - 0.04, c, at=(pos.x + sx * (w / 2 - 0.02), pos.y, 0), bevel=0.005)
         shapes.box(name + ".drawers", 0.4, d - 0.05, h * 0.55, c, at=(pos.x + w / 2 - 0.24, pos.y, h * 0.4), bevel=0.01)
         s.block(pos, w, d)
-        s.add_surface(name, pos, h)
+        s.add_surface(name, pos, h, (w, d))
         for item in p.get("items", []):
-            s.place_item(item, pos, h, w)
+            s.place_item(item, pos, h, w, on=name, depth=d)
         toward = 1 if p.get("facing", "back") == "back" else -1     # the sitter faces the back wall or the camera
         if p.get("chair", True):
             s.add_prop({"type": "chair", "name": f"{name}-chair", "at": (pos.x, pos.y - toward * (d / 2 + 0.3)),
@@ -656,7 +656,18 @@ class Tray(Item):
         shapes.box("tray.wax", 0.43, 0.29, 0.008, look.matte("#2f3436", 0.35), at=(x, y, z + 0.012), bevel=0)
         s.focus.setdefault("tray", Vector((x, y, z + 0.03)))
         s.add_mark("tray", (x, y - 0.55), facing="back")
-        s.add_surface("tray", (x, y), z + 0.02)
+        s.add_surface("tray", (x, y), z + 0.02, (0.4, 0.26))
+
+
+class Scalpel(Item):
+    description = "A scalpel"
+
+    def build(self, s, x, y, z, rng):
+        shapes.cylinder("scalpel", 0.008, 0.12, _metal("#d9dde0"), at=(x, y, z + 0.008), rot=(0, math.pi / 2, 0),
+                        bevel=0, segments=8)
+        blade = shapes.box("scalpel.blade", 0.035, 0.002, 0.012, _metal("#eef1f3"), at=(x + 0.135, y, z + 0.002),
+                           bevel=0)
+        blade.rotation_euler.y = 0.15
 
 
 class ToolCup(Item):
@@ -734,9 +745,9 @@ class LabBench(Prop):
             shapes.box(name + ".door", w / n - 0.04, 0.01, h - 0.15, c, at=(x, pos.y - d / 2 + 0.035, 0.05), bevel=0.004)
             shapes.box(name + ".handle", 0.06, 0.02, 0.012, _metal(), at=(x, pos.y - d / 2 + 0.025, h - 0.16), bevel=0.003)
         for item in p.get("items", []):
-            s.place_item(item, pos, h, w)
+            s.place_item(item, pos, h, w, on=name, depth=d)
         s.block(pos, w, d)
-        s.add_surface(name, pos, h)
+        s.add_surface(name, pos, h, (w, d))
         s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
         for side, label in ((-1, "left"), (1, "right")):
             s.marks[f"{name}-{label}"] = Mark(f"{name}-{label}", (pos.x + side * (w / 2 + 0.35), pos.y),

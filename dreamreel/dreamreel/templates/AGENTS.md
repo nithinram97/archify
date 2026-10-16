@@ -145,6 +145,13 @@ after a big moment so it reads. `exaggeration` (film.toml) sets how cartoony the
 New manners are classes (`dr.Manner.define("drunkenly", weight=-0.4, time=-0.5, space=-1, flow=-1)`).
 See docs on acting in dreamreel's repository for the principles behind it.
 
+## Handling things
+
+Things on tables, counters and benches can be picked up, carried, handed over and put down
+(`pick_up`, `give`, `put_down`, `drop`); `hold` puts something in a hand from the start of a beat
+(`hold`, thing = "scalpel"); `grab` picks up a small character. Characters walk over to what they
+reach for, so there's no need to move them there first. Two hands hold two things.
+
 ## Rules
 
 - Never use raw coordinates in cast, set or scene files: use places, marks, seats and characters.

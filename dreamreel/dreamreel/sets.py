@@ -86,6 +86,7 @@ class Set(Plugin):
         self.glows = []      # (material, kind, strength): windows that show the sky, lit windows at night
         self.windows = []    # (x, y, z) of windows in rooms: daylight comes in through them
         self.surfaces = {}   # name -> (x, y, height): tops of tables and benches a character can be on
+        self.things = {}     # name -> handling.Thing: items that can be picked up
         self.build_environment()
         for p in self.spec.get("props", []):
             self.add_prop(p)
@@ -184,9 +185,12 @@ class Set(Plugin):
         self.marks[name] = Mark(name, at, facing)
         return self.marks[name]
 
-    def add_surface(self, name, at, height):
-        """Something a (small) character can stand on: a table top, a bench, a tray."""
+    def add_surface(self, name, at, height, size=(0.6, 0.6)):
+        """Something a (small) character can stand on or things can be put on: a table top, a bench,
+        a tray. `size` is its width and depth."""
         self.surfaces[name] = (float(at[0]), float(at[1]), float(height))
+        self.surface_size = getattr(self, "surface_size", {})
+        self.surface_size[name] = (float(size[0]), float(size[1]))
 
     def add_seat(self, name, at, facing, height, front):
         """A place to sit at `at` (x, y), seat height `height`, got into from `front`."""
@@ -194,13 +198,41 @@ class Set(Plugin):
         self.marks.setdefault(name, Mark(name, front, facing=facing))
         return self.seats[name]
 
-    def place_item(self, item, pos, h, w):
-        """Put a small Item (by name) on a surface of width w at height h centred on pos."""
-        rng = random.Random(item)
+    def place_item(self, item, pos, h, w, on=None, depth=0.5):
+        """Put a small Item (by name) on a surface of width w at height h centred on pos. It becomes a
+        thing that can be picked up, named after the item (`cup`, `cup-2`...)."""
+        rng = random.Random(item + str(len(self.things)))
         x = pos.x + rng.uniform(-w / 3, w / 3)
+        y = pos.y - max(0.0, depth / 2 - 0.12)     # near the front edge, within reach
+        return self.add_thing(item, (x, y, h), rng, approach=on if on in self.marks or on is None else None,
+                              on=on)
+
+    def add_thing(self, item, at, rng=None, approach=None, on=None):
+        """Build an Item at `at` (x, y, z of its base) as one movable thing; returns its name."""
+        from .handling import Thing
+        rng = rng or random.Random(item)
         before = set(bpy.data.objects.keys())
-        plugins.get("item", item)().build(self, x, pos.y, h, rng)
+        plugins.get("item", item)().build(self, at[0], at[1], at[2], rng)
         self._remember_focus(item, before)
+        name = item
+        k = 2
+        while name in self.things:
+            name = f"{item}-{k}"
+            k += 1
+        root = shapes.empty(f"thing.{name}", at=tuple(at))
+        bpy.context.view_layer.update()
+        inv = root.matrix_world.inverted()
+        for o in [bpy.data.objects[n] for n in set(bpy.data.objects.keys()) - before]:
+            if o.parent is None and o is not root:
+                o.parent = root
+                o.matrix_parent_inverse = inv
+        objs = [bpy.data.objects[n] for n in set(bpy.data.objects.keys()) - before if n != root.name]
+        top = max((max((o.matrix_world @ Vector(b)).z for b in o.bound_box) for o in objs if o.type == "MESH"),
+                  default=at[2] + 0.05)
+        self.things[name] = Thing(name, root, approach=approach or on, grip=(top - at[2]) * 0.45)
+        if name != item:
+            self.focus.setdefault(name, self.focus.get(item))
+        return name
 
     def seat_facing(self, p, pos):
         if "face" in p:

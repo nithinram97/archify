@@ -190,6 +190,75 @@ class DoGesture(Action):
         who.do(gesture, target=target, how=how)
 
 
+class Hold(Action):
+    label = "is holding"
+    description = "Holding something from this moment (a thing in the set, or a new item such as a scalpel)"
+    sentence = "{who} is holding {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", required=True, label="What"),
+              Param("hand", "choice", default=None, choices=("right", "left"))]
+
+    def run(self, s, who, thing, hand=None):
+        who.hold(thing, hand=hand, at=s._start(who, None))
+
+
+class PickUp(Action):
+    label = "picks up"
+    description = "Walk over, reach and pick something up"
+    sentence = "{who} picks up {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", required=True, label="What"),
+              Param("hand", "choice", default=None, choices=("right", "left"))]
+
+    def run(self, s, who, thing, hand=None):
+        who.pick_up(thing, hand=hand)
+
+
+class Grab(Action):
+    label = "grabs"
+    description = "Grab a small character (a frog, a cat...) and hold it"
+    sentence = "{who} grabs {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "character", required=True, label="Who"),
+              Param("hand", "choice", default=None, choices=("right", "left"))]
+
+    def run(self, s, who, thing, hand=None):
+        who.grab(thing, hand=hand)
+
+
+class PutDown(Action):
+    label = "puts down"
+    description = "Put what they're holding down: on a table, bench or tray, or on the floor"
+    sentence = "{who} puts down {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", label="What (what they hold)"), Param("on", "surface", label="On")]
+
+    def run(self, s, who, thing=None, on=None):
+        who.put_down(thing, on=on)
+
+
+class Give(Action):
+    label = "gives"
+    description = "Hand what they're holding to someone"
+    sentence = "{who} gives {thing} to {to}"
+    needs = ("arms",)
+    params = [Param("to", "character", required=True, label="To"), Param("thing", "thing", label="What")]
+
+    def run(self, s, who, to, thing=None):
+        who.give(to, thing=thing)
+
+
+class Drop(Action):
+    label = "drops"
+    description = "Let go: it falls to the floor"
+    sentence = "{who} drops {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", label="What")]
+
+    def run(self, s, who, thing=None):
+        who.drop(thing)
+
+
 class Leave(Action):
     label = "leaves"
     description = "Disappear (for example after walking to the door)"

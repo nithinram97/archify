@@ -119,6 +119,8 @@ Movement follows the classic principles of animation: gestures anticipate and fo
 squash and stretch, long hair and floppy ears swing and settle. Every gesture and walk is shaped by
 the character's mood or by a manner you give it (`how = "nervously"`), using the four Laban effort
 qualities (weight, time, space, flow), so an angry wave and a sad wave are different performances.
+Characters pick things up, carry them, hand them over and put them down, and can grab small
+creatures.
 See [docs/acting.md](docs/acting.md).
 
 ## A real camera

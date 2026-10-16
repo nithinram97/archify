@@ -781,7 +781,8 @@ class Creature(Character):
             piv = shapes.empty(f"{n}.arm.{'L' if side > 0 else 'R'}", anchor, at)
             arm = shapes.capsule(f"{n}.arm", 0.05 * S, 0.2 * S * float(self.get("legs_length", 1) or 1), self.color("skin"),
                                  piv, rot=(0, _deg(-12 * side), 0), hang=True)
-            shapes.sphere(f"{n}.hand", 0.065 * S, self.color("skin"), arm, at=(0, 0, -(0.2 * S + 0.1 * S)))
+            self.hands[side] = shapes.sphere(f"{n}.hand", 0.065 * S, self.color("skin"), arm,
+                                             at=(0, 0, -(0.2 * S + 0.1 * S)))
             self.arms[side] = piv
 
     def build_frog_arms(self, anchor):
@@ -795,6 +796,7 @@ class Creature(Character):
                                    hang=True)
             hand = shapes.empty(f"{n}.hand", upper, (0, 0, -0.215 * S))
             hand.rotation_euler = (_deg(38), 0, 0)
+            self.hands[side] = hand
             palm = shapes.ellipsoid(f"{n}.palm", 0.035 * S, 0.03 * S, 0.012 * S, col, hand)
             palm.location.z = -0.006 * S
             for f in range(4):

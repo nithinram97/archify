@@ -118,7 +118,9 @@ by_the_plant = "left"
 
 Items on tables, counters and benches: cookie-jar, cookie, plate, cup, vase, laptop, book, tray (a
 dissection tray; makes the mark `tray`), tool-cup, jar, beaker, bottle, scale.
-A second thing of the same type gets `-2` (`chair-2`), or give it a `name`.
+A second thing of the same type gets `-2` (`chair-2`), or give it a `name`. Items on surfaces are
+*things* that characters can pick up, carry, give and put down, named after the item (`cup`,
+`cup-2`); a scalpel is an item too.
 
 ## Scenes: `scenes/NNN_name.toml`
 
@@ -151,6 +153,12 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | turn_to, look_at | target |
 | feel | mood |
 | gesture | gesture, target, how |
+| pick_up | thing (walks over if needed), hand (right, left) |
+| put_down | thing (what they hold), on (a table, counter, bench, desk or tray; else the floor) |
+| give | to, thing |
+| drop | thing (it falls to the floor) |
+| hold | thing, hand: holding it from this moment; a thing in the set, or a new item (`scalpel`) |
+| grab | thing = a small character (a frog, a cat): carried like a thing, put down the same way |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
 | slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |

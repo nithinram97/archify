@@ -258,7 +258,8 @@ def cmd_info(a):
             scene_mod._reset_blender()
             st = sets.Set.create(p.set_spec(name), name=name)
             info["sets"][name] = {"kind": st.kind, "marks": sorted(st.marks), "seats": sorted(st.seats),
-                                  "surfaces": sorted(st.surfaces), "props": sorted(st.props)}
+                                  "surfaces": sorted(st.surfaces), "props": sorted(st.props),
+                                  "things": sorted(st.things)}
         except Exception as e:
             info["sets"][name] = {"error": f"{type(e).__name__}: {e}", "marks": [], "seats": []}
     print("@@JSON " + json.dumps(info))

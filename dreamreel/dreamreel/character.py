@@ -114,6 +114,8 @@ class Character(Plugin):
         self.sitting = None
         self.rng = random.Random(name)
         self.danglers = []     # (pivot, stiffness, damping, gain): parts that lag and settle (acting.py)
+        self.hands = {}        # side -> hand object (what held things follow)
+        self.holding = {}      # side -> name of the thing in that hand (handling.py)
         self.validate()
         self.proportions()
         self.build()
@@ -215,7 +217,7 @@ class Character(Plugin):
             piv = shapes.empty(f"{n}.arm.{'L' if side > 0 else 'R'}", self.body, (side * self.body_r * 0.86, 0, self.shoulder_z))
             arm = shapes.capsule(f"{n}.arm", 0.047 * H, 0.15 * H, self.color("top"), piv, rot=(0, _deg(-12 * side), 0),
                                  hang=True)
-            shapes.sphere(f"{n}.hand", 0.058 * H, self.color("skin"), arm, at=(0, 0, -0.27 * H))
+            self.hands[side] = shapes.sphere(f"{n}.hand", 0.058 * H, self.color("skin"), arm, at=(0, 0, -0.27 * H))
             self.arms[side] = piv
 
     def build_head(self):
@@ -428,7 +430,7 @@ class Character(Plugin):
             at = None
         t = self._start(at)
         p0 = self.position(t)
-        p1 = self.scene._resolve(where, t, me=self, approach=True)
+        p1 = self.scene._resolve(where, t, me=self, approach=getattr(self, "_approach", True))
         path = self.scene.set.route(p0, p1) if self.scene.set else [p0, p1]
         sp = SPEEDS.get(speed, speed) if not isinstance(speed, (int, float)) else speed
         self._effort = acting.effort_of(self, t, how)
@@ -501,8 +503,10 @@ class Character(Plugin):
             sgn = 1 if i % 2 else -1
             key(self.legs[1], "rotation_euler", ti, (-sgn * amp, 0, 0))
             key(self.legs[-1], "rotation_euler", ti, (sgn * amp, 0, 0))
-            key(self.arms[1], "rotation_euler", ti, (sgn * amp * 0.9, 0, 0))
-            key(self.arms[-1], "rotation_euler", ti, (-sgn * amp * 0.9, 0, 0))
+            if 1 not in self.holding:          # an arm carrying something doesn't swing
+                key(self.arms[1], "rotation_euler", ti, (sgn * amp * 0.9, 0, 0))
+            if -1 not in self.holding:
+                key(self.arms[-1], "rotation_euler", ti, (-sgn * amp * 0.9, 0, 0))
             if i < n_steps:
                 b = eff.bounce()
                 key(self.hips, "location", ti, (0, 0, base - 0.018 * H * (1.6 if run else 1) * b))
@@ -749,6 +753,179 @@ class Character(Plugin):
         end = acting.shape(curves, t, end, acting.effort_of(self, t, how), self.scene.exaggeration)
         self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
         return self._end(end, wait)
+
+    # ------------------------------------------------------------------ handling things (handling.py)
+    def _hand(self, hand=None, holding=None):
+        if not self.arms or not self.hands:
+            raise ValueError(f"{self.name} has no hands to hold things with")
+        if holding is not None:
+            side = next((s for s, n in self.holding.items() if n == holding), None)
+            if side is None:
+                raise ValueError(f"{self.name} isn't holding {holding!r} (holding: {list(self.holding.values()) or 'nothing'})")
+            return side
+        if hand in ("left", 1):
+            return 1
+        if hand in ("right", -1):
+            return -1
+        free = [s for s in (-1, 1) if s in self.hands and s not in self.holding]
+        if not free:
+            raise ValueError(f"{self.name}'s hands are full ({', '.join(self.holding.values())}): put something down first")
+        return free[0]
+
+    def _held(self, thing=None):
+        if thing is None:
+            if not self.holding:
+                raise ValueError(f"{self.name} isn't holding anything")
+            return next(iter(self.holding.values()))
+        return thing
+
+    def hold(self, thing, hand=None, at=None):
+        """Be holding something from this moment: a thing in the set (`cup`) or a new item (`scalpel`)."""
+        from . import handling
+        t = 0.0 if at is None else at
+        side = self._hand(hand)
+        th = self.scene.thing(thing, create=True)
+        point = handling.carry_point(self, side, t)
+        keys.key(self.arms[side], "rotation_euler", t, handling.aim(self, side, t, point), "cut")
+        handling.evaluate(self.scene, t)
+        hand_at = self.hands[side].matrix_world.translation
+        if th.character is None:
+            keys.key(th.root, "location", t, tuple(hand_at - Vector((0, 0, 0.02 * self.H))), "cut")
+        handling.attach(self.scene, th, self.hands[side], t)
+        self.holding[side] = th.name
+        th.holder = (self, side)
+        return self
+
+    def pick_up(self, thing, hand=None, at=None, wait=True):
+        """Walk over if needed, reach, take it, and carry it."""
+        from . import handling
+        th = self.scene.thing(thing)
+        if th.holder is not None and th.holder[0] is not self:
+            raise ValueError(f"{th.name} is in {th.holder[0].name}'s hand: use give")
+        side = self._hand(hand)
+        t = self._start(at)
+        p = handling.thing_point(self.scene, th, t)
+        _, reach = handling.arm_rest(self)[side]
+        if (self.position(t) - p.to_2d()).length > reach + 0.35 * self.H:
+            self.walk_to(th.approach or (p.x, p.y), at=t, wait=True)
+            t = max(self.busy, t)
+        if self.heading(t) is not None:
+            self.turn_to((p.x, p.y), at=t, wait=True)
+            t = max(self.busy, t)
+        eff = acting.effort_of(self, t)
+        t1 = t + 0.45 * eff.tempo()
+        handling.reach(self, side, t, t1, p + Vector((0, 0, 0.03 * self.H)))
+        handling.attach(self.scene, th, self.hands[side], t1)
+        t2 = t1 + 0.4 * eff.tempo()
+        handling.straighten(self, t1, t2)
+        keys.key(self.arms[side], "rotation_euler", t2, handling.aim(self, side, t1, handling.carry_point(self, side, t1)))
+        self.holding[side] = th.name
+        th.holder = (self, side)
+        self.scene._event("handle", self, t, t2, action="picks up", thing=th.name)
+        return self._end(t2, wait)
+
+    def grab(self, who, hand=None, at=None, wait=True):
+        """Grab a (small) character and carry it."""
+        return self.pick_up(who, hand=hand, at=at, wait=wait)
+
+    def put_down(self, thing=None, on=None, at=None, wait=True):
+        """Put what's held (or `thing`) down: on a surface (`on = "table"`) or the floor in front."""
+        from . import handling
+        name = self._held(thing)
+        side = self._hand(holding=name)
+        th = self.scene.thing(name)
+        t = self._start(at)
+        if on is not None:
+            surf = self.scene.set.surfaces.get(on) if self.scene.set else None
+            if surf is None:
+                raise ValueError(f"nothing called {on!r} to put things on. Surfaces: {sorted(self.scene.set.surfaces)}")
+            if on in self.scene.set.marks:
+                self.walk_to(on, at=t, wait=True)
+                t = max(self.busy, t)
+            here = self.position(t)
+            centre = Vector(surf[:2])
+            toward = (here - centre)
+            w, d = self.scene.set.surface_size.get(on, (0.6, 0.6))
+            # near the edge on this side, within reach
+            edge = max(0.0, min(w, d) / 2 - 0.12)
+            spot = centre + (toward.normalized() * min(edge, toward.length) if toward.length > 1e-3 else Vector())
+            point = Vector((spot.x, spot.y, surf[2]))
+        else:
+            h = self.heading(t)
+            fwd = Vector((math.sin(h), -math.cos(h)))
+            spot = self.position(t) + fwd * 0.4 * self.H
+            point = Vector((spot.x, spot.y, 0.0))
+        eff = acting.effort_of(self, t)
+        t1 = t + 0.45 * eff.tempo()
+        handling.reach(self, side, t, t1, point + Vector((0, 0, 0.04 * self.H)))
+        if on is not None:   # put it down where the hand got to, kept on the surface
+            handling.evaluate(self.scene, t1)
+            hand = self.hands[side].matrix_world.translation
+            cx, cy, h = self.scene.set.surfaces[on]
+            w, d = self.scene.set.surface_size.get(on, (0.6, 0.6))
+            point = Vector((min(cx + w / 2 - 0.05, max(cx - w / 2 + 0.05, hand.x)),
+                            min(cy + d / 2 - 0.05, max(cy - d / 2 + 0.05, hand.y)), h))
+        handling.release(self.scene, th, t1, at=point, heading=self.heading(t1))
+        if th.character is not None:
+            th.character.busy = max(th.character.busy, t1)
+        t2 = t1 + 0.4 * eff.tempo()
+        handling.straighten(self, t1, t2)
+        keys.key(self.arms[side], "rotation_euler", t2, (0, 0, 0))
+        del self.holding[side]
+        self.scene._event("handle", self, t, t2, action="puts down", thing=name)
+        return self._end(t2, wait)
+
+    def drop(self, thing=None, at=None, wait=True):
+        """Let go: it falls to the floor."""
+        from . import handling
+        name = self._held(thing)
+        side = self._hand(holding=name)
+        th = self.scene.thing(name)
+        t = self._start(at)
+        end = handling.fall(self.scene, th, t)
+        keys.key(self.arms[side], "rotation_euler", t + 0.35, (0, 0, 0))
+        del self.holding[side]
+        self.scene._event("handle", self, t, end, action="drops", thing=name)
+        return self._end(max(t + 0.35, end), wait)
+
+    def give(self, to, thing=None, at=None, wait=True):
+        """Hand what's held (or `thing`) to someone: walk to them, both reach, they take it."""
+        from . import handling
+        name = self._held(thing)
+        side = self._hand(holding=name)
+        other = self.scene.character(to) if isinstance(to, str) else to
+        if other is None:
+            raise ValueError(f"no one called {to!r} to give it to")
+        oside = other._hand()
+        th = self.scene.thing(name)
+        t = self._start(at)
+        self._approach = "close"
+        try:
+            self.walk_to(other.name, at=t, wait=True)
+        finally:
+            self._approach = True
+        t = max(self.busy, other.busy, t)
+        other.turn_to(self.name, at=t, wait=False)
+        evalt = t + 0.25
+        a = handling.carry_point(self, side, evalt)
+        b = handling.carry_point(other, oside, evalt)
+        meet = (a + b) / 2
+        t1 = evalt + 0.5
+        handling.reach(self, side, evalt, t1, meet)
+        handling.reach(other, oside, evalt, t1, meet)
+        handling.attach(self.scene, th, other.hands[oside], t1)
+        t2 = t1 + 0.45
+        handling.straighten(self, t1, t2)
+        handling.straighten(other, t1, t2)
+        keys.key(self.arms[side], "rotation_euler", t2, (0, 0, 0))
+        keys.key(other.arms[oside], "rotation_euler", t2,
+                 handling.aim(other, oside, t1, handling.carry_point(other, oside, t1)))
+        del self.holding[side]
+        other.holding[oside] = name
+        th.holder = (other, oside)
+        self.scene._event("handle", self, t, t2, action="gives", thing=name, listener=other)
+        self.scene._end(other, t2, wait=False)
+        return self._end(t2, wait)
 
     # ------------------------------------------------------------------ life
     def _alive(self, length):
