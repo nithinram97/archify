@@ -24,6 +24,12 @@ import wave
 ENGINES = {}
 VOICE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "voices")
 DEFAULT_VOICE = "en_US-lessac-medium"
+SUGGESTED = (  # a few good Piper voices; hundreds more at https://rhasspy.github.io/piper-samples/
+    "en_US-lessac-medium", "en_US-amy-medium", "en_US-ryan-medium", "en_US-joe-medium",
+    "en_US-kristin-medium", "en_US-hfc_female-medium", "en_US-hfc_male-medium", "en_US-kathleen-low",
+    "en_GB-alan-medium", "en_GB-alba-medium", "en_GB-cori-medium", "en_GB-jenny_dioco-medium",
+    "en_GB-northern_english_male-medium", "en_GB-southern_english_female-low",
+)
 
 
 def register_engine(name, fn):
@@ -98,12 +104,17 @@ class Voices:
         os.makedirs(self.dir, exist_ok=True)
         path = os.path.join(self.dir, f"{character.name.lower()}-{h}.wav")
         if not os.path.exists(path):
+            tmp = f"{path}.{os.getpid()}.part.wav"  # write aside, then rename: never read half a file
             try:
-                ENGINES[self.engine](line, voice, path)
+                ENGINES[self.engine](line, voice, tmp)
+                os.replace(tmp, path)
             except Exception as e:  # never stop a render for a voice problem
                 if not self.warned:
                     print(f"[dreamreel] voice engine {self.engine!r} failed ({e}); using silent mouths")
                     self.warned = True
                 self.engine = None
                 return None
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
         return Speech(path)

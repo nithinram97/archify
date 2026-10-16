@@ -330,6 +330,27 @@ class Scene:
         lines += [f"  WARNING: {w}" for w in warnings]
         return "\n".join(lines)
 
+    def timeline(self):
+        """The scene as data: length, events, camera cuts and warnings (for `check --json`)."""
+        self.finish()
+        rows = []
+        for e in self.events:
+            row = {"t": round(e["t0"], 2), "end": round(e["t1"], 2), "kind": e["kind"], "who": e["who"].name}
+            if e["kind"] == "say":
+                row["line"] = e["line"]
+                row["to"] = e["listener"].name if e.get("listener") else None
+            elif e["kind"] == "gesture":
+                row["gesture"] = e["gesture"]
+            rows.append(row)
+        for t, label in self.cut.describe():
+            rows.append({"t": round(t, 2), "kind": "cut", "shot": label})
+        for t0, t1, text in self.captions:
+            rows.append({"t": round(t0, 2), "end": round(t1, 2), "kind": "caption", "text": text})
+        rows.sort(key=lambda r: (r["t"], r["kind"] != "cut"))
+        return {"length": self.length, "set": self.set.name if self.set else None,
+                "cast": [c.name for c in self.actors.values()], "events": rows, "warnings": self.check(),
+                "cards": [c[0] for c in self.cards]}
+
     def check(self):
         """Things that will probably look wrong."""
         out = []

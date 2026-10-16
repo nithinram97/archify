@@ -21,4 +21,4 @@ dreamreel = "dreamreel.cli:main"
 include = ["dreamreel*"]
 
 [tool.setuptools.package-data]
-dreamreel = ["templates/**/*"]
+dreamreel = ["templates/**/*", "studio/static/*"]

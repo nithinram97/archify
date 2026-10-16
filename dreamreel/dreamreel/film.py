@@ -109,6 +109,7 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     _compat.set_video_output(r)
     r.ffmpeg.constant_rate_factor = "HIGH"
     r.filepath = out
+    print(f"[dreamreel] rendering {name}: {s.bscene.frame_end} frames", flush=True)
     bpy.ops.render.render(animation=True)
     meta = s.metadata()
     meta["hash"] = digest
@@ -182,5 +183,6 @@ def assemble(proj, metas, quality="final", subtitles=True):
     out = proj.renders(f"{safe}{'' if quality == 'final' else '-' + quality}.mp4")
     r.filepath = out
     r.use_sequencer = True
+    print(f"[dreamreel] rendering film: {sc.frame_end} frames", flush=True)
     bpy.ops.render.render(animation=True)
     return out

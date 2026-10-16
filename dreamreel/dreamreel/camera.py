@@ -198,8 +198,9 @@ class Director:
         # behind and to the side of the near character, at a height between the two faces, so the
         # near head fills about a third of the frame and the far face is clear
         back = 1.25 * p.H
-        off = 0.55 * p.H
-        z = max(hp.z, ho.z) * 0.6 + min(hp.z, ho.z) * 0.4 + 0.08 * p.H
+        drop = max(0.0, hp.z - ho.z)  # the near character is higher (standing over someone seated)
+        off = 0.55 * p.H + 1.3 * drop
+        z = max(hp.z, ho.z) * 0.6 + min(hp.z, ho.z) * 0.4 + 0.08 * p.H + 0.6 * drop
         pos = Vector((hp.x + u.x * back + side.x * off, hp.y + u.y * back + side.y * off, z))
         aim = ho + Vector((0, 0, -0.06 * o.H)) + Vector((-side.x, -side.y, 0)) * 0.1 * o.H
         return self._add("over_shoulder", t, [o, p], pos, aim, 40, 4.0, f"over_shoulder({p.name} -> {o.name})")

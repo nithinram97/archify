@@ -29,5 +29,6 @@ places, with voices, subtitles and automatic camera coverage. Next, roughly in o
 
 ## Tooling
 - An MCP server so any AI model can drive dreamreel as tools.
-- A simple desktop app: story -> scenes -> previz with notes, for people who don't use a terminal.
+- dreamreel studio (done in 0.1): next, an "Ask the AI director" panel that takes notes in plain
+  words, drag-and-drop blocking on the floor plan, and a one-click installer with no terminal.
 - Render farm / GPU cloud render command.

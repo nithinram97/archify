@@ -28,6 +28,9 @@ FLOORS = {"wood": "wood", "tiles": "cream", "carpet": "beige", "concrete": "#9a9
           "sand": "#e3cf9e", "stone": "#a9a196"}
 
 
+TABLE_ITEMS = ("cookie-jar", "cookie", "plate", "cup", "vase", "laptop", "book")
+
+
 class Mark:
     def __init__(self, name, at, facing=None):
         self.name = name
@@ -198,7 +201,7 @@ class Set:
         elif item == "book":
             shapes.box("book", 0.2, 0.14, 0.04, rng.choice(["red", "blue", "green"]), at=(x, pos.y, h), bevel=0.005)
         else:
-            raise ValueError(f"unknown table item {item!r}; use cookie-jar, cookie, plate, cup, vase, laptop, book")
+            raise ValueError(f"unknown table item {item!r}; use one of {TABLE_ITEMS}")
 
     def _seat_facing(self, p, pos):
         if "face" in p:

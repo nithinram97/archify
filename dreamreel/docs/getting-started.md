@@ -25,8 +25,10 @@ Open `scenes/010_empty_jar.py` next to the video: every line in the file is some
 
 ## 3. Make your own
 
-The easy way: open your project folder in an AI coding agent (Claude Code, Codex or similar) and
-describe your film. Every project includes `AGENTS.md`, which tells the agent how to direct with
+The friendliest way: run `dreamreel studio` and use the app in your browser (see [studio.md](studio.md)).
+
+Or open your project folder in an AI coding agent (Claude Code, Codex or similar) and describe
+your film. Every project includes `AGENTS.md`, which tells the agent how to direct with
 dreamreel, check its work and show you frames. See [ai-director.md](ai-director.md).
 
 By hand:

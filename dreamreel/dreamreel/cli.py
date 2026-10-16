@@ -8,6 +8,7 @@
     dreamreel contact 010            6 frames of a scene on one sheet
     dreamreel previz                 fast flat-shaded video of the whole film
     dreamreel render                 the final film (only changed scenes are re-rendered)
+    dreamreel studio                 the same, in a friendly app in your browser
 """
 import argparse
 import math
@@ -49,6 +50,24 @@ def cmd_check(a):
     from . import film
     p = _project()
     paths = [p.scene_path(a.scene)] if a.scene else p.scenes()
+    if a.json:
+        import json
+        out = []
+        for path in paths:
+            try:
+                s = film.build(p, path)
+                out.append({"scene": s.name, **s.timeline()})
+            except BaseException as e:  # report the error for this scene and carry on
+                import traceback
+                line = getattr(e, "lineno", None) if isinstance(e, SyntaxError) else None
+                for fr in traceback.extract_tb(e.__traceback__):
+                    if os.path.abspath(fr.filename) == os.path.abspath(path):
+                        line = fr.lineno
+                msg = str(e) if not isinstance(e, SystemExit) else str(e.code)
+                out.append({"scene": os.path.splitext(os.path.basename(path))[0], "line": line,
+                            "error": f"{type(e).__name__}: {msg}"})
+        print("@@JSON " + json.dumps(out))
+        return
     total = 0.0
     for path in paths:
         s = film.build(p, path)
@@ -97,7 +116,7 @@ def cmd_cast(a):
     r.resolution_percentage = a.percent
     _compat.set_image_output(r)
     s.bscene.frame_set(1)
-    r.filepath = p.renders("stills", "cast.png")
+    r.filepath = a.out or p.renders("stills", "cast.png" if not a.names else f"cast_{'_'.join(a.names)}.png")
     bpy.ops.render.render(write_still=True)
     print(r.filepath)
 
@@ -108,6 +127,16 @@ def cmd_plan(a):
     p = _project()
     s = scene_mod.Scene(a.set)
     st = s.set
+    if a.view:  # how the set looks through the camera, empty
+        s.cut.wide(at=0)
+        s.finish()
+        r = s.bscene.render
+        r.resolution_percentage = a.percent
+        _compat.set_image_output(r)
+        r.filepath = p.renders("stills", f"view_{a.set}.png")
+        bpy.ops.render.render(write_still=True)
+        print(r.filepath)
+        return
     for name, m in st.marks.items():
         shapes.cylinder("mark", 0.09, 0.02, look.plastic("red", emission=0.5), at=(m.at.x, m.at.y, 2.5), bevel=0)
         if m.facing is not None:
@@ -164,8 +193,50 @@ def cmd_render(a):
     _render_all(a, "final")
 
 
+def cmd_studio(a):
+    from .studio import server
+    server.serve(a.dir, a.port, open_browser=not a.no_browser)
+
+
+def cmd_info(a):
+    """Everything a tool needs to offer valid choices: the catalogue, and each set's marks and seats."""
+    import json
+    from . import character, look, scene as scene_mod, sets, voices
+    from .sets import ZONES
+    p = _project()
+    info = {
+        "catalog": {
+            "bodies": list(character.BODIES), "hair": list(character.HAIR), "extras": list(character.EXTRAS),
+            "moods": list(character.MOODS), "gestures": list(character.GESTURES), "speeds": list(character.SPEEDS),
+            "props": sets.PROP_TYPES, "places": [z for z in ZONES if z != "centre"], "colors": look.COLORS,
+            "table_items": list(sets.TABLE_ITEMS), "floors": list(sets.FLOORS), "sizes": list(sets.SIZES),
+            "outfits": ["shirt", "dress"], "eyes": ["small", "normal", "big"],
+            "voices": list(voices.SUGGESTED), "voice_engine": voices._piper_available(),
+        },
+        "sets": {},
+    }
+    for name in p.set_names():
+        try:
+            scene_mod._reset_blender()
+            st = sets.Set(p.set_spec(name), name=name)
+            info["sets"][name] = {"kind": st.kind, "marks": sorted(st.marks), "seats": sorted(st.seats),
+                                  "props": sorted(st.props)}
+        except Exception as e:
+            info["sets"][name] = {"error": f"{type(e).__name__}: {e}", "marks": [], "seats": []}
+    print("@@JSON " + json.dumps(info))
+
+
 def cmd_voices(a):
     from . import voices
+    if a.say:
+        v = a.voice or voices.DEFAULT_VOICE
+        p = _project()
+        out = p.renders("voices", f"{v}.wav")
+        if not voices._piper_available():
+            raise SystemExit("voices need Piper: pip install piper-tts")
+        voices._piper(a.say, v, out)
+        print(out)
+        return
     print("Voices come from Piper (free, offline). Install it with:  pip install piper-tts")
     print("Browse voices at https://rhasspy.github.io/piper-samples/ and put the name in a cast file:")
     print('  voice = "en_US-amy-medium"')
@@ -183,6 +254,7 @@ def main(argv=None):
 
     c = sub.add_parser("check", help="build scenes and print their timelines")
     c.add_argument("scene", nargs="?")
+    c.add_argument("--json", action="store_true", help="machine-readable output (for tools and the studio)")
     c.set_defaults(fn=cmd_check)
 
     st = sub.add_parser("still", help="render frames of a scene")
@@ -202,10 +274,13 @@ def main(argv=None):
     ca = sub.add_parser("cast", help="picture of the cast")
     ca.add_argument("names", nargs="*")
     ca.add_argument("--percent", type=int, default=50)
+    ca.add_argument("--out")
     ca.set_defaults(fn=cmd_cast)
 
     pl = sub.add_parser("plan", help="top-down map of a set and its marks")
     pl.add_argument("set")
+    pl.add_argument("--view", action="store_true", help="render the empty set through the camera instead")
+    pl.add_argument("--percent", type=int, default=35)
     pl.set_defaults(fn=cmd_plan)
 
     for name, fn, help_ in (("previz", cmd_previz, "fast flat-shaded film"), ("render", cmd_render, "final film")):
@@ -216,7 +291,18 @@ def main(argv=None):
         r.set_defaults(fn=fn)
 
     v = sub.add_parser("voices", help="how to give characters voices")
+    v.add_argument("--say", help="speak this text with --voice into renders/voices/ (to audition a voice)")
+    v.add_argument("--voice")
     v.set_defaults(fn=cmd_voices)
+
+    i = sub.add_parser("info", help="catalogue and set marks as JSON (for tools)")
+    i.set_defaults(fn=cmd_info)
+
+    sd = sub.add_parser("studio", help="open dreamreel studio in your browser")
+    sd.add_argument("dir", nargs="?", default=".", help="film folder (or a folder to create films in)")
+    sd.add_argument("--port", type=int, default=8765)
+    sd.add_argument("--no-browser", action="store_true")
+    sd.set_defaults(fn=cmd_studio)
 
     a = ap.parse_args(argv)
     a.fn(a)

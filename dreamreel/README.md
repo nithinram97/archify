@@ -50,7 +50,21 @@ pip install "dreamreel[voices]"  # optional: free offline voices (Piper)
 Needs Python 3.13 (what Blender 5.2's `bpy` is built for). A GPU makes final renders much faster
 but isn't required.
 
-## Make a film
+## dreamreel studio: no code needed
+
+```bash
+dreamreel studio        # opens in your browser
+```
+
+A friendly app for the whole process. Design characters with a live drawing, lay out sets on a
+floor plan, write scenes by picking *who* does *what* from menus, and see every scene as a
+timeline. Click any moment to render that frame, then make a quick previz or the final film.
+Everything it makes is the same plain-text project, so you can switch between the studio, the
+command line and an AI agent at any time.
+
+![dreamreel studio: the scene editor with the line builder and the timeline](docs/media/studio-story.jpg)
+
+## Make a film from the command line
 
 ```bash
 dreamreel new my-film --example   # a finished 50-second short to learn from
@@ -87,6 +101,7 @@ looks intentional instead of stiff. More styles (claymation, paper cut-out) are 
 ## Docs
 
 - [Getting started](docs/getting-started.md)
+- [dreamreel studio](docs/studio.md)
 - [Reference](dreamreel/templates/REFERENCE.md): cast, sets, actions, moods, gestures, camera
 - [Working with an AI model](docs/ai-director.md)
 - [Roadmap](ROADMAP.md)
