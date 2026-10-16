@@ -151,6 +151,12 @@ If `motions/` has clips (`dreamreel motions`), use `perform` for movement proced
 do: dances, acrobatics, fights, falls. Walks use the library's walk and run clips automatically.
 Never add clips yourself from the internet without the film maker's say: licences differ.
 
+## Your own models
+
+A character can be a 3D model from `models/` (`type = "model"`, `file = "models/hero.glb"`): rigged
+or not, it acts like a toy figure. Use one when the film maker brings a model or asks for a look
+toy figures can't give. Never download models yourself without the film maker's say: licences differ.
+
 ## Handling things
 
 Things on tables, counters and benches can be picked up, carried, handed over and put down

@@ -25,7 +25,7 @@ Next, roughly in order:
 - Styles that change over a scene (fading into a memory); hatching and watercolour styles.
 
 ## Acting
-- Hold and hand over props (`pick_up`, `give`, `put_down`), open doors.
+- Open doors, sit on and climb things.
 - Walk cycles that follow curves and stairs; crowds walking in the background.
 - More gestures (hug, high-five, dance, fall over, sneak) and gesture layering while talking.
 - Better lip sync from phonemes (Rhubarb Lip Sync) instead of loudness.
@@ -34,7 +34,7 @@ Next, roughly in order:
 ## Characters
 - More hair and outfits; robots and monsters as body plans.
 - A character designer: describe a person in a sentence and get a cast file with a turnaround image.
-- Import your own models (glTF) and CC0 asset packs (Kenney, Quaternius, Poly Haven).
+- CC0 asset packs as props and sets (Kenney, Quaternius, Poly Haven); fingers on imported models.
 
 ## Places
 - More set kinds: space station, castle, underwater; rivers and lakes in biomes.

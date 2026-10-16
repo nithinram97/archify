@@ -410,7 +410,7 @@ class Scene:
         sc.render.engine = "BLENDER_WORKBENCH"
         sh = sc.display.shading
         sh.light = "STUDIO"
-        sh.color_type = "MATERIAL"
+        sh.color_type = "TEXTURE"        # imported models show their textures; others their colours
         sh.show_shadows = True
         sh.show_cavity = False
         self.style.previz(sc)

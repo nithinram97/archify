@@ -53,6 +53,21 @@ What each body can do:
 
 All bodies: say, feel (moods), look_at, turn_to, nod, shake_head, jump, bow, roar, sniff, spin.
 
+### `type = "model"`: your own 3D model
+
+```toml
+type = "model"
+file = "models/hero.glb"     # glTF/GLB, FBX or OBJ, in the film's models/ folder
+height = 1.0                 # metres; toy figures are about 1 m
+turn = 0                     # degrees, if it doesn't face the front after import
+```
+
+A rigged model (Mixamo, Ready Player Me, VRoid, Quaternius...) keeps its skeleton; an unrigged
+one standing in a T or A pose is rigged automatically. Either way it walks, gestures, performs
+motion capture and handles things like a toy figure. If the model has facial shape keys (blink,
+smile, jawOpen; ARKit and VRM names work), moods, blinks and talking drive them; without them its
+face doesn't change. Check the licence of any model you use.
+
 **Colours**: hex (`"#e4572e"`) or a name: red orange yellow green teal blue navy purple pink cream
 beige wood darkwood charcoal denim mint sky brick leaf grass white black grey brown chestnut blonde
 ginger.

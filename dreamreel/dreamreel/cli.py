@@ -41,7 +41,7 @@ def cmd_new(a):
         fh.write("@AGENTS.md\n")
     with open(os.path.join(a.dir, ".gitignore"), "w") as fh:
         fh.write("renders/\naudio/voices/\n")
-    for sub in ("audio/music", "audio/sfx", "renders", "extensions", "motions"):
+    for sub in ("audio/music", "audio/sfx", "renders", "extensions", "motions", "models"):
         os.makedirs(os.path.join(a.dir, sub), exist_ok=True)
     print(f"Created {a.dir}. Next:\n  cd {a.dir}\n  dreamreel check\n  dreamreel contact 010\n"
           f"Or open the folder in an AI coding agent (Claude Code, Codex, ...) and describe your film: "
@@ -253,9 +253,12 @@ def cmd_info(a):
         },
         "sets": {},
         "motions": [],
+        "models": [],
     }
     from . import motion as _motion
     info["motions"] = _motion.Library(p.root).names()
+    from . import models as _models
+    info["models"] = _models.files(p.root)
     for name in p.set_names():
         try:
             scene_mod._reset_blender()

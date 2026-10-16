@@ -124,6 +124,14 @@ creatures. Add motion-capture clips (BVH or FBX) to a film's `motions/` folder a
 perform them: dances, cartwheels, fights, retargeted to their body; walks use library walk cycles.
 See [docs/acting.md](docs/acting.md).
 
+## Your own characters
+
+Bring a 3D model (glTF/GLB, FBX or OBJ) into a film's `models/` folder and cast it with
+`type = "model"`. Rigged models (Mixamo, Ready Player Me, VRoid...) keep their skeleton, whatever its
+bones are called; unrigged models in a T or A pose get one automatically, found from the shape of the
+body. Either way the model walks, gestures, performs motion capture, carries things and, if it has
+facial shape keys, smiles, frowns and blinks with the story's moods.
+
 ## A real camera
 
 Shots combine framing (establishing to extreme close-up, two-shot, over-the-shoulder, point of view,

@@ -41,4 +41,4 @@ from .environment import Light, TimeOfDay, Weather  # noqa: F401,E402
 from .nature import Biome, Scenery, Terrain  # noqa: F401,E402
 from .styles import Style  # noqa: F401,E402
 from .acting import Effort, Manner  # noqa: F401,E402
-from . import acting, actions, editing, environment, gestures, nature, parts, props, styles, timewarp, town  # noqa: F401,E402
+from . import acting, actions, editing, environment, gestures, nature, parts, props, styles, timewarp, town, models  # noqa: F401,E402

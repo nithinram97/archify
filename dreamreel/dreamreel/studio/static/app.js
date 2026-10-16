@@ -341,6 +341,8 @@ function paramField(p, value, onChange, ctx = {}) {
       break;
     case "mark": el = select(marks.map((m) => [m, "📍 " + m]), value, onChange, opt("—")); break;
     case "seat": el = select(setInfo.seats.map((m) => [m, "🪑 " + m]), value, onChange, opt("—")); break;
+    case "model": el = select((info().models || []).map((m) => [m, "🧍 " + m.replace(/^models\//, "")]), value ?? "", onChange,
+      { label: p.label, blank: (info().models || []).length ? "—" : "(put .glb/.fbx/.obj files in models/)" }); break;
     case "motion": el = select((info().motions || []).map((m) => [m, "🎞 " + m]), value ?? "", onChange,
       { label: p.label, blank: (info().motions || []).length ? "—" : "(add clips to motions/)" }); break;
     case "surface": el = select((setInfo.surfaces || []).map((m) => [m, m]), value ?? "", onChange, opt("(the floor)")); break;
