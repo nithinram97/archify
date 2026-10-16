@@ -58,8 +58,21 @@ ginger.
 ## Sets: `sets/<name>.toml`
 
 `kind = "room"`: `size` (small, medium, large), `walls`, `floor` (wood, tiles, carpet, concrete,
-grass, sand, stone), `trim`, `wallpaper`.
-`kind = "outdoor"`: `ground`, `trees`, `hills`, `path` (true/false), `seed`.
+grass, sand, stone), `trim`, `wallpaper`, and `furnish` to have it furnished for you: living_room,
+kitchen, bedroom, office, classroom, cafe. Your own `[[props]]` come first; the furniture fills
+the places that are still free.
+
+`kind = "outdoor"`: `biome` (meadow, forest, autumn, beach, desert, snow, mountains, moon),
+`terrain` (flat, rolling, hills, mountains, dunes, craters; the biome chooses otherwise), `density`
+(how much scenery, 0-3), `ground` (a colour), `path` (true/false), `seed` (a different arrangement).
+The acting area always stays flat and clear; scenery is laid out round it by the biome's rules.
+
+`kind = "street"`: a town street made by rules. `style` (town, city, old_town), `shops` (0-1),
+`cars`, `lamps`, `trees`, `seed`. The pavement in front of the buildings is the acting area, the
+road runs towards the camera, the other side of the street is there for reverse shots. Marks:
+`door`, `shop`, `crossing`, `kerb`, `lamp`, `across`, and `car`, `car-2`... for parked cars.
+
+A set file can also give its scenes a default `time_of_day` and `weather`.
 
 Things go in **places** (a 3 x 3 grid seen from the camera; the back row is against the back wall):
 
@@ -89,7 +102,13 @@ by_the_plant = "left"
 | sofa, bench | width, color, facing | seats `sofa`, `sofa-2` / `bench`, `bench-2` |
 | counter | width, color, top, items | `counter` |
 | fridge, bookshelf, plant, lamp, rug | color (lamp and streetlamp give light) | `fridge` |
-| tree, streetlamp, house | outdoors | `tree`, `house` |
+| tree | scale, variety (any scenery: tree, pine, palm, cactus, rock, bush, snowman...) | `tree` |
+| streetlamp, house | (the street lamp gives light) | `house` |
+| bed | color, frame, width | seat `bed` (sitting on its edge) |
+| desk | color, chair, facing (back, camera), items | `desk`; seat `desk-chair` |
+| wardrobe, tv | color / facing, on | `wardrobe` |
+| painting, clock, blackboard | on the back wall (they don't take a floor place) | `blackboard` |
+| car | color, facing (left, right, camera, back) | `car` |
 
 Items on tables and counters: cookie-jar, cookie, plate, cup, vase, laptop, book.
 A second thing of the same type gets `-2` (`chair-2`), or give it a `name`.
@@ -99,7 +118,9 @@ A second thing of the same type gets `-2` (`chair-2`), or give it a `name`.
 ```toml
 set = "kitchen"
 cast = ["mia", "tom"]
-time_of_day = "day"          # or "night"
+time_of_day = "golden_hour"  # dawn, morning, day, golden_hour, sunset, dusk, night
+weather = "rain"             # clear, cloudy, overcast, fog, rain, snow, storm, windy
+weather_strength = 1.0       # 0.3 a little ... 2 a lot
 
 [[beats]]
 who = "mia"
@@ -130,6 +151,10 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | jump_cut (no who) | seconds, after: that much story is cut out and the picture jumps ahead |
 | screen (no who) | effect (fade_out, fade_in, flash, dip, blackout), duration, color, after |
 | shot (no who) | shot, of, other, angle, side, move, amount, to, handheld, dutch, lens, duration (see Camera) |
+
+Time of day sets the sun, the sky and how much lamps matter (rooms get their light through the
+windows). Weather changes the light everywhere; outdoors it also brings clouds, rain, snow, fog,
+lightning and wind in the trees. Slow motion slows the rain too.
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
 

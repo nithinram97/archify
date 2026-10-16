@@ -411,6 +411,54 @@ EXTEND_TEMPLATES = {
         pos = (head.x + f.x * 1.6, head.y + f.y * 1.6, 0.25)   # low, in front, looking up
         return d.add(self.name, t, [c], pos, head, lens=24, fstop=4.0, label=f"{name}({{c.name}})")
 ''', 'do = "shot", shot = "{name}" in a beat'),
+    "scenery": ('''class {cls}(dr.Scenery):
+    """{desc}"""
+    description = "{desc}"
+    radius = 0.5              # how much room it needs
+    blocks = True             # people walk round it
+    sway = 0.5                # how much it moves in the wind (0: not at all)
+
+    def build(self, root, name, scale, rng):
+        # Build round `root`, an empty at its base on the ground; sizes times `scale`.
+        dr.shapes.cylinder(name, 0.12 * scale, 1.2 * scale, dr.look.matte("#7a5a3a"), root, bevel=0)
+        dr.shapes.sphere(name, 0.5 * scale, dr.look.plastic(rng.choice(["#e07ab0", "#f2a9cf"])), root,
+                         at=(0, 0, 1.4 * scale), segments=16)
+''', 'variety = "{name}" on a tree prop, or in a biome\'s scatter list'),
+    "biome": ('''class {cls}(dr.Biome):
+    """{desc}"""
+    description = "{desc}"
+    ground, far = "#8fc06a", "#a0c880"         # ground colour near and far
+    terrain = "hills"                          # flat, rolling, hills, mountains, dunes, craters
+    scatter = [("tree", 1.0), ("bush", 0.5)]   # (scenery, weight) in the distance and at the sides
+    near = [("flowers", 1.0)]                  # small things near the acting area
+    density = 1.0
+
+    def adjust_light(self, light):
+        light.tint_sky("#ffd0e0", 0.2)         # a pinker sky; see dr.Light for everything
+
+    def build_extra(self, s, rng):
+        pass                                   # anything else: a lake, a castle on the hill...
+''', 'kind = "outdoor", biome = "{name}" in a set file'),
+    "time": ('''class {cls}(dr.TimeOfDay):
+    """{desc}"""
+    description = "{desc}"
+    sun_elevation, sun_azimuth = 15, 220       # degrees; azimuth 0 = behind the set, 180 = behind the camera
+    sun_color, sun_energy = "#ffcf9a", 2.4
+    zenith, horizon, sky_strength = "#7a8fc8", "#ffd8b0", 0.8
+    room, room_color, practicals = 0.8, "#ffe0c0", 1.4   # room lights, their colour, lamps
+''', 'time_of_day = "{name}" in a scene file'),
+    "weather": ('''class {cls}(dr.Weather):
+    """{desc}"""
+    description = "{desc}"
+    wind = 1.0
+
+    def adjust(self, light, k):
+        light.sun_energy *= 0.6
+        light.tint_sky("#d9a066", 0.5 * k)
+
+    def build(self, env, k):
+        env.clouds(int(6 * k), "#e8c8a0")       # also env.precipitation("rain" or "snow", count), env.light
+''', 'weather = "{name}" in a scene file'),
     "transition": ('''class {cls}(dr.Transition):
     """{desc}"""
     description = "{desc}"

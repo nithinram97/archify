@@ -223,7 +223,8 @@ class Director:
             hit, loc, _n, _i, obj, _m = self.scene.bscene.ray_cast(dg, origin, dirn, distance=remaining)
             if not hit:
                 return True
-            if self._top(obj) not in roots and not obj.name.startswith(("camera", "floor", "ground")):
+            if self._top(obj) not in roots and not obj.name.startswith(("camera", "floor", "ground")) \
+                    and not obj.get("dr_fx"):
                 return False
             step = (loc - origin).length + 0.01
             origin, remaining = loc + dirn * 0.01, remaining - step
@@ -255,8 +256,18 @@ class Director:
         # nothing clear nearby: come in front of whatever is in the way
         dg = bpy.context.evaluated_depsgraph_get()
         dirn = (pos - aim).normalized()
-        hit, loc, *_ = self.scene.bscene.ray_cast(dg, aim + dirn * 0.05, dirn, distance=dist)
-        if not hit or (loc - aim).length < 0.3:   # the aim point itself is inside something: leave it
+        origin, left = aim + dirn * 0.05, dist
+        for _ in range(12):
+            hit, loc, _n, _i, obj, _m = self.scene.bscene.ray_cast(dg, origin, dirn, distance=left)
+            if not hit:
+                return pos
+            if not obj.get("dr_fx"):
+                break
+            left -= (loc - origin).length + 0.01
+            origin = loc + dirn * 0.01
+        else:
+            return pos
+        if (loc - aim).length < 0.3:   # the aim point itself is inside something: leave it
             return pos
         return loc - dirn * 0.12
 

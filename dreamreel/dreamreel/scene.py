@@ -51,7 +51,8 @@ def _reset_blender():
 
 
 class Scene:
-    def __init__(self, set=None, name=None, length=None, lighting=None, time_of_day="day"):
+    def __init__(self, set=None, name=None, length=None, lighting=None, time_of_day=None, weather=None,
+                 weather_strength=None):
         global CURRENT
         _reset_blender()
         self.project = project.current()
@@ -77,6 +78,8 @@ class Scene:
         self.transition = None   # how this scene comes in after the previous one (see editing.py)
         self.fixed_length = length
         self.time_of_day = time_of_day
+        self.weather = weather
+        self.weather_strength = weather_strength
         self.voices = Voices(self.project.root if self.project else None,
                              engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True))
         if isinstance(set, dict):
@@ -182,8 +185,8 @@ class Scene:
     @classmethod
     def from_spec(cls, spec, name=None):
         """Build a scene from a scene file's contents: set, cast, time_of_day and beats."""
-        s = cls(spec.get("set"), name=name, time_of_day=spec.get("time_of_day", "day"),
-                length=spec.get("length"))
+        s = cls(spec.get("set"), name=name, time_of_day=spec.get("time_of_day"), weather=spec.get("weather"),
+                weather_strength=spec.get("weather_strength"), length=spec.get("length"))
         cast = spec.get("cast", [])
         if cast:
             s.cast(*cast)
@@ -344,54 +347,16 @@ class Scene:
 
     # ------------------------------------------------------------------ look
     def _light(self, lighting):
-        sc = self.bscene
-        world = bpy.data.worlds.new("world")
-        sc.world = world
-        world.use_nodes = True
-        bg = world.node_tree.nodes.get("Background")
-        outdoor = self.set is not None and self.set.outdoor
-        night = self.time_of_day == "night"
-        custom = self.set is not None and self.set.lighting(self, night)
-        sky = "#22305a" if night else ("#a9d2f0" if outdoor else "#f1e6d6")
-        bg.inputs["Color"].default_value = look.rgba(sky)
-        bg.inputs["Strength"].default_value = 0.25 if night else (0.9 if outdoor else 0.55)
-
-        def area(name, loc, energy, color, size, target=(0, 0, 0.6)):
-            data = bpy.data.lights.new(name, "AREA")
-            data.energy = energy
-            data.color = look.rgb(color)
-            data.size = size
-            obj = bpy.data.objects.new(name, data)
-            sc.collection.objects.link(obj)
-            obj.location = loc
-            d = Vector(target) - Vector(loc)
-            obj.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
-            return obj
-
-        if custom:
-            pass
-        elif outdoor:
-            data = bpy.data.lights.new("sun", "SUN")
-            data.energy = 0.6 if night else 3.2
-            data.color = look.rgb("#aab8ff" if night else "#fff1dc")
-            data.angle = math.radians(8)
-            sun = bpy.data.objects.new("sun", data)
-            sc.collection.objects.link(sun)
-            sun.rotation_euler = (math.radians(50), 0, math.radians(-35))
-        else:
-            k = 0.35 if night else 1.0
-            area("key", (-3.0, -4.5, 4.2), 900 * k, "#fff0dc", 4.0)
-            area("fill", (4.0, -3.5, 2.5), 350 * k, "#dce8ff", 5.0)
-            area("top", (0, 0, 3.5), 250 * k, "#fff6ea", 6.0)
+        """The sky, sun, weather and lights: see environment.py."""
+        from .environment import Environment
+        sp = self.set.spec if self.set is not None else {}
+        self.time_of_day = self.time_of_day or sp.get("time_of_day") or "day"
+        self.weather = self.weather or sp.get("weather") or "clear"
+        k = self.weather_strength if self.weather_strength is not None else sp.get("weather_strength", 1.0)
+        self.environment = Environment(self, self.time_of_day, self.weather, k)
         if self.set is not None:
-            for loc, color, power in self.set.lights:
-                data = bpy.data.lights.new("practical", "POINT")
-                data.energy = power * (2.5 if night else 1.0)
-                data.color = look.rgb(color)
-                data.shadow_soft_size = 0.2
-                obj = bpy.data.objects.new("practical", data)
-                sc.collection.objects.link(obj)
-                obj.location = loc
+            self.set.adjust_light(self.environment.light)
+        self.environment.build()
 
     def _render_settings(self):
         sc, r = self.bscene, self.bscene.render
@@ -422,6 +387,9 @@ class Scene:
         sh.color_type = "MATERIAL"
         sh.show_shadows = True
         sh.show_cavity = False
+        for o in bpy.data.objects:      # fog volumes and the like only show in the final render
+            if o.get("dr_final_only"):
+                o.hide_render = True
         try:
             sc.view_settings.view_transform = "Standard"
         except TypeError:
@@ -437,6 +405,9 @@ class Scene:
         for c in self.actors.values():
             c.prepare(L)
             c._alive(L)
+        self.environment.animate(L)
+        if self.set is not None:
+            self.set.animate(L)
         self.cut.build()
         if self.warps:
             self._apply_warps()
@@ -465,7 +436,8 @@ class Scene:
     def summary(self):
         """A text timeline of the scene: what a director (human or AI) checks before rendering."""
         self.finish()
-        lines = [f"scene {self.name}: {self.length:.1f} s, set {self.set.name if self.set else '-'}, "
+        air = self.time_of_day.replace("_", " ") + ("" if self.weather == "clear" else f", {self.weather}".replace("_", " "))
+        lines = [f"scene {self.name}: {self.length:.1f} s, set {self.set.name if self.set else '-'} ({air}), "
                  f"cast {', '.join(c.name for c in self.actors.values())}"]
         rows = []
         for e in self.events:
@@ -516,7 +488,7 @@ class Scene:
         rows.sort(key=lambda r: (r["t"], r["kind"] != "cut"))
         return {"length": self.length, "set": self.set.name if self.set else None,
                 "cast": [c.name for c in self.actors.values()], "events": rows, "warnings": self.check(),
-                "cards": [c[0] for c in self.cards]}
+                "cards": [c[0] for c in self.cards], "time_of_day": self.time_of_day, "weather": self.weather}
 
     def check(self):
         """Things that will probably look wrong."""
@@ -541,4 +513,5 @@ class Scene:
             "shots": self.cut.describe(),
             "screen": [list(x) for x in self.screen_fx],
             "transition": self.transition,
+            "time_of_day": self.time_of_day, "weather": self.weather,
         }

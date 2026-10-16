@@ -202,13 +202,19 @@ class Window(Prop):
     name = "window"
     description = "A window in the back wall"
     default_place = "back-right"
+    wall = True
     params = Prop.params + [Param("view", "color", default="sky", label="Outside")]
 
     def build(self, s, name, p):
         pos = s.spot_for(p, 1.2, 0.1, "back-right")
         if not s.outdoor:
             pos.y = s.depth / 2
-        sky = look.plastic(p.get("view", "sky"), 0.9, 0.0, emission=1.2)
+        if "view" in p:
+            sky = look.plastic(p["view"], 0.9, 0.0, emission=1.2)
+        else:   # shows the sky of the scene's time of day and weather
+            sky = look.plastic("sky", 0.9, 0.0, emission=1.2).copy()
+            s.glows.append((sky, "sky", 1.2))
+            s.windows.append((pos.x, pos.y, 1.25))
         shapes.box(name + ".view", 1.2, 0.05, 0.9, sky, at=(pos.x, pos.y - 0.02, 0.8), bevel=0)
         frame = look.matte("white", 0.5)
         for dz in (0.8, 1.25, 1.7):
@@ -268,18 +274,25 @@ class Bookshelf(Prop):
         w = p.get("width", 1.2)
         pos = s.spot_for(p, w, 0.35, "back")
         c = p.get("color", "darkwood")
-        shapes.box(name, w, 0.35, 1.6, c, at=(pos.x, pos.y, 0), bevel=0.01)
+        shapes.box(name + ".back", w, 0.03, 1.6, c, at=(pos.x, pos.y + 0.16, 0), bevel=0.005)
+        for sx in (-1, 1):
+            shapes.box(name, 0.04, 0.35, 1.6, c, at=(pos.x + sx * (w / 2 - 0.02), pos.y, 0), bevel=0.005)
         rng = random.Random(name)
+        for shelf in range(5):
+            shapes.box(name + ".shelf", w, 0.35, 0.03, c, at=(pos.x, pos.y, shelf * 0.38 + (0 if shelf else 0.04)),
+                       bevel=0.004)
+        shapes.box(name + ".top", w, 0.35, 0.04, c, at=(pos.x, pos.y, 1.56), bevel=0.004)
         for shelf in range(4):
-            z = 0.12 + shelf * 0.38
-            shapes.box(name + ".back", w - 0.08, 0.3, 0.33, look.matte("#3d2a1c"), at=(pos.x, pos.y + 0.03, z), bevel=0)
-            x = pos.x - w / 2 + 0.08
+            z = 0.07 + shelf * 0.38
+            x = pos.x - w / 2 + 0.06
             while x < pos.x + w / 2 - 0.12:
                 bw = rng.uniform(0.04, 0.08)
                 bh = rng.uniform(0.22, 0.3)
                 shapes.box(name + ".book", bw, 0.24, bh, rng.choice(["red", "blue", "green", "yellow", "cream", "teal"]),
                            at=(x + bw / 2, pos.y - 0.02, z), bevel=0.004)
                 x += bw + 0.008
+                if rng.random() < 0.06:
+                    x += 0.12
         s.block(pos, w, 0.35)
         return None
 
@@ -362,13 +375,14 @@ class Bench(Prop):
 
 class Tree(Prop):
     name = "tree"
-    description = "A tree"
+    description = "A tree (or any scenery: pine, palm, cactus, rock...)"
     default_place = "back-left"
-    params = Prop.params + [Param("scale", "number", default=1.0, min=0.5, max=2.5, step=0.1, label="Size")]
+    params = Prop.params + [Param("scale", "number", default=1.0, min=0.5, max=2.5, step=0.1, label="Size"),
+                            Param("variety", "scenery", default="tree", label="Kind")]
 
     def build(self, s, name, p):
         pos = s.spot_for(p, 1, 1, "back-left")
-        s.tree(name, pos, p.get("scale", 1.0), random.Random(name))
+        s.tree(name, pos, p.get("scale", 1.0), random.Random(name), kind=p.get("variety", "tree"), block=False)
         s.block(pos, 0.5, 0.5)
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.7), facing=math.pi)
         return None
@@ -411,3 +425,211 @@ class House(Prop):
         s.block(Vector((pos.x, pos.y + 1.2)), 3.0, 2.6)
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.6), facing=0.0)
         return None
+
+
+# ---------------------------------------------------------------------- more furniture
+def _wall_y(s, p, depth):
+    """For things against the back wall: the y of their front."""
+    pos = s.spot_for(p, 1, depth, "back")
+    if not s.outdoor:
+        pos.y = s.depth / 2 - depth / 2 - 0.05
+    return pos
+
+
+class Bed(Prop):
+    name = "bed"
+    description = "A bed with a pillow and blanket; you can sit on its edge"
+    default_place = "back"
+    params = Prop.params + [Param("color", "color", default="#7aa6d9", label="Blanket"),
+                            Param("frame", "color", default="wood"), Param("width", "number", default=1.4, min=0.9,
+                                                                            max=2.0, step=0.1)]
+
+    def build(self, s, name, p):
+        w, d = p.get("width", 1.4), 2.0
+        pos = _wall_y(s, dict(p, place=p.get("place", "back")), d)
+        fr = p.get("frame", "wood")
+        shapes.box(name, w + 0.1, d + 0.1, 0.25, fr, at=(pos.x, pos.y, 0), bevel=0.03)
+        shapes.box(name + ".head", w + 0.1, 0.08, 0.85, fr, at=(pos.x, pos.y + d / 2 + 0.02, 0), bevel=0.03)
+        shapes.box(name + ".mattress", w, d - 0.05, 0.18, look.matte("#f4f1ea", 0.7), at=(pos.x, pos.y, 0.25), bevel=0.06)
+        shapes.box(name + ".pillow", w * 0.7, 0.35, 0.12, look.matte("white", 0.7), at=(pos.x, pos.y + d / 2 - 0.3, 0.42),
+                   bevel=0.05)
+        shapes.box(name + ".blanket", w + 0.04, d * 0.62, 0.05, look.matte(p.get("color", "#7aa6d9"), 0.85),
+                   at=(pos.x, pos.y - d * 0.19, 0.41), bevel=0.02)
+        s.block(pos, w + 0.1, d + 0.1)
+        edge = Vector((pos.x, pos.y - d / 2 + 0.25))
+        s.add_seat(name, edge, 0.0, 0.42, (edge.x, edge.y - 0.6))
+        return None
+
+
+class Desk(Prop):
+    name = "desk"
+    description = "A desk, with a chair (seat '<name>-chair') and things on it"
+    default_place = "left"
+    params = Prop.params + [Param("color", "color", default="wood"), Param("chair", "bool", default=True),
+                            Param("facing", "choice", default="back", choices=("back", "camera"), label="Sits facing"),
+                            Param("items", "items", label="On top")]
+
+    def build(self, s, name, p):
+        w, d, h = 1.2, 0.6, 0.5
+        pos = s.spot_for(p, w, d, "left")
+        c = p.get("color", "wood")
+        shapes.box(name, w, d, 0.04, c, at=(pos.x, pos.y, h - 0.04), bevel=0.01)
+        for sx in (-1, 1):
+            shapes.box(name + ".side", 0.04, d, h - 0.04, c, at=(pos.x + sx * (w / 2 - 0.02), pos.y, 0), bevel=0.005)
+        shapes.box(name + ".drawers", 0.4, d - 0.05, h * 0.55, c, at=(pos.x + w / 2 - 0.24, pos.y, h * 0.4), bevel=0.01)
+        s.block(pos, w, d)
+        for item in p.get("items", []):
+            s.place_item(item, pos, h, w)
+        toward = 1 if p.get("facing", "back") == "back" else -1     # the sitter faces the back wall or the camera
+        if p.get("chair", True):
+            s.add_prop({"type": "chair", "name": f"{name}-chair", "at": (pos.x, pos.y - toward * (d / 2 + 0.3)),
+                        "face": (0, toward), "tucked": True, "color": p.get("chair_color", "charcoal")})
+        s.marks.setdefault(name, Mark(name, (pos.x + w / 2 + 0.4, pos.y - 0.2), facing=-math.pi / 2))
+        return None
+
+
+class Wardrobe(Prop):
+    name = "wardrobe"
+    description = "A tall wardrobe"
+    default_place = "back-left"
+    params = Prop.params + [Param("color", "color", default="#c9a27a")]
+
+    def build(self, s, name, p):
+        w, d = 1.1, 0.6
+        pos = _wall_y(s, dict(p, place=p.get("place", "back-left")), d)
+        c = p.get("color", "#c9a27a")
+        shapes.box(name, w, d, 1.95, c, at=(pos.x, pos.y, 0), bevel=0.02)
+        shapes.box(name + ".split", 0.012, 0.01, 1.8, look.matte("#5a4030"), at=(pos.x, pos.y - d / 2, 0.08), bevel=0)
+        for sx in (-1, 1):
+            shapes.box(name + ".handle", 0.025, 0.04, 0.2, "#e2b53e", at=(pos.x + sx * 0.06, pos.y - d / 2 - 0.02, 0.95),
+                       bevel=0.005)
+        s.block(pos, w, d)
+        s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.6), facing=math.pi)
+        return None
+
+
+class Television(Prop):
+    name = "tv"
+    description = "A television on a stand"
+    default_place = "left"
+    params = Prop.params + [Param("facing", "facing", default="right"), Param("on", "bool", default=True)]
+
+    def build(self, s, name, p):
+        pos = s.spot_for(p, 1.0, 0.45, "left")
+        f = s.seat_facing(p, pos)
+        root = shapes.empty(name, at=(pos.x, pos.y, 0))
+        root.rotation_euler.z = f
+        shapes.box(name + ".stand", 1.1, 0.42, 0.42, "charcoal", root, bevel=0.02)
+        shapes.box(name, 1.0, 0.06, 0.6, look.plastic("#1c1a1a", 0.3, 0.4), root, at=(0, 0.05, 0.47), bevel=0.015)
+        screen = look.plastic("#6fa8dc" if p.get("on", True) else "#202024", 0.2, 0.3,
+                              emission=1.5 if p.get("on", True) else 0.0)
+        shapes.box(name + ".screen", 0.92, 0.01, 0.52, screen, root, at=(0, 0.015, 0.51), bevel=0)
+        if p.get("on", True):
+            fwd = Vector((math.sin(f), -math.cos(f)))
+            s.lights.append(((pos.x + fwd.x * 0.6, pos.y + fwd.y * 0.6, 0.8), "#9cc9ec", 25))
+        s.block(pos, 1.1, 0.45)
+        return root
+
+
+class Painting(Prop):
+    name = "painting"
+    description = "A framed picture on the back wall"
+    default_place = "back"
+    wall = True
+    params = Prop.params + [Param("color", "color", default="#e8b33c", label="Main colour"),
+                            Param("height", "number", default=1.5, min=0.8, max=2.2, step=0.05)]
+
+    def build(self, s, name, p):
+        pos = s.spot_for(p, 0.9, 0.05, "back")
+        y = s.depth / 2 - 0.02 if not s.outdoor else pos.y
+        z = p.get("height", 1.5)
+        shapes.box(name + ".frame", 0.9, 0.04, 0.68, look.matte("#6e4a2f", 0.5), at=(pos.x, y, z - 0.34), bevel=0.01)
+        shapes.box(name, 0.78, 0.045, 0.56, look.matte("#f3e6cc"), at=(pos.x, y - 0.002, z - 0.28), bevel=0)
+        rng = random.Random(name)
+        for k in range(3):
+            shapes.box(name + ".paint", rng.uniform(0.15, 0.35), 0.05, rng.uniform(0.12, 0.3),
+                       look.matte(rng.choice([p.get("color", "#e8b33c"), "teal", "red", "navy", "pink"])),
+                       at=(pos.x + rng.uniform(-0.2, 0.2), y - 0.004, z - 0.25 + rng.uniform(0, 0.2)), bevel=0)
+        s.focus.setdefault(name, Vector((pos.x, y, z)))
+        return None
+
+
+class WallClock(Prop):
+    name = "clock"
+    description = "A round clock on the back wall"
+    default_place = "back-right"
+    wall = True
+    params = Prop.params + [Param("time", "text", default="10:10", label="Shows")]
+
+    def build(self, s, name, p):
+        pos = s.spot_for(p, 0.4, 0.05, "back-right")
+        y = s.depth / 2 - 0.03 if not s.outdoor else pos.y
+        z = 1.85
+        face = shapes.cylinder(name, 0.2, 0.04, look.matte("white", 0.5), at=(pos.x, y, z), bevel=0.01, segments=32)
+        face.rotation_euler.x = math.pi / 2
+        rim = shapes.torus(name + ".rim", 0.2, 0.02, "charcoal", at=(pos.x, y - 0.02, z))
+        rim.rotation_euler.x = math.pi / 2
+        try:
+            hh, mm = [int(v) for v in str(p.get("time", "10:10")).split(":")]
+        except ValueError:
+            hh, mm = 10, 10
+        for length, ang in ((0.1, (hh % 12 + mm / 60) / 12), (0.16, mm / 60)):
+            hand = shapes.box(name + ".hand", 0.015, 0.01, length, "charcoal", at=(pos.x, y - 0.045, z), bevel=0)
+            hand.rotation_euler.y = ang * 2 * math.pi
+        s.focus.setdefault(name, Vector((pos.x, y, z)))
+        return None
+
+
+class Blackboard(Prop):
+    name = "blackboard"
+    description = "A blackboard on the back wall (a classroom)"
+    default_place = "back"
+    wall = True
+    params = Prop.params + [Param("width", "number", default=2.4, min=1, max=4, step=0.1)]
+
+    def build(self, s, name, p):
+        w = p.get("width", 2.4)
+        pos = s.spot_for(p, w, 0.05, "back")
+        y = s.depth / 2 - 0.03 if not s.outdoor else pos.y
+        shapes.box(name + ".frame", w + 0.1, 0.04, 1.1, look.matte("wood"), at=(pos.x, y, 0.85), bevel=0.01)
+        shapes.box(name, w, 0.045, 1.0, look.matte("#2f4a3a", 0.9), at=(pos.x, y - 0.003, 0.9), bevel=0)
+        shapes.box(name + ".tray", w, 0.08, 0.03, look.matte("wood"), at=(pos.x, y - 0.05, 0.84), bevel=0.005)
+        for k in range(4):
+            shapes.box(name + ".chalk", 0.5 - 0.1 * k, 0.046, 0.025, look.matte("#e8ece6"),
+                       at=(pos.x - w / 4 + 0.05 * k, y - 0.005, 1.6 - 0.15 * k), bevel=0)
+        s.focus.setdefault(name, Vector((pos.x, y, 1.4)))
+        s.marks[name] = Mark(name, (pos.x - w / 2 + 0.3, y - 0.7), facing=math.pi)
+        return None
+
+
+class Car(Prop):
+    name = "car"
+    description = "A small toy car"
+    default_place = "front-left"
+    params = Prop.params + [Param("color", "color", default="red"),
+                            Param("facing", "choice", default="left", choices=("left", "right", "camera", "back"))]
+
+    def build(self, s, name, p):
+        if "at" in p:
+            pos = Vector(p["at"])
+        else:
+            pos = s.spot_for(p, 1.9, 0.9, "front-left")
+        f = {"left": -math.pi / 2, "right": math.pi / 2, "camera": 0.0, "back": math.pi}[p.get("facing", "left")]
+        root = shapes.empty(name, at=(pos.x, pos.y, 0))
+        root.rotation_euler.z = f + math.pi / 2       # the car is built pointing along +x
+        c = look.plastic(p.get("color", "red"), 0.3, 0.6)
+        shapes.box(name, 2.0, 0.9, 0.42, c, root, at=(0, 0, 0.16), bevel=0.12)
+        shapes.box(name + ".cabin", 1.05, 0.8, 0.36, c, root, at=(-0.12, 0, 0.55), bevel=0.12)
+        glass = look.plastic("#2a3a4a", 0.1, 0.8)
+        shapes.box(name + ".glass", 1.0, 0.82, 0.24, glass, root, at=(-0.12, 0, 0.6), bevel=0.08)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                wheel = shapes.cylinder(name + ".wheel", 0.17, 0.12, "charcoal", root,
+                                        at=(sx * 0.62, sy * 0.4, 0.17), bevel=0.02, segments=20)
+                wheel.rotation_euler.x = math.pi / 2
+                wheel.location.y += sy * 0.06
+            shapes.sphere(name + ".light", 0.06, look.plastic("#fff6d8", 0.2, 0.2, emission=0.8), root,
+                          at=(1.0, sx * 0.3, 0.42), segments=12)
+        s.block(pos, 2.0 if abs(math.sin(f)) > 0.5 else 0.9, 0.9 if abs(math.sin(f)) > 0.5 else 2.0)
+        s.marks.setdefault(name, Mark(name, (pos.x, pos.y - 0.9), facing=math.pi))
+        return root

@@ -10,11 +10,12 @@ Since then:
   moves, the 180° rule, lead room, obstruction avoidance and a mood-aware automatic director.
 - Editing: ten transitions, an edit list with cross-cutting, J and L cuts and split screens, slow
   motion with speed ramps, freeze frames, jump cuts and screen effects.
+- Places: eight outdoor biomes with generated terrain and rule-based scenery, a generated town
+  street, rooms that furnish themselves, seven times of day and eight kinds of weather.
 
 Next, roughly in order:
 
-## Places and looks (next)
-- Environments: terrain, sky and weather, more interiors, rule-based layout of furniture and nature.
+## Looks (next)
 - Visual styles: toon, clay, anime, noir, storybook, realistic.
 
 ## Acting

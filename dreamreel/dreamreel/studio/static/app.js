@@ -722,7 +722,14 @@ function sceneHeader(file, spec, chk) {
         h("button", { class: "btn ghost danger sm", onclick: async () => { if (!confirm(`Delete scene ${sceneLabel(file)}?`)) return; await api("DELETE", `/api/scenes/${file}`).catch(fail); delete S.sceneSpec[file]; S.scene = null; refresh(); } }, "Delete"))),
     edit ? h("div", { class: "fields" },
       h("label", { class: "field" }, h("span", {}, "Where"), select(sets, spec.set, (v) => change("set", v), { label: "Set" })),
-      h("label", { class: "field" }, h("span", {}, "Time of day"), seg(["day", "night"], spec.time_of_day || "day", (v) => change("time_of_day", v === "day" ? undefined : v))),
+      h("label", { class: "field" }, h("span", {}, "Time of day"),
+        select(choicesOf("time"), spec.time_of_day || "day", (v) => change("time_of_day", v === "day" ? undefined : v), { label: "Time of day" })),
+      h("label", { class: "field" }, h("span", {}, "Weather"),
+        select(choicesOf("weather"), spec.weather || "clear", (v) => change("weather", v === "clear" ? undefined : v), { label: "Weather" })),
+      spec.weather && spec.weather !== "clear" ? h("label", { class: "field" }, h("span", {}, "How much"),
+        h("input", { type: "number", min: 0.2, max: 2.5, step: 0.1, style: "width:96px", value: spec.weather_strength ?? "",
+          placeholder: "1", "aria-label": "Weather strength",
+          onchange: (e) => change("weather_strength", e.target.value === "" ? undefined : +e.target.value) })) : null,
       h("div", { class: "field", style: "grid-column: span 2" }, h("span", {}, "Who's in it"),
         multiChips(Object.keys(S.state.cast).map((k) => [k, nameOf(k)]), spec.cast || [], (v) => {
           const gone = (spec.cast || []).filter((k) => !v.includes(k));
@@ -912,8 +919,11 @@ function picturesCard(file) {
 // ------------------------------------------------------------------ TOOLBOX (every feature, from the plugins)
 const KIND_TITLES = [
   ["character", "Kinds of character"], ["hair", "Hair"], ["extra", "Extras"], ["mood", "Moods"], ["gesture", "Gestures"],
-  ["action", "Things characters and scenes can do"], ["set", "Kinds of place"], ["prop", "Things in sets"], ["item", "Things on tables"],
-  ["shot", "Camera shots"], ["voice", "Voice engines"],
+  ["action", "Things characters and scenes can do"], ["set", "Kinds of place"], ["biome", "Landscapes"],
+  ["scenery", "Nature and scenery"], ["prop", "Things in sets"], ["item", "Things on tables"],
+  ["time", "Times of day"], ["weather", "Weather"], ["body", "Body plans"],
+  ["shot", "Camera shots"], ["move", "Camera moves"], ["transition", "Transitions"], ["screen", "Screen effects"],
+  ["voice", "Voice engines"],
 ];
 
 function toolboxView() {

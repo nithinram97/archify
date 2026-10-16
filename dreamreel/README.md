@@ -102,6 +102,16 @@ moods with the same face system.
 ![Nine creatures from eight body plans](docs/media/creatures.jpg)
 ![A procedural four-beat dog walk](docs/media/dog-walk.jpg)
 
+## Any place, any light, any weather
+
+Rooms furnish themselves (living room, kitchen, bedroom, office, classroom, café). Outdoors, a
+biome lays out the land and what grows on it by rules: meadow, forest, autumn woods, beach, desert,
+snow, mountains or the moon. A whole town street (buildings, shops, pavements, lamps, parked cars)
+comes from one line. Every scene picks its time of day (dawn to night) and weather (clouds,
+overcast, fog, rain, snow, storms with lightning, wind in the trees).
+
+![Twelve places, times of day and weathers](docs/media/places.jpg)
+
 ## A real camera
 
 Shots combine framing (establishing to extreme close-up, two-shot, over-the-shoulder, point of view,
@@ -124,7 +134,8 @@ and screen effects fade, flash or dip the picture. Changing the edit never re-re
 ## Everything is extensible
 
 Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,
-actions, props, set kinds, camera shots and moves, transitions, screen effects and voice engines. A film can add its own in its
+actions, props, set kinds, biomes, scenery, times of day, weather, camera shots and moves, transitions,
+screen effects and voice engines. A film can add its own in its
 `extensions/` folder (`dreamreel extend prop campfire` starts one). New classes immediately work
 in cast, set and scene files and show up in the studio's menus. When a film needs something
 dreamreel doesn't have, you or your AI agent add it as a class instead of working around it.

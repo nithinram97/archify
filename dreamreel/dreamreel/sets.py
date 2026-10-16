@@ -82,6 +82,9 @@ class Set(Plugin):
         self.lights = []     # (location, colour, power) of practical lights (lamps)
         self.walls = []      # hidden in the top-down map
         self.focus = {}      # prop or item name -> its middle (for insert shots)
+        self.sway = []       # (object, how much) that move in the wind: trees, plants
+        self.glows = []      # (material, kind, strength): windows that show the sky, lit windows at night
+        self.windows = []    # (x, y, z) of windows in rooms: daylight comes in through them
         self.build_environment()
         for p in self.spec.get("props", []):
             self.add_prop(p)
@@ -95,8 +98,34 @@ class Set(Plugin):
         """Make the floor, walls, sky... (override in subclasses)."""
 
     def lighting(self, scene, night):
-        """Add lights for this set. Return True if you did, False for dreamreel's default lighting."""
+        """Add lights for this set. Return True if you did, False for dreamreel's default lighting.
+        `scene.environment.light` says what the light is like (time of day and weather)."""
         return False
+
+    def adjust_light(self, light):
+        """Change the light before it is built (the moon has a black sky)."""
+
+    def animate(self, length):
+        """Move things in the set once the scene's length is known (waves)."""
+
+    def apply_light(self, light):
+        """Match the set to the time of day: windows show the sky, town windows light up at night."""
+        rng = random.Random(self.name)
+        for mat, kind, strength in self.glows:
+            bsdf = mat.node_tree.nodes.get("Principled BSDF") if mat.node_tree else None
+            if bsdf is None:
+                continue
+            if kind == "sky":
+                color = (*look.rgb(light.horizon), 1)
+                bsdf.inputs["Base Color"].default_value = color
+                bsdf.inputs["Emission Color"].default_value = color
+                bsdf.inputs["Emission Strength"].default_value = strength * max(0.25, light.sky_strength)
+                mat.diffuse_color = color
+            elif kind == "lit":
+                on = rng.random() < light.lit_windows
+                bsdf.inputs["Emission Strength"].default_value = strength if on else 0.0
+                if on:
+                    mat.diffuse_color = (*look.rgb("#ffd890"), 1)
 
     # ------------------------------------------------------------------ places
     def zone(self, place, inset=0.9):
@@ -180,12 +209,9 @@ class Set(Plugin):
             return math.atan2(q.x - pos.x, -(q.y - pos.y))
         return {"left": -math.pi / 2, "right": math.pi / 2, "back": math.pi}.get(target, 0.0)
 
-    def tree(self, name, at, scale, rng):
-        x, y = at
-        shapes.cylinder(name, 0.09 * scale, 1.0 * scale, look.matte("darkwood"), at=(x, y, 0), r2=0.06 * scale)
-        for j in range(3):
-            shapes.sphere(name, (0.55 - 0.1 * j) * scale, look.plastic(rng.choice(["leaf", "#5aa84f", "#3f8a44"]), 0.6, 0.1),
-                          at=(x + rng.uniform(-0.15, 0.15) * scale, y, (1.15 + 0.38 * j) * scale))
+    def tree(self, name, at, scale, rng, kind="tree", **kw):
+        """A tree (or any scenery: pine, palm, cactus, rock, bush...) at (x, y)."""
+        return plugins.get("scenery", kind)().place(self, name, Vector(at[:2]), scale, rng, **kw)
 
     # ------------------------------------------------------------------ walking round things
     def _clear(self, a, b, pad=0.32):
@@ -243,10 +269,64 @@ class Set(Plugin):
 
 
 
+# A furnished room: what goes where. Your own props come first; these fill the places still free.
+FURNISH = {
+    "living_room": [{"type": "window", "place": "back-left"}, {"type": "sofa", "place": "back"},
+                    {"type": "painting", "place": "back"}, {"type": "lamp", "place": "back-right"},
+                    {"type": "rug", "place": "center"}, {"type": "tv", "place": "left", "facing": "right"},
+                    {"type": "plant", "place": "right"}, {"type": "door", "place": "back-right"}],
+    "kitchen": [{"type": "door", "place": "back-left"}, {"type": "fridge", "place": "back"},
+                {"type": "counter", "place": "back-right", "items": ["cup", "plate"]},
+                {"type": "window", "place": "back-right"}, {"type": "clock", "place": "back"},
+                {"type": "table", "place": "center", "chairs": 2, "items": ["plate"]}, {"type": "plant", "place": "left"}],
+    "bedroom": [{"type": "bed", "place": "back"}, {"type": "wardrobe", "place": "back-left"},
+                {"type": "window", "place": "back-right"}, {"type": "lamp", "place": "right"},
+                {"type": "rug", "place": "front"}, {"type": "desk", "place": "left", "items": ["book"]},
+                {"type": "painting", "place": "back", "height": 1.75}],
+    "office": [{"type": "window", "place": "back-left"}, {"type": "bookshelf", "place": "back"},
+               {"type": "plant", "place": "back-right"}, {"type": "desk", "place": "left", "items": ["laptop"]},
+               {"type": "desk", "place": "right", "items": ["laptop", "cup"]}, {"type": "clock", "place": "back"},
+               {"type": "door", "place": "back-right"}],
+    "classroom": [{"type": "blackboard", "place": "back"}, {"type": "desk", "place": "back-left", "facing": "camera",
+                                                               "items": ["book"]},
+                  {"type": "desk", "place": "left", "items": ["book"]}, {"type": "desk", "place": "center"},
+                  {"type": "desk", "place": "right", "items": ["book"]}, {"type": "bookshelf", "place": "back-right"},
+                  {"type": "clock", "place": "back-right"}, {"type": "door", "place": "back-left"}],
+    "cafe": [{"type": "counter", "place": "back", "items": ["cup", "cup", "plate"]}, {"type": "window", "place": "back-left"},
+             {"type": "plant", "place": "back-right"}, {"type": "table", "place": "left", "width": 0.9, "chairs": 2,
+                                                          "items": ["cup"]},
+             {"type": "table", "place": "right", "width": 0.9, "chairs": 2, "items": ["cup"]},
+             {"type": "painting", "place": "back-right"}, {"type": "lamp", "place": "front-left"}],
+}
+
+
+def furnish(kind, own):
+    """The props of a furnished room: yours, plus the room type's furniture wherever a place is free."""
+    from . import plugins as _plugins
+    own = list(own or [])
+    taken_floor = {p.get("place", _plugins.get("prop", p["type"]).default_place) for p in own
+                   if not getattr(_plugins.get("prop", p["type"]), "wall", False)}
+    have = {p["type"] for p in own}
+    out = list(own)
+    for p in FURNISH[kind]:
+        cls = _plugins.get("prop", p["type"])
+        wall = getattr(cls, "wall", False)
+        if p["type"] in have and p["type"] in ("door", "window", "sofa", "bed", "counter", "fridge", "tv",
+                                                "blackboard", "clock", "bookshelf", "wardrobe"):
+            continue
+        if not wall and p["place"] in taken_floor:
+            continue
+        if not wall:
+            taken_floor.add(p["place"])
+        out.append(dict(p))
+    return out
+
+
 class Room(Set):
     """A room with no front wall (the camera side), like a sitcom set."""
-    description = "Indoors: floor, three walls, furniture"
+    description = "Indoors: floor, three walls, furniture (or furnished for you)"
     params = [
+        Param("furnish", "choice", default=None, choices=tuple(FURNISH), label="Furnish as"),
         Param("size", "choice", default="medium", choices=tuple(SIZES)),
         Param("walls", "color", default="cream"),
         Param("floor", "choice", default="wood", choices=tuple(FLOORS)),
@@ -258,6 +338,8 @@ class Room(Set):
         size = spec.get("size", "medium")
         self.size = SIZES[size] if isinstance(size, str) else tuple(size)
         self.wall_h = spec.get("wall_height", 2.4)
+        if spec.get("furnish"):
+            spec = dict(spec, props=furnish(spec["furnish"], spec.get("props")))
         super().__init__(spec, name)
 
     def build_environment(self):
@@ -284,32 +366,59 @@ class Room(Set):
 
 
 class Outdoor(Set):
-    """Open ground with trees and hills."""
-    description = "Outdoors: ground, trees, hills, sky"
+    """Outdoors: a biome (meadow, forest, beach, desert, snow, mountains, moon...) with its terrain and
+    scenery laid out by rules round a flat acting area. See nature.py."""
+    description = "Outdoors: any landscape, from a meadow to the moon"
     outdoor = True
     size = (6.5 * 1.4, 4.4 * 1.6)
     params = [
-        Param("ground", "choice", default="grass", choices=tuple(FLOORS)),
-        Param("trees", "number", default=6, min=0, max=30, step=1),
-        Param("hills", "number", default=3, min=0, max=10, step=1),
+        Param("biome", "biome", default="meadow", label="Landscape"),
+        Param("terrain", "choice", default=None, choices=("flat", "rolling", "hills", "mountains", "dunes", "craters"),
+              label="Land"),
+        Param("density", "number", default=None, min=0, max=3, step=0.1, label="How much scenery"),
+        Param("ground", "color", label="Ground colour"),
         Param("path", "bool", default=True, label="Footpath"),
         Param("seed", "number", default=3, min=0, max=999, step=1, label="Shuffle"),
     ]
 
+    def __init__(self, spec, name="set"):
+        self.foam = []
+        super().__init__(spec, name)
+
     def build_environment(self):
+        from . import nature
         spec = self.spec
         W, D = self.width, self.depth
-        ground = spec.get("ground", "grass")
-        shapes.cylinder("ground", max(W, D) * 1.6, 0.1, look.matte(FLOORS.get(ground, ground), 0.9), at=(0, D * 0.3, -0.1),
-                        bevel=0, segments=64)
-        if spec.get("path", True):
-            shapes.box("path", W * 3, 0.7, 0.02, look.matte(FLOORS["stone"], 0.8), at=(0, -0.2, -0.01), bevel=0.01)
-        rng = random.Random(spec.get("seed", 3))
-        for i in range(int(spec.get("trees", 6))):
-            x = rng.uniform(-W * 0.8, W * 0.8)
-            y = rng.uniform(D * 0.45, D * 1.2)
-            self.tree(f"tree{i}", (x, y), rng.uniform(0.8, 1.4), rng)
-        for i in range(int(spec.get("hills", 3))):
-            shapes.ellipsoid("hill", rng.uniform(6, 10), rng.uniform(3, 5), rng.uniform(1.5, 3),
-                             look.matte(rng.choice(["#86c06a", "#74b05c", "#93c977"]), 0.9),
-                             at=(rng.uniform(-W, W), D * 1.6 + rng.uniform(0, 3), -0.3))
+        self.biome = plugins.get("biome", spec.get("biome") or "meadow")()
+        seed = int(spec.get("seed", 3))
+        rng = random.Random(seed)
+        style = spec.get("terrain")
+        if style is None and "hills" in spec:          # older set files: hills = 0 meant flat
+            style = "rolling" if spec["hills"] else "flat"
+        self.terrain = nature.Terrain(style or self.biome.terrain, seed, W, D)
+        ground = spec.get("ground") or self.biome.ground
+        ground = FLOORS.get(ground, ground)
+        far = self.biome.far if not spec.get("ground") else None
+        self.terrain.extra = getattr(self.biome, "height", None)
+        if self.terrain.extra is not None:
+            base = self.terrain.height
+            self.terrain.height = lambda x, y: base(x, y) + self.biome.height(x, y, self)
+        self.terrain.build(ground, far, self.biome.snow_line)
+        if spec.get("path", True) and self.biome.path:
+            shapes.box("ground.path", W + 3.0, 0.7, 0.02, look.matte(self.biome.path, 0.8), at=(0, -0.2, -0.01),
+                       bevel=0.01)
+        self.biome.build_extra(self, rng)
+        density = spec.get("density")
+        if density is None:
+            density = spec["trees"] / 6 if "trees" in spec else 1.0
+        from . import nature as _n
+        _n.scatter(self, self.biome, rng, float(density))
+
+    def ground_height(self, x, y):
+        return self.terrain.height(x, y)
+
+    def adjust_light(self, light):
+        self.biome.adjust_light(light)
+
+    def animate(self, length):
+        self.biome.animate(self, length)

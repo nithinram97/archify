@@ -59,6 +59,16 @@ Movement follows the body: `walk_to` walks, trots, gallops, scuttles, swims, sli
 `fly_to` needs wings. Gestures check the body: a snake can't `wave`, but it can `spin`; a dog can
 `tail_wag`, `sniff`, `roar`, `rear_up`. Run `dreamreel plugins gesture -v` to see what each needs.
 
+## Places, light and weather
+
+Any place can be built from a set file without modelling: rooms furnish themselves (`furnish =
+"bedroom"`), outdoor sets pick a `biome` (meadow, forest, autumn, beach, desert, snow, mountains,
+moon), and `kind = "street"` makes a whole town street. Time of day and weather go in each scene
+file, so one set serves a sunny morning, a rainy night and a storm. Light tells the story: golden
+hour for warmth, dusk for melancholy, night and rain for danger, fog for mystery, a storm's
+lightning for a shock. New biomes, scenery, times of day and weather are classes like everything
+else (`dreamreel extend biome volcano`).
+
 ## Camera
 
 The automatic director covers every scene well enough to start with; watch the previz first. Add a
@@ -99,7 +109,8 @@ Never fake a missing feature with coordinates or workarounds in beats. Add it as
 
 ```bash
 dreamreel extend gesture dance        # also: character, body, hair, extra, mood, action, move,
-dreamreel extend prop campfire        #       prop, set, shot, transition, screen, voice
+dreamreel extend prop campfire        #       prop, set, shot, transition, screen, voice,
+                                      #       biome, scenery, time, weather
 ```
 
 That writes a commented starting point. Then:
@@ -113,7 +124,7 @@ That writes a commented starting point. Then:
 - Subclass the nearest existing class and override only what differs (a `Character` build step,
   a `BodyPlan.skeleton`, a `Set.build_environment`...). Read the docstring at the top of the
   module you extend: plugins.py, character.py, creatures.py, parts.py, gestures.py, actions.py,
-  props.py, sets.py, camera.py, editing.py, voices.py.
+  props.py, sets.py, nature.py, town.py, environment.py, camera.py, editing.py, voices.py.
 - Check it: `dreamreel plugins` lists it, then use it in a file, `dreamreel check`, and render a
   frame to look at it.
 - A scene can also be a Python script (`scenes/NNN_name.py`) for something beats can't say yet,
