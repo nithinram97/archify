@@ -1,0 +1,10 @@
+name = "Gran"
+height = 0.95
+skin = "skin5"
+hair = "bun"
+hair_color = "grey"
+top = "purple"
+outfit = "dress"
+shoes = "charcoal"
+extras = ["glasses"]
+voice = "en_GB-southern_english_female-low"

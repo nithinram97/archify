@@ -1,0 +1,12 @@
+# An outdoor set (not used by the example scenes; try it in a scene of your own).
+kind = "outdoor"
+ground = "grass"
+trees = 7
+
+[[props]]
+type = "bench"
+place = "back"
+
+[[props]]
+type = "streetlamp"
+place = "back-right"

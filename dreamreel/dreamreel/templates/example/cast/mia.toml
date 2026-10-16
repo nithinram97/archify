@@ -1,0 +1,12 @@
+# How Mia looks and sounds. Every field is optional.
+name = "Mia"
+height = 1.0
+body = "bean"          # bean, round, tall, kid
+skin = "skin3"         # skin1 (lightest) ... skin6 (deepest), or a hex colour
+hair = "bob"           # none, short, bob, long, spiky, bun, curly, ponytail, mohawk
+hair_color = "black"
+top = "red"
+bottom = "denim"
+shoes = "white"
+extras = ["glasses"]   # glasses, hat, cap, scarf, tie, bow, beard, moustache, headphones
+voice = "en_US-amy-medium"
