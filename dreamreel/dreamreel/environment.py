@@ -75,6 +75,8 @@ class Light:
         self.fog = 0.0                # fog density outdoors
         self.fog_color = "#dfe3e8"
         self.wind = 0.3               # how much trees sway
+        self.key = 1.0                # the main light (a style like noir makes it harder...)
+        self.fill = 1.0               # ...and the light filling the shadows weaker
         for k, v in kw.items():
             setattr(self, k, v)
 
@@ -350,7 +352,7 @@ class Environment:
         else:
             wall = mix("#f1e6d6", L.room_color, 0.4)
             bg.inputs["Color"].default_value = (*wall, 1)
-            bg.inputs["Strength"].default_value = 0.55 * max(0.3, L.room)
+            bg.inputs["Strength"].default_value = 0.55 * max(0.3, L.room) * L.fill
             world.color = wall
         self.background = bg
 
@@ -370,7 +372,8 @@ class Environment:
         self.sun = sun
         # a soft fill from the camera side, stronger when the sun is weak (night, rain), so faces read
         weak = max(0.12, 1.0 - L.sun_energy / 3.2)
-        self._area("fill", (1.5, -9.0, 5.0), 900 * weak, mix(L.zenith, "#ffffff", 0.55), 9.0, target=(0, 0, 0.7))
+        self._area("fill", (1.5, -9.0, 5.0), 900 * weak * L.fill, mix(L.zenith, "#ffffff", 0.55), 9.0,
+                   target=(0, 0, 0.7))
 
     def _area(self, name, loc, energy, color, size, target=(0, 0, 0.6)):
         data = bpy.data.lights.new(name, "AREA")
@@ -386,9 +389,10 @@ class Environment:
     def _room_lights(self):
         L = self.light
         k = L.room
-        self._area("key", (-3.0, -4.5, 4.2), 900 * k, mix("#fff0dc", L.room_color, 0.6), 4.0)
-        self._area("fill", (4.0, -3.5, 2.5), 350 * k, mix("#dce8ff", L.room_color, 0.3), 5.0)
-        self._area("top", (0, 0, 3.5), 250 * k, mix("#fff6ea", L.room_color, 0.5), 6.0)
+        self._area("key", getattr(L, "key_position", (-3.0, -4.5, 4.2)), 900 * k * L.key,
+                   mix("#fff0dc", L.room_color, 0.6), 4.0 if L.key <= 1 else 2.0)
+        self._area("fill", (4.0, -3.5, 2.5), 350 * k * L.fill, mix("#dce8ff", L.room_color, 0.3), 5.0)
+        self._area("top", (0, 0, 3.5), 250 * k * L.fill, mix("#fff6ea", L.room_color, 0.5), 6.0)
         # daylight through the windows, in the colour of the sun
         for x, y, z in (self.set.windows if self.set is not None else []):
             glow = L.sun_energy / 3.2

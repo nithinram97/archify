@@ -69,6 +69,12 @@ hour for warmth, dusk for melancholy, night and rain for danger, fog for mystery
 lightning for a shock. New biomes, scenery, times of day and weather are classes like everything
 else (`dreamreel extend biome volcano`).
 
+## Look
+
+The film's `style` (film.toml) is chosen once with the film maker: toy, toon, anime, clay, paper,
+storybook, noir or realistic. A scene may change it for a reason (a noir flashback, a storybook
+dream). New styles are classes (`dreamreel extend style comic`).
+
 ## Camera
 
 The automatic director covers every scene well enough to start with; watch the previz first. Add a
@@ -110,7 +116,7 @@ Never fake a missing feature with coordinates or workarounds in beats. Add it as
 ```bash
 dreamreel extend gesture dance        # also: character, body, hair, extra, mood, action, move,
 dreamreel extend prop campfire        #       prop, set, shot, transition, screen, voice,
-                                      #       biome, scenery, time, weather
+                                      #       biome, scenery, time, weather, style
 ```
 
 That writes a commented starting point. Then:
@@ -124,7 +130,7 @@ That writes a commented starting point. Then:
 - Subclass the nearest existing class and override only what differs (a `Character` build step,
   a `BodyPlan.skeleton`, a `Set.build_environment`...). Read the docstring at the top of the
   module you extend: plugins.py, character.py, creatures.py, parts.py, gestures.py, actions.py,
-  props.py, sets.py, nature.py, town.py, environment.py, camera.py, editing.py, voices.py.
+  props.py, sets.py, nature.py, town.py, environment.py, styles.py, camera.py, editing.py, voices.py.
 - Check it: `dreamreel plugins` lists it, then use it in a file, `dreamreel check`, and render a
   frame to look at it.
 - A scene can also be a Python script (`scenes/NNN_name.py`) for something beats can't say yet,

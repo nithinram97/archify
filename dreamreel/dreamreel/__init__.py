@@ -39,4 +39,5 @@ from .look import COLORS  # noqa: F401,E402
 from .editing import Editor, ScreenEffect, Transition  # noqa: F401,E402
 from .environment import Light, TimeOfDay, Weather  # noqa: F401,E402
 from .nature import Biome, Scenery, Terrain  # noqa: F401,E402
-from . import actions, editing, environment, gestures, nature, parts, props, timewarp, town  # noqa: F401,E402
+from .styles import Style  # noqa: F401,E402
+from . import actions, editing, environment, gestures, nature, parts, props, styles, timewarp, town  # noqa: F401,E402

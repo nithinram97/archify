@@ -459,6 +459,20 @@ EXTEND_TEMPLATES = {
     def build(self, env, k):
         env.clouds(int(6 * k), "#e8c8a0")       # also env.precipitation("rain" or "snow", count), env.light
 ''', 'weather = "{name}" in a scene file'),
+    "style": ('''class {cls}(dr.Style):
+    """{desc}"""
+    description = "{desc}"
+    view = ("Standard", "None")             # colour management (view transform, look)
+    outline, outline_color = 0.012, "#1c1a1a"
+    bands = [(0.0, 0.5), (0.25, 0.8), (0.6, 1.0)]  # cel shading tones: (where, brightness or colour)
+    saturation = 1.2
+    steps = 1                                # 2 or 3: animate on twos or threes
+
+    def adjust_light(self, light):
+        light.fill = 0.6                     # see dr.Light for everything that can change
+
+    # def material(self, mat, scene): ...    # or change every material yourself
+''', 'style = "{name}" in film.toml (the whole film) or in a scene file'),
     "transition": ('''class {cls}(dr.Transition):
     """{desc}"""
     description = "{desc}"

@@ -12,11 +12,13 @@ Since then:
   motion with speed ramps, freeze frames, jump cuts and screen effects.
 - Places: eight outdoor biomes with generated terrain and rule-based scenery, a generated town
   street, rooms that furnish themselves, seven times of day and eight kinds of weather.
+- Looks: eight visual styles (toy, toon, anime, clay, paper, storybook, noir, realistic) for a
+  whole film or a single scene.
 
 Next, roughly in order:
 
-## Looks (next)
-- Visual styles: toon, clay, anime, noir, storybook, realistic.
+## Looks
+- Styles that change over a scene (fading into a memory); hatching and watercolour styles.
 
 ## Acting
 - Hold and hand over props (`pick_up`, `give`, `put_down`), open doors.
@@ -38,7 +40,6 @@ Next, roughly in order:
 ## Film-making
 - Shot variety learnt from scene content (reaction shots, cutaways to props).
 - Sound effects library and footsteps; music ducking under dialogue.
-- More looks: claymation (12 fps, fingerprint texture), paper cut-out, low-poly storybook.
 - Cloud voice engines as plugins; multi-language voices and subtitles.
 
 ## Tooling

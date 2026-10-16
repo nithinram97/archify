@@ -52,7 +52,7 @@ def _reset_blender():
 
 class Scene:
     def __init__(self, set=None, name=None, length=None, lighting=None, time_of_day=None, weather=None,
-                 weather_strength=None):
+                 weather_strength=None, style=None):
         global CURRENT
         _reset_blender()
         self.project = project.current()
@@ -80,6 +80,7 @@ class Scene:
         self.time_of_day = time_of_day
         self.weather = weather
         self.weather_strength = weather_strength
+        self.style = plugins.get("style", style or self.film.get("style") or "toy")()
         self.voices = Voices(self.project.root if self.project else None,
                              engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True))
         if isinstance(set, dict):
@@ -186,7 +187,7 @@ class Scene:
     def from_spec(cls, spec, name=None):
         """Build a scene from a scene file's contents: set, cast, time_of_day and beats."""
         s = cls(spec.get("set"), name=name, time_of_day=spec.get("time_of_day"), weather=spec.get("weather"),
-                weather_strength=spec.get("weather_strength"), length=spec.get("length"))
+                weather_strength=spec.get("weather_strength"), style=spec.get("style"), length=spec.get("length"))
         cast = spec.get("cast", [])
         if cast:
             s.cast(*cast)
@@ -356,6 +357,7 @@ class Scene:
         self.environment = Environment(self, self.time_of_day, self.weather, k)
         if self.set is not None:
             self.set.adjust_light(self.environment.light)
+        self.style.adjust_light(self.environment.light)
         self.environment.build()
 
     def _render_settings(self):
@@ -387,6 +389,7 @@ class Scene:
         sh.color_type = "MATERIAL"
         sh.show_shadows = True
         sh.show_cavity = False
+        self.style.previz(sc)
         for o in bpy.data.objects:      # fog volumes and the like only show in the final render
             if o.get("dr_final_only"):
                 o.hide_render = True
@@ -413,6 +416,7 @@ class Scene:
             self._apply_warps()
         self.bscene.frame_start = 1
         self.bscene.frame_end = keys.CLOCK.frame(self.length) - 1   # time effects may have changed it
+        self.style.finish(self)
         self.bscene.frame_set(1)
 
     def _apply_warps(self):
@@ -513,5 +517,5 @@ class Scene:
             "shots": self.cut.describe(),
             "screen": [list(x) for x in self.screen_fx],
             "transition": self.transition,
-            "time_of_day": self.time_of_day, "weather": self.weather,
+            "time_of_day": self.time_of_day, "weather": self.weather, "style": self.style.name,
         }

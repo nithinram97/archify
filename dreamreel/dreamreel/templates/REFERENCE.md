@@ -196,6 +196,22 @@ handheld = true
 
 Faces get headroom and lead room (space on the side they're looking towards) automatically.
 
+## Looks: `style`
+
+`style = "toon"` in `film.toml` sets the look of the whole film; `style = "noir"` at the top of a
+scene file gives that scene its own (flashbacks, dreams, a film within the film).
+
+| Style | Look |
+|---|---|
+| toy | soft vinyl toys under warm light (the default) |
+| toon | flat colours, two tones, bold outlines |
+| anime | crisp cel shading, cool violet shadows, fine lines, vivid colour |
+| clay | matte clay with thumbprints, animated on twos like stop-motion |
+| paper | flat card cut-outs with white edges, animated on threes |
+| storybook | soft pastel tones, gentle brown lines, a warm painted feel |
+| noir | black and white, a low hard side light, deep shadows |
+| realistic | less plastic, more texture, richer contrast |
+
 ## Editing: transitions, time and the edit list
 
 How a scene comes in after the one before it goes at the top of its scene file:

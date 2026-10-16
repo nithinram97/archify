@@ -134,7 +134,7 @@ and screen effects fade, flash or dip the picture. Changing the edit never re-re
 ## Everything is extensible
 
 Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,
-actions, props, set kinds, biomes, scenery, times of day, weather, camera shots and moves, transitions,
+actions, props, set kinds, biomes, scenery, times of day, weather, visual styles, camera shots and moves, transitions,
 screen effects and voice engines. A film can add its own in its
 `extensions/` folder (`dreamreel extend prop campfire` starts one). New classes immediately work
 in cast, set and scene files and show up in the studio's menus. When a film needs something
@@ -144,10 +144,14 @@ dreamreel doesn't have, you or your AI agent add it as a class instead of workin
 
 ![Four characters, each described in a few lines of text](docs/media/cast.jpg)
 
-dreamreel's first style is **toy figures**: jointed vinyl characters with big heads and stubby limbs,
-in miniature sets with soft light and shallow depth of field. It's a style where procedural animation
-looks intentional instead of stiff. More styles (claymation, paper cut-out) are on the
-[roadmap](ROADMAP.md).
+The characters are **toy figures**: jointed vinyl characters with big heads and stubby limbs, a
+style where procedural animation looks intentional instead of stiff. One line in `film.toml`
+(`style = "toon"`) changes the look of the whole film, and a scene can have its own (a noir
+flashback, a storybook dream): toy, toon, anime, clay (animated on twos, like stop-motion), paper
+cut-out (on threes), storybook, noir and realistic. Styles change materials, outlines, light and
+colour, never the staging, so trying one costs a re-render and nothing else.
+
+![The same moment in eight styles](docs/media/styles.jpg)
 
 ## Docs
 

@@ -737,6 +737,8 @@ function sceneHeader(file, spec, chk) {
           if (used.length && !confirm(`${used.map(nameOf).join(", ")} still has beats in this scene. Remove anyway?`)) { render(); return; }
           spec.cast = v; scheduleSave(file); render();
         })),
+      h("label", { class: "field" }, h("span", {}, "Look"),
+        select(choicesOf("style"), spec.style || "", (v) => change("style", v || undefined), { label: "Scene look", blank: "(the film's look)" })),
       transitionFields(spec, change)) : null);
 }
 
@@ -921,7 +923,7 @@ const KIND_TITLES = [
   ["character", "Kinds of character"], ["hair", "Hair"], ["extra", "Extras"], ["mood", "Moods"], ["gesture", "Gestures"],
   ["action", "Things characters and scenes can do"], ["set", "Kinds of place"], ["biome", "Landscapes"],
   ["scenery", "Nature and scenery"], ["prop", "Things in sets"], ["item", "Things on tables"],
-  ["time", "Times of day"], ["weather", "Weather"], ["body", "Body plans"],
+  ["time", "Times of day"], ["weather", "Weather"], ["style", "Looks"], ["body", "Body plans"],
   ["shot", "Camera shots"], ["move", "Camera moves"], ["transition", "Transitions"], ["screen", "Screen effects"],
   ["voice", "Voice engines"],
 ];
@@ -1004,6 +1006,7 @@ function filmView() {
   const res = (film.resolution || [1920, 1080]).join("x");
   const save = async () => {
     await api("PUT", "/api/film", { title: film.title, fps: film.fps, resolution: film.resolution, music: film.music || null,
+      style: film.style && film.style !== "toy" ? film.style : null,
       voices: film.voices === false ? false : null }).catch(fail);
     await refresh();
     toast("Saved");
@@ -1016,7 +1019,8 @@ function filmView() {
         h("label", { class: "field" }, "Title", h("input", { type: "text", value: film.title || "", oninput: (e) => (film.title = e.target.value) })),
         h("label", { class: "field" }, "Picture", select([["1280x720", "HD 720p"], ["1920x1080", "Full HD 1080p"], ["3840x2160", "4K"], ["1080x1920", "Vertical (phones)"], ["1080x1080", "Square"]], res,
           (v) => (film.resolution = v.split("x").map(Number)))),
-        h("label", { class: "field" }, "Frames per second", select([["24", "24 (film)"], ["25", "25"], ["30", "30"]], String(film.fps || 24), (v) => (film.fps = +v)))),
+        h("label", { class: "field" }, "Frames per second", select([["24", "24 (film)"], ["25", "25"], ["30", "30"]], String(film.fps || 24), (v) => (film.fps = +v))),
+        h("label", { class: "field" }, "Look", select(choicesOf("style"), film.style || "toy", (v) => (film.style = v), { label: "Look" }))),
       h("div", { class: "fields" },
         h("label", { class: "field" }, "Music", select(S.state.music, music.file || "", (v) => (film.music = v ? { file: v, volume: music.volume || 0.35 } : null), { blank: S.state.music.length ? "(no music)" : "(put music files in audio/music)" })),
         h("label", { class: "field" }, "Music volume", h("input", { type: "range", min: 0.05, max: 1, step: 0.05, value: music.volume || 0.35,
