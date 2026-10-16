@@ -15,6 +15,7 @@ The camera side is the front (-Y). Rooms have no front wall, like a theatre or s
 import math
 import random
 
+import bpy
 from mathutils import Vector
 
 from . import look, plugins, shapes
@@ -80,6 +81,7 @@ class Set(Plugin):
         self.props = {}
         self.lights = []     # (location, colour, power) of practical lights (lamps)
         self.walls = []      # hidden in the top-down map
+        self.focus = {}      # prop or item name -> its middle (for insert shots)
         self.build_environment()
         for p in self.spec.get("props", []):
             self.add_prop(p)
@@ -125,8 +127,21 @@ class Set(Plugin):
             name = f"{kind}-{len([k for k in self.props if k.startswith(kind)]) + 1}"
         prop = plugins.get("prop", kind)
         self.props[name] = prop
+        before = set(bpy.data.objects.keys())
         prop().build(self, name, p)
+        self._remember_focus(name, before)
         return name
+
+    def _remember_focus(self, name, before):
+        """The middle of whatever was just built, so cameras can frame it (insert shots)."""
+        new = [o for o in bpy.data.objects if o.name not in before and o.type == "MESH"]
+        if not new:
+            return
+        bpy.context.view_layer.update()
+        pts = [o.matrix_world @ Vector(c) for o in new for c in o.bound_box]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        self.focus.setdefault(name, (lo + hi) / 2)
 
     def block(self, pos, w, d):
         """Characters walk round a w x d footprint centred on pos."""
@@ -149,7 +164,9 @@ class Set(Plugin):
         """Put a small Item (by name) on a surface of width w at height h centred on pos."""
         rng = random.Random(item)
         x = pos.x + rng.uniform(-w / 3, w / 3)
+        before = set(bpy.data.objects.keys())
         plugins.get("item", item)().build(self, x, pos.y, h, rng)
+        self._remember_focus(item, before)
 
     def seat_facing(self, p, pos):
         if "face" in p:

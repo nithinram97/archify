@@ -159,13 +159,7 @@ def cmd_plan(a):
         ob.data.materials.append(look.plastic("black"))
     for w in getattr(st, "walls", []):
         w.hide_render = True
-    cam = s.cut.cam
-    cam.data.type = "ORTHO"
-    cam.data.ortho_scale = max(st.width, st.depth * 16 / 9) + 1.0
-    cam.data.dof.use_dof = False
-    cam.constraints.clear()
-    cam.location = (0, 0, 12)
-    cam.rotation_euler = (0, 0, 0)
+    s.cut.top_down(12, max(st.width, st.depth * 16 / 9) + 1.0)
     s.cut.manual = True
     s.cut.shots = []
     s.cut.build = lambda: None
@@ -354,6 +348,18 @@ EXTEND_TEMPLATES = {
         W, D = self.width, self.depth
         shapes.box("floor", W + 0.4, D + 0.4, 0.1, self.spec["floor_color"], at=(0, 0, -0.1), bevel=0)
 ''', 'kind = "{name}" in a set file'),
+    "move": ('''class {cls}(dr.CameraMove):
+    """{desc}"""
+    description = "{desc}"
+    default_amount = 1.0
+
+    def track(self, d, shot, t0, t1, base, amount=None, to=None):
+        # base: [(time, CameraState)] so far; return a new list. A CameraState has pos, aim, lens,
+        # roll (degrees), focus and fstop; .copy(...) changes some of them; .right() is screen right.
+        a = self.default_amount if amount is None else float(amount)
+        t, s = base[0]
+        return [(t0, s), (t1, s.copy(pos=s.pos + dr.camera.UP * a, roll=s.roll + 10 * a))]
+''', 'do = "shot", move = "{name}" in a beat'),
     "shot": ('''class {cls}(dr.ShotType):
     """{desc}"""
     description = "{desc}"

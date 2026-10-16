@@ -102,6 +102,17 @@ moods with the same face system.
 ![Nine creatures from eight body plans](docs/media/creatures.jpg)
 ![A procedural four-beat dog walk](docs/media/dog-walk.jpg)
 
+## A real camera
+
+Shots combine framing (establishing to extreme close-up, two-shot, over-the-shoulder, point of view,
+insert, group) × angle (eye level, high, low, overhead, worm's eye) × side × Dutch tilt × lens ×
+camera move (push in, pull out, pan, tilt, truck, crane, orbit, follow, zoom, dolly zoom, focus pull,
+handheld). Headroom, lead room and the 180° rule are handled for you, and the camera moves out of
+the way of furniture. Without any shots, an automatic director covers the scene and picks angles
+and moves from the mood of each moment.
+
+![Sixteen shots of the same moment](docs/media/shots.jpg)
+
 ## Everything is extensible
 
 Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,

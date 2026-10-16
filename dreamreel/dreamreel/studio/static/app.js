@@ -770,11 +770,19 @@ function beatRow(file, spec, i, chk) {
     Object.keys(b).forEach((k) => !keep.has(k) && delete b[k]);
     b.do = v; save(); render();
   }, { label: "What" });
-  const fields = act ? act.params.map((p, k) => {
+  const ekey = `${file}#${i}`;
+  const open = S.expanded && S.expanded[ekey];
+  const shown = (p, k) => open || act.params.length <= 5 || k < 3 || p.required || (b[p.name] !== undefined && b[p.name] !== "");
+  const hidden = act ? act.params.filter((p, k) => !shown(p, k)).length : 0;
+  const fields = act ? act.params.filter((p, k) => shown(p, k)).map((p, k) => {
     const ctx = { cast, who: b.who, setInfo, inline: true };
     const el = paramField(p, b[p.name], (v, quiet) => { if (v === undefined || v === "") delete b[p.name]; else b[p.name] = v; if (!quiet) save(); }, ctx);
     return p.type === "bool" ? el : h("span", { class: "bf", title: p.label }, k > 0 && p.type !== "text" ? h("small", { class: "bl" }, p.label.toLowerCase()) : null, el);
   }) : [h("span", { class: "banner err" }, `Unknown action: ${b.do}`)];
+  if (act && (hidden || open) && act.params.length > 5) {
+    fields.push(h("button", { class: "tool", onclick: () => { S.expanded = S.expanded || {}; S.expanded[ekey] = !open; render(); } },
+      open ? "less" : `+ ${hidden} more`));
+  }
   const move = (d) => { const j = i + d; if (j < 0 || j >= spec.beats.length) return; [spec.beats[i], spec.beats[j]] = [spec.beats[j], spec.beats[i]]; S.selBeat[file] = j; save(); render(); };
   return h("div", { class: "beat" + (sel ? " sel" : "") + (err ? " err" : "") + (b.with_previous ? " linked" : ""), id: `beat-${i}`,
     onclick: (e) => { if (e.target.closest("select, input, button, .chips")) return; S.selBeat[file] = sel ? null : i; render(); } },
@@ -818,11 +826,13 @@ function beatsCard(file, spec, chk) {
       select([...cast.map((k) => [k, "👤 " + nameOf(k)]), ["_scene", "🎬 Scene"]], nb.who, (v) => {
         nb.who = v; const a = actionsFor(v); if (!a.find((x) => x.name === nb.do)) nb.do = a[0].name; render(); }, { label: "Who" }),
       select(actionsFor(nb.who).map((a) => [a.name, a.label + (a.source !== "built-in" ? " ✦" : "")]), act.name, (v) => { nb.do = v; render(); }, { label: "What" }),
-      act.params.map((p, k) => {
+      act.params.filter((p, k) => S.composerMore || act.params.length <= 5 || k < 3 || p.required).map((p, k) => {
         const el = paramField(p, nb[p.name], (v) => { nb[p.name] = v; }, { cast, who: nb.who === "_scene" ? null : nb.who, setInfo, inline: true });
         if (p.type === "text") el.addEventListener("keydown", (e) => e.key === "Enter" && add());
         return p.type === "bool" ? el : h("span", { class: "bf" }, k > 0 && p.type !== "text" ? h("small", { class: "bl" }, p.label.toLowerCase()) : null, el);
       }),
+      act.params.length > 5 ? h("button", { class: "tool", onclick: () => { S.composerMore = !S.composerMore; render(); } },
+        S.composerMore ? "fewer options" : "more options") : null,
       h("button", { class: "btn primary sm", onclick: add }, "Add ⏎")),
     !cast.length ? h("div", { class: "small muted", style: "margin-top:6px" }, "Add people to the scene above to give them things to do.") : null);
   return h("div", { class: "card" },

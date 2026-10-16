@@ -290,6 +290,21 @@ class Character(Plugin):
         hz = value_at(self.hips, "location", t)[2]
         return Vector((loc[0], loc[1], loc[2] + hz + self.top_z + self.head_center.z))
 
+    def height(self):
+        """Top of the head above the feet, in metres (for framing)."""
+        return self.top_z + self.head_center.z + self.head_r
+
+    def length(self):
+        """Front-to-back size, in metres (for framing long bodies)."""
+        return 2 * self.head_r
+
+    def where_at(self, t):
+        """Smoothly interpolated (x, y, z) of the feet and the heading at time t (for following)."""
+        loc = keys.sample(self.root, "location", t)
+        rot = keys.sample(self.root, "rotation_euler", t)
+        hz = keys.sample(self.hips, "location", t)[2]
+        return Vector(loc), rot[2], hz
+
     def visible(self, t):
         return value_at(self.root, "scale", t)[0] > 0.01
 
@@ -581,7 +596,8 @@ class Character(Plugin):
         listener = self.scene.character(to) if isinstance(to, str) else to
         if listener is None:
             listener = self.scene._nearest(self, t)
-        self.scene._event("say", self, t0, t0 + dur, line=line, listener=listener, audio=speech)
+        self.scene._event("say", self, t0, t0 + dur, line=line, listener=listener, audio=speech,
+                          mood=mood or self.mood)
         return self._end(t0 + dur + 0.3, wait)
 
     def _mouth_key(self, t, open_amt, round_amt=0.0):

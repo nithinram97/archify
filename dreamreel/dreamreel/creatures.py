@@ -874,6 +874,13 @@ class Creature(Character):
         y = r.x * math.sin(h) + r.y * math.cos(h)
         return Vector((loc[0] + x, loc[1] + y, loc[2] + hz + r.z))
 
+    def height(self):
+        return self.head_rest.z + self.hr
+
+    def length(self):
+        ys = [j.at.y for j in self.skel.joints.values()]
+        return max(ys) - min(ys) + 2 * self.hr
+
     def home_at(self, leg, pos, heading, z=0.0):
         """Where a leg's foot rests when the creature stands at pos (x, y) facing heading."""
         hx, hy, hz = self.foot_home[leg]

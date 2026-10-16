@@ -28,7 +28,7 @@ def main():
             s = film.build(p, path)
             says = [e for e in s.events if e["kind"] == "say"]
             assert says, f"{path}: no dialogue"
-            assert len(s.cut.shots) >= 3, f"{path}: only {len(s.cut.shots)} shots"
+            assert len(s.cut.final) >= 3, f"{path}: only {len(s.cut.final)} shots"
             assert not s.check(), f"{path}: {s.check()}"
             assert 5 < s.length < 120, s.length
             print(s.summary().splitlines()[0])

@@ -98,3 +98,18 @@ def hold(target, prop, at, index=-1, ease="smooth"):
     else:
         key(target, prop, at, v, ease)
     return v
+
+
+def sample(target, prop, at):
+    """The animated value of `target.prop` at `at` seconds, interpolated between keys (unlike value_at,
+    which gives the last key). Used to follow moving things smoothly."""
+    frame = CLOCK.frame(at)
+    cur = getattr(target, prop)
+    full = _path(target, prop)
+    curves = {fc.array_index: fc for fc in _compat.fcurves(target.id_data) if fc.data_path == full}
+    if not hasattr(cur, "__len__"):
+        return curves[0].evaluate(frame) if 0 in curves else cur
+    vec = list(cur)
+    for i, fc in curves.items():
+        vec[i] = fc.evaluate(frame)
+    return vec

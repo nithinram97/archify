@@ -59,13 +59,34 @@ Movement follows the body: `walk_to` walks, trots, gallops, scuttles, swims, sli
 `fly_to` needs wings. Gestures check the body: a snake can't `wave`, but it can `spin`; a dog can
 `tail_wag`, `sniff`, `roar`, `rear_up`. Run `dreamreel plugins gesture -v` to see what each needs.
 
+## Camera
+
+The automatic director covers every scene well enough to start with; watch the previz first. Add a
+`shot` beat where a moment needs a specific choice, combining framing × angle × side × move:
+
+```toml
+[[beats]]
+do = "shot"
+shot = "pov"            # through Tom's eyes...
+of = "tom"
+other = "cookie-jar"    # ...looking at the jar
+move = "push_in"
+duration = 2.5          # then the automatic camera continues
+```
+
+Think like a cinematographer: low angles make someone powerful, high angles small; a push in
+builds tension; a pull out or crane up ends a scene; handheld feels urgent; a dutch tilt feels
+wrong; an insert shows the thing everyone is talking about; a dolly zoom is a shock.
+See REFERENCE.md "Camera" for every option. New framings (`dr.ShotType`) and moves
+(`dr.CameraMove`) can be added in extensions.
+
 ## When something isn't there: extend dreamreel
 
 Never fake a missing feature with coordinates or workarounds in beats. Add it as a class in
 `extensions/`, so it becomes a real, reusable feature that also appears in the studio's menus:
 
 ```bash
-dreamreel extend gesture dance        # also: character, body, hair, extra, mood, action,
+dreamreel extend gesture dance        # also: character, body, hair, extra, mood, action, move,
 dreamreel extend prop campfire        #       prop, set, shot, voice
 ```
 

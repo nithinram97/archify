@@ -231,10 +231,22 @@ class TitleCard(Action):
 class Shot(Action):
     scope = "scene"
     label = "camera shot"
-    description = "Choose the camera shot from here on (otherwise dreamreel picks shots itself)"
+    description = "Choose the camera from here on: framing, angle, side, tilt, lens and move"
     sentence = "camera: {shot}"
-    params = [Param("shot", "shot", required=True, default="wide"), Param("of", "character", label="Of"),
-              Param("other", "character", label="And / onto")]
+    params = [Param("shot", "shot", required=True, default="wide", label="Framing"),
+              Param("of", "target", label="Of"),
+              Param("other", "target", label="And / onto"),
+              Param("angle", "choice", default=None, choices=("eye_level", "high", "low", "birds_eye", "worms_eye")),
+              Param("side", "choice", default=None, choices=("auto", "front", "three_quarter", "profile", "back")),
+              Param("move", "move", label="Camera move"),
+              Param("amount", "number", label="Move amount"),
+              Param("to", "target", label="Move / focus to"),
+              Param("handheld", "bool", default=False, label="Handheld"),
+              Param("dutch", "number", min=-45, max=45, step=1, label="Dutch tilt (°)"),
+              Param("lens", "number", min=10, max=200, step=1, label="Lens (mm)"),
+              Param("duration", "number", min=0.5, max=60, step=0.5, label="Then back to automatic after (s)")]
 
-    def run(self, s, who, shot="wide", of=None, other=None):
-        s.cut.shot(shot, of=of, other=other)
+    def run(self, s, who, shot="wide", of=None, other=None, angle=None, side=None, move=None, amount=None,
+            to=None, handheld=False, dutch=None, lens=None, duration=None):
+        s.cut.shot(shot, of=of, other=other, angle=angle, side=side, move=move, amount=amount, to=to,
+                   handheld=handheld, dutch=dutch, lens=lens, duration=duration)

@@ -274,7 +274,8 @@ class Studio:
 
     def info(self):
         """Plugins, catalogue and set marks, from `dreamreel info` (cached until a set or extension changes)."""
-        key = ()
+        pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        key = (max(os.path.getmtime(os.path.join(pkg, f)) for f in os.listdir(pkg) if f.endswith(".py")),)
         for sub in ("sets", "extensions"):  # new set files or extension classes change what's offered
             d = os.path.join(self.root, sub)
             if os.path.isdir(d):

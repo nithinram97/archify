@@ -125,7 +125,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | gesture | gesture, target |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
-| shot (no who) | shot, of, other |
+| shot (no who) | shot, of, other, angle, side, move, amount, to, handheld, dutch, lens, duration (see Camera) |
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
 
@@ -134,8 +134,38 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 **Gestures**: wave, nod, shake_head, shrug, point, jump, cheer, facepalm, clap, think, bow, stomp
 (toys); roar, sniff, spin, tail_wag, flap, rear_up (any body that has what it needs).
 
-**Shots**: wide, medium, close_up, two_shot (of, other), over_shoulder (of = past whom, other = onto
-whom). Without shot beats, dreamreel chooses the shots itself.
+## Camera
+
+Without shot beats, dreamreel directs the scene itself. It establishes the place, follows people
+who travel, cuts between speakers on one side of the line (the 180° rule), and lets the mood choose
+angles and moves (low angle for anger, high for fear, a push in on surprise).
+
+A `shot` beat takes over from that moment until the next shot, or for `duration` seconds:
+
+```toml
+[[beats]]
+do = "shot"
+shot = "close_up"      # the framing
+of = "mia"
+angle = "low"
+move = "push_in"
+handheld = true
+```
+
+| Setting | Values |
+|---|---|
+| `shot` (framing) | establishing, wide, group, full, medium_wide, medium, medium_close, close_up, extreme_close_up, two_shot (of, other), over_shoulder (of = past whom, other = onto whom), pov (through of's eyes, looking at other), insert (of = a prop or thing on a table, e.g. `cookie-jar`) |
+| `angle` | eye_level, high, low, birds_eye, worms_eye |
+| `side` | auto, front, three_quarter, profile, back |
+| `move` | static, push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, truck_left, truck_right, crane_up, crane_down, orbit_left, orbit_right, follow, zoom_in, zoom_out, dolly_zoom, rack_focus |
+| `amount` | how much the move does (degrees for pans, tilts and orbits; metres for trucks and cranes; a share of the distance for push and pull; a lens factor for zooms) |
+| `to` | pan to someone or something; rack focus onto them |
+| `handheld` | true adds a human wobble to any shot or move |
+| `dutch` | tilt the frame by degrees (unease) |
+| `lens` | millimetres (24 wide ... 85 long); chosen from the framing otherwise |
+| `duration` | seconds before the automatic camera takes over again |
+
+Faces get headroom and lead room (space on the side they're looking towards) automatically.
 
 ## Commands
 

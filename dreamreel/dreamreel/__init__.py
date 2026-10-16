@@ -11,7 +11,8 @@ Everything is a class you can extend (see plugins.py):
     class Hug(dr.Action): ...            # a new verb for scenes
     class Cake(dr.Prop): ...             # furniture and things
     class Spaceship(dr.Set): ...         # a new kind of place
-    class LowAngle(dr.ShotType): ...     # a camera shot
+    class LowAngle(dr.ShotType): ...     # a camera framing
+    class Vertigo(dr.CameraMove): ...    # a camera move
     class MyTTS(dr.VoiceEngine): ...     # voices
 
 Put such classes in a film's extensions/ folder and they appear in the studio's menus.
@@ -29,7 +30,8 @@ from .parts import Extra, Hair, Mood  # noqa: F401,E402
 from .gestures import Gesture  # noqa: F401,E402
 from .sets import FLOORS, SIZES, ZONES, Outdoor, Room, Set  # noqa: F401,E402
 from .props import Item, Prop  # noqa: F401,E402
-from .camera import ShotType  # noqa: F401,E402
+from .camera import CameraMove, CameraState, ShotType  # noqa: F401,E402
+from . import camera  # noqa: F401,E402
 from .actions import Action  # noqa: F401,E402
 from .voices import VoiceEngine  # noqa: F401,E402
 from .scene import BeatError, Scene  # noqa: F401,E402
