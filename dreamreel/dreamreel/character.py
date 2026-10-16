@@ -29,7 +29,7 @@ import re
 
 from mathutils import Vector
 
-from . import keys, look, plugins, shapes
+from . import acting, keys, look, plugins, shapes
 from .keys import hold, key, value_at
 from .plugins import Param, Plugin
 
@@ -113,6 +113,7 @@ class Character(Plugin):
         self.mood = "neutral"
         self.sitting = None
         self.rng = random.Random(name)
+        self.danglers = []     # (pivot, stiffness, damping, gain): parts that lag and settle (acting.py)
         self.validate()
         self.proportions()
         self.build()
@@ -416,10 +417,11 @@ class Character(Plugin):
         key(self.neck, "rotation_euler", t1, (cur[0], cur[1], 0.0))
 
     # ------------------------------------------------------------------ moving
-    def walk_to(self, where, speed="normal", facing=None, at=None, wait=True):
+    def walk_to(self, where, speed="normal", facing=None, at=None, wait=True, how=None):
         """Walk to a mark, prop or character (stopping in front of them), going round furniture.
 
-        speed: "slow", "normal", "fast" or "run". facing: what to face on arrival.
+        speed: "slow", "normal", "fast" or "run". facing: what to face on arrival. how: a manner
+        ("angrily", "sneakily"...; otherwise the mood decides how they walk).
         """
         if self.sitting:
             self.stand(at=at)
@@ -429,6 +431,8 @@ class Character(Plugin):
         p1 = self.scene._resolve(where, t, me=self, approach=True)
         path = self.scene.set.route(p0, p1) if self.scene.set else [p0, p1]
         sp = SPEEDS.get(speed, speed) if not isinstance(speed, (int, float)) else speed
+        self._effort = acting.effort_of(self, t, how)
+        sp *= self._effort.walk_speed()
         run = sp >= 1.8
         stride, step_t = self.gait_timing(sp, run)
         total = sum((path[i + 1] - path[i]).length for i in range(len(path) - 1))
@@ -479,8 +483,10 @@ class Character(Plugin):
         """Animate the body while the root travels along `path` (a Stride): legs, arms, bounce.
         The toy swings its rigid legs and arms; other bodies plant feet (see creatures.py)."""
         ws, end, H = path.start, path.end, self.H
-        A = _deg(38 if run else 26)
-        lean = _deg(10 if run else 2)
+        eff = getattr(self, "_effort", None) or acting.Effort()
+        ex = self.scene.exaggeration
+        A = _deg(38 if run else 26) * (1 + (eff.swing() - 1) * ex)
+        lean = _deg(10 if run else 2) + _deg(5) * eff.time * ex - _deg(4) * max(0.0, -eff.weight)
         base = self.hip_z
         for leg in self.legs.values():
             hold(leg, "rotation_euler", ws)
@@ -498,10 +504,14 @@ class Character(Plugin):
             key(self.arms[1], "rotation_euler", ti, (sgn * amp * 0.9, 0, 0))
             key(self.arms[-1], "rotation_euler", ti, (-sgn * amp * 0.9, 0, 0))
             if i < n_steps:
-                key(self.hips, "location", ti, (0, 0, base - 0.018 * H * (1.6 if run else 1)))
-                key(self.hips, "location", ti + step_t / 2, (0, 0, base + (0.03 if run else 0.012) * H))
+                b = eff.bounce()
+                key(self.hips, "location", ti, (0, 0, base - 0.018 * H * (1.6 if run else 1) * b))
+                key(self.hips, "location", ti + step_t / 2, (0, 0, base + (0.03 if run else 0.012) * H * b))
         key(self.hips, "location", end, (0, 0, base))
-        key(self.body, "rotation_euler", end, (0, 0, 0))
+        # follow-through: the body carries on a little when the feet stop, then settles
+        settle = 0.08 * ex * (1 + max(0.0, -eff.flow))
+        key(self.body, "rotation_euler", end, (-lean - settle, 0, 0))
+        key(self.body, "rotation_euler", end + 0.3, (0, 0, 0))
 
     def run_to(self, where, **kw):
         return self.walk_to(where, speed="run", **kw)
@@ -557,6 +567,7 @@ class Character(Plugin):
         """Change expression to a mood (see dr.registry("mood"); add your own with dr.Mood)."""
         m = plugins.get("mood", mood)
         t = self._start(at)
+        self._moods = sorted(getattr(self, "_moods", []) + [(t, mood)])
         tilt, lift, smile, frown, eye, mopen, head_tilt = (m.brow_tilt, m.brow_lift, m.smile, m.frown, m.eyes,
                                                           m.mouth_open, m.head_tilt)
         t1 = t + 0.25
@@ -694,12 +705,35 @@ class Character(Plugin):
         key(self.hips, "location", t + 0.4, (0, 0, z + height * self.H), "ease_out")
         key(self.hips, "location", t + 0.65, (0, 0, z - 0.03 * self.H), "ease_in")
         key(self.hips, "location", t + 0.8, (0, 0, z))
+        self.squash_at(t + 0.15, 1.0)          # crouch
+        self.squash_at(t + 0.3, -1.0)          # stretch on the way up
+        self.squash_at(t + 0.48, 0.0)
+        self.squash_at(t + 0.66, 0.8)          # land
+        self.squash_at(t + 0.82, 0.0)
+
+    def squash_at(self, t, amount):
+        """Squash (amount > 0) or stretch (< 0) the body, keeping its volume (squash and stretch)."""
+        k = 0.1 * amount * self.scene.exaggeration
+        z = 1.0 - k
+        xy = 1.0 / max(0.5, z) ** 0.5
+        hold(self.body, "scale", t)
+        key(self.body, "scale", t, (xy, xy, z))
+
+    def dangle(self, obj, root, stiffness=1.0, damping=1.0, gain=1.0):
+        """Make a part hang from `root` (a point in its parent's space) and lag behind the body's
+        movements, then settle (follow-through). Used for long hair, ponytails, floppy ears..."""
+        piv = shapes.empty(f"{self.name}.dangle", obj.parent, root)
+        obj.location = obj.location - Vector(root)
+        obj.parent = piv
+        self.danglers.append((piv, stiffness, damping, gain))
+        return piv
 
     def lean_at(self, t, deg_side=0.0, deg_forward=0.0):
         key(self.body, "rotation_euler", t, (_deg(-deg_forward), _deg(deg_side), 0))
 
-    def do(self, gesture, target=None, at=None, wait=True):
-        """Play a gesture (see dr.registry("gesture"); add your own with dr.Gesture)."""
+    def do(self, gesture, target=None, at=None, wait=True, how=None):
+        """Play a gesture (see dr.registry("gesture"); add your own with dr.Gesture). `how`: a manner
+        ("angrily", "nervously"...); otherwise the current mood shapes it (see acting.py)."""
         g = plugins.get("gesture", gesture)
         missing = set(g.needs) - self.capabilities
         if missing:
@@ -710,8 +744,10 @@ class Character(Plugin):
         for arm in self.arms.values():
             hold(arm, "rotation_euler", t)
         hold(self.body, "rotation_euler", t)
-        end = g().perform(self, t, target=target)
-        self.scene._event("gesture", self, t, end, gesture=gesture)
+        with keys.recording() as curves:
+            end = g().perform(self, t, target=target)
+        end = acting.shape(curves, t, end, acting.effort_of(self, t, how), self.scene.exaggeration)
+        self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
         return self._end(end, wait)
 
     # ------------------------------------------------------------------ life

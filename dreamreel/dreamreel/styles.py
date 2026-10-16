@@ -91,6 +91,7 @@ class Style(Plugin):
     tint = None                         # a colour every material is multiplied by
     edge = 0.08                         # how soft the edge between two tones is
     samples = 48
+    exaggeration = 1.0                  # how far acting is pushed (1 = natural; toon styles push it)
 
     @classmethod
     def describe_extra(cls):
@@ -241,6 +242,7 @@ class Toy(Style):
 
 class Toon(Style):
     description = "Cartoon: flat colours, two tones and bold outlines"
+    exaggeration = 1.35
     samples = 64
     view = ("Standard", "None")
     outline = 0.012
@@ -250,6 +252,7 @@ class Toon(Style):
 
 class Anime(Style):
     description = "Anime: crisp cel shading, cool violet shadows, fine lines, vivid colour"
+    exaggeration = 1.2
     samples = 64
     view = ("Standard", "None")
     outline, outline_color = 0.007, "#2a2238"
@@ -263,6 +266,7 @@ class Anime(Style):
 
 class Clay(Style):
     description = "Claymation: soft matte clay with thumbprints, animated on twos"
+    exaggeration = 1.15
     view = ("AgX", "AgX - Punchy")
     steps = 2
     saturation = 1.2
@@ -302,6 +306,7 @@ class Clay(Style):
 
 class Paper(Style):
     description = "Paper cut-out: flat card shapes with white edges, animated on threes"
+    exaggeration = 1.25
     samples = 64
     view = ("Standard", "None")
     outline, outline_color = 0.01, "#f7f3ea"
@@ -328,6 +333,7 @@ class Paper(Style):
 
 class Storybook(Style):
     description = "Storybook: soft pastel tones, gentle brown lines, a warm painted feel"
+    exaggeration = 1.1
     samples = 64
     view = ("Standard", "None")
     outline, outline_color = 0.005, "#6b4a35"
@@ -338,6 +344,7 @@ class Storybook(Style):
 
 class Noir(Style):
     description = "Film noir: black and white, a low hard side light, deep shadows"
+    exaggeration = 0.9
     view = ("AgX", "AgX - Greyscale")
     exposure = 0.5
     samples = 96
@@ -363,6 +370,7 @@ class Noir(Style):
 
 class Realistic(Style):
     description = "Realistic light and materials: less plastic, more texture, richer contrast"
+    exaggeration = 0.8
     view = ("AgX", "AgX - Base Contrast")
     samples = 96
 

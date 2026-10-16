@@ -103,21 +103,24 @@ class Bob(Hair):
 class Long(Hair):
     def build(self, c, color):
         self.cap(c, color)
-        S.ellipsoid(f"{c.name}.hair", c.hr * 0.95, c.hr * 0.45, c.hr * 1.25, color, c.neck,
-                    at=c.hc + Vector((0, c.hr * 0.6, -c.hr * 0.65)))
+        back = S.ellipsoid(f"{c.name}.hair", c.hr * 0.95, c.hr * 0.45, c.hr * 1.25, color, c.neck,
+                           at=c.hc + Vector((0, c.hr * 0.6, -c.hr * 0.65)))
+        c.dangle(back, c.hc + Vector((0, c.hr * 0.55, c.hr * 0.4)), stiffness=0.8, gain=0.7)
 
 
 class Ponytail(Hair):
     def build(self, c, color):
         self.cap(c, color)
-        S.ellipsoid(f"{c.name}.hair", c.hr * 0.3, c.hr * 0.3, c.hr * 0.8, color, c.neck,
-                    at=c.hc + Vector((0, c.hr * 1.15, -c.hr * 0.25)), rot=(_deg(-25), 0, 0))
+        tail = S.ellipsoid(f"{c.name}.hair", c.hr * 0.3, c.hr * 0.3, c.hr * 0.8, color, c.neck,
+                           at=c.hc + Vector((0, c.hr * 1.15, -c.hr * 0.25)), rot=(_deg(-25), 0, 0))
+        c.dangle(tail, c.hc + Vector((0, c.hr * 0.95, c.hr * 0.45)), stiffness=0.6, gain=1.3)
 
 
 class Bun(Hair):
     def build(self, c, color):
         self.cap(c, color)
-        S.sphere(f"{c.name}.hair", c.hr * 0.42, color, c.neck, at=c.hc + Vector((0, c.hr * 0.25, c.hr * 1.02)))
+        bun = S.sphere(f"{c.name}.hair", c.hr * 0.42, color, c.neck, at=c.hc + Vector((0, c.hr * 0.25, c.hr * 1.02)))
+        c.dangle(bun, c.hc + Vector((0, c.hr * 0.2, c.hr * 0.75)), stiffness=2.2, gain=0.5)
 
 
 class Spiky(Hair):

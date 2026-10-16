@@ -23,6 +23,7 @@ Add a new verb by subclassing:
 
 Scene-level actions (pauses, captions, camera shots) set `scope = "scene"` and get who=None.
 """
+from .acting import HOW
 from .plugins import Param, Plugin
 
 
@@ -68,19 +69,19 @@ class WalkTo(Action):
     sentence = "{who} goes to {where}"
     params = [Param("where", "target", required=True, label="To"),
               Param("speed", "choice", default="normal", choices=("slow", "normal", "fast", "run")),
-              Param("facing", "target", label="Then faces")]
+              Param("facing", "target", label="Then faces"), HOW]
 
-    def run(self, s, who, where, speed="normal", facing=None):
-        who.walk_to(where, speed=speed, facing=facing)
+    def run(self, s, who, where, speed="normal", facing=None, how=None):
+        who.walk_to(where, speed=speed, facing=facing, how=how)
 
 
 class RunTo(Action):
     label = "runs to"
     sentence = "{who} runs to {where}"
-    params = [Param("where", "target", required=True, label="To")]
+    params = [Param("where", "target", required=True, label="To"), HOW]
 
-    def run(self, s, who, where):
-        who.run_to(where)
+    def run(self, s, who, where, how=None):
+        who.run_to(where, how=how)
 
 
 class FlyTo(Action):
@@ -183,10 +184,10 @@ class DoGesture(Action):
     label = "does"
     description = "Body language: wave, shrug, cheer..."
     sentence = "{who} does {gesture}"
-    params = [Param("gesture", "gesture", required=True, default="wave"), Param("target", "target", label="At")]
+    params = [Param("gesture", "gesture", required=True, default="wave"), Param("target", "target", label="At"), HOW]
 
-    def run(self, s, who, gesture, target=None):
-        who.do(gesture, target=target)
+    def run(self, s, who, gesture, target=None, how=None):
+        who.do(gesture, target=target, how=how)
 
 
 class Leave(Action):

@@ -141,8 +141,8 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | `do` | Settings |
 |---|---|
 | say | line, mood, to |
-| walk_to | where, speed (slow, normal, fast, run), facing |
-| run_to | where |
+| walk_to | where, speed (slow, normal, fast, run), facing, how |
+| run_to | where, how |
 | fly_to | where, height, land (needs wings) |
 | enter | where (appears there; hidden before) |
 | place | where, facing, on (standing there from the start; `on` = a table, bench, desk, counter or tray top) |
@@ -150,7 +150,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | lie_down, stand, leave | |
 | turn_to, look_at | target |
 | feel | mood |
-| gesture | gesture, target |
+| gesture | gesture, target, how |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
 | slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |
@@ -162,6 +162,13 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 Time of day sets the sun, the sky and how much lamps matter (rooms get their light through the
 windows). Weather changes the light everywhere; outdoors it also brings clouds, rain, snow, fog,
 lightning and wind in the trees. Slow motion slows the rain too.
+
+**How** (`how = "angrily"`): angrily, happily, sadly, nervously, proudly, lazily, excitedly,
+carefully, sneakily, wildly, gently, firmly. Without it, the character's current mood decides how
+they move: an angry wave is quick, big and sharp; a sad walk is slow, with small steps. Every gesture
+anticipates (a small counter-move first) and follows through (overshoots and settles); long hair,
+ponytails, floppy ears and antennae swing and settle; jumps squash and stretch. `exaggeration` in
+film.toml (0.5 subtle ... 1 natural ... 2 very cartoony) pushes all of it; each style has its own default.
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
 

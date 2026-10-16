@@ -81,6 +81,8 @@ class Scene:
         self.weather = weather
         self.weather_strength = weather_strength
         self.style = plugins.get("style", style or self.film.get("style") or "toy")()
+        # how far acting is pushed (anticipation, overshoot, amplitude): film.toml, else the style's
+        self.exaggeration = float(self.film.get("exaggeration") or self.style.exaggeration)
         self.voices = Voices(self.project.root if self.project else None,
                              engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True))
         if isinstance(set, dict):
@@ -411,6 +413,9 @@ class Scene:
         self.environment.animate(L)
         if self.set is not None:
             self.set.animate(L)
+        from . import acting
+        for c in self.actors.values():
+            acting.follow_through(c, L, self.exaggeration)
         self.cut.build()
         if self.warps:
             self._apply_warps()

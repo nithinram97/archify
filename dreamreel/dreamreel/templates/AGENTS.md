@@ -136,6 +136,15 @@ That writes a commented starting point. Then:
 - A scene can also be a Python script (`scenes/NNN_name.py`) for something beats can't say yet,
   but prefer a new action class: it keeps the scene editable in the studio.
 
+## Acting
+
+Moods already shape how people move; add `how` to a gesture or walk when the manner matters more
+than the mood ("she waves sadly", "he walks sneakily"). Set the mood before the action it should
+colour. Prefer one clear, well-timed gesture to several small ones, and leave a beat of stillness
+after a big moment so it reads. `exaggeration` (film.toml) sets how cartoony the acting is.
+New manners are classes (`dr.Manner.define("drunkenly", weight=-0.4, time=-0.5, space=-1, flow=-1)`).
+See docs on acting in dreamreel's repository for the principles behind it.
+
 ## Rules
 
 - Never use raw coordinates in cast, set or scene files: use places, marks, seats and characters.

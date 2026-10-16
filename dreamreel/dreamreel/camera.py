@@ -536,19 +536,21 @@ class Director:
             if e["kind"] == "move" and t0 > 0.5:
                 dur = e["t1"] - t0
                 movers = [m for m in events if m["kind"] == "move" and m["t0"] < e["t1"] and m["t1"] > t0]
+                # cut on action: a moment into the movement, so the motion carries across the cut
+                tc = t0 + min(CUT_ON_ACTION, 0.3 * dur)
                 if dur > 2.5 and len({m["who"].name for m in movers}) == 1:
-                    s = self.frame_single(e["who"], t0, "medium_wide", side="auto")
+                    s = self.frame_single(e["who"], tc, "medium_wide", side="auto")
                     s.moves.append((plugins.get("move", "follow")(), {}))
                     s.label += " · follow"
                     last = "follow"
                 elif last != "wide":
-                    self.frame_wide(max(0.0, t0 - 0.1))
+                    self.frame_wide(tc)
                     last = "wide"
                 continue
             if e["kind"] == "gesture" and e.get("gesture") in BIG_GESTURES and t0 > 0.5:
                 talking = any(x["kind"] == "say" and x["t0"] < e["t1"] and x["t1"] > t0 for x in events)
                 if not talking:
-                    self.frame_single(e["who"], max(0.0, t0 - 0.1), "full")
+                    self.frame_single(e["who"], t0 + min(CUT_ON_ACTION, 0.25 * (e["t1"] - t0)), "full")
                     last = "full"
                 continue
             if e["kind"] != "say":
@@ -661,6 +663,7 @@ class Director:
         self.cam.data.dof.use_dof = False
 
 
+CUT_ON_ACTION = 0.3   # seconds into a movement that the automatic director cuts (editing: cut on action)
 BIG_GESTURES = {"cheer", "jump", "dance", "rear_up", "flap", "spin", "bow", "stomp", "roar", "wave"}
 STRONG_MOODS = {"angry", "surprised", "scared", "excited"}
 MOOD_ANGLE = {"angry": "low", "smug": "low", "scared": "high", "sad": "high", "worried": "high"}

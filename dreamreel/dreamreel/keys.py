@@ -44,6 +44,21 @@ def _path(target, prop):
         return prop
 
 
+RECORDING = []    # stacks of key records while a gesture is being performed (see acting.py)
+
+
+class recording:
+    """Collect every curve keyed inside the block: `with keys.recording() as rec: ...`."""
+
+    def __enter__(self):
+        self.curves = set()
+        RECORDING.append(self.curves)
+        return self.curves
+
+    def __exit__(self, *exc):
+        RECORDING.remove(self.curves)
+
+
 def key(target, prop, at, value, ease="smooth", index=-1):
     """Set `target.prop` (or one component of it, with `index`) and keyframe it at `at` seconds."""
     interp, mode = EASINGS[ease]
@@ -60,6 +75,8 @@ def key(target, prop, at, value, ease="smooth", index=-1):
     full = _path(target, prop)
     for fc in _compat.fcurves(target.id_data):
         if fc.data_path == full and (index < 0 or fc.array_index == index):
+            for rec in RECORDING:
+                rec.add(fc)
             for kp in fc.keyframe_points:
                 if abs(kp.co[0] - frame) < 0.5:
                     kp.interpolation = interp
@@ -113,3 +130,25 @@ def sample(target, prop, at):
     for i, fc in curves.items():
         vec[i] = fc.evaluate(frame)
     return vec
+
+
+def bake(target, prop, frames, rows):
+    """Replace `target.prop`'s animation with one key per frame: rows[i] is the value at frames[i].
+    Fast, for simulated motion (springs)."""
+    n = len(rows[0]) if hasattr(rows[0], "__len__") else 1
+    target.keyframe_insert(prop, frame=frames[0])
+    full = _path(target, prop)
+    for fc in _compat.fcurves(target.id_data):
+        if fc.data_path != full:
+            continue
+        i = fc.array_index
+        pts = fc.keyframe_points
+        pts.clear()
+        pts.add(len(frames))
+        co = []
+        for f, r in zip(frames, rows):
+            co += [f, r[i] if n > 1 else r]
+        pts.foreach_set("co", co)
+        for kp in pts:
+            kp.interpolation = "LINEAR"
+        fc.update()

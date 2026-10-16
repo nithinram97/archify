@@ -872,9 +872,10 @@ class Creature(Character):
             pass   # the body is the head
         elif kind == "bug":
             for side in (1, -1):
-                shapes.cylinder(f"{n}.antenna", hr * 0.05, hr * 1.4, "charcoal", self.neck,
-                                at=hc + Vector((side * hr * 0.35, -hr * 0.5, hr * 0.6)),
-                                rot=(_deg(-35), _deg(25 * side), 0), bevel=0)
+                root = hc + Vector((side * hr * 0.35, -hr * 0.5, hr * 0.6))
+                ant = shapes.cylinder(f"{n}.antenna", hr * 0.05, hr * 1.4, "charcoal", self.neck, at=root,
+                                      rot=(_deg(-35), _deg(25 * side), 0), bevel=0)
+                self.dangle(ant, root, stiffness=1.5, gain=1.0)
 
     def face_point(self, x, z, inset=0.006):
         hr = self.hr
@@ -930,11 +931,13 @@ class Creature(Character):
                 shapes.ellipsoid(f"{n}.ear", hr * 0.3, hr * 0.1, hr * 0.3, col, self.neck,
                                  at=hc + Vector((side * hr * 0.7, hr * 0.1, hr * 0.7)))
             elif ears == "floppy":
-                shapes.ellipsoid(f"{n}.ear", hr * 0.18, hr * 0.12, hr * 0.5, col, self.neck,
-                                 at=hc + Vector((side * hr * 1.0, hr * 0.1, -hr * 0.1)), rot=(0, _deg(-15 * side), 0))
+                ear = shapes.ellipsoid(f"{n}.ear", hr * 0.18, hr * 0.12, hr * 0.5, col, self.neck,
+                                       at=hc + Vector((side * hr * 1.0, hr * 0.1, -hr * 0.1)), rot=(0, _deg(-15 * side), 0))
+                self.dangle(ear, hc + Vector((side * hr * 0.9, hr * 0.1, hr * 0.35)), stiffness=0.7, gain=1.2)
             elif ears == "long":
-                shapes.ellipsoid(f"{n}.ear", hr * 0.18, hr * 0.08, hr * 0.85, col, self.neck,
-                                 at=hc + Vector((side * hr * 0.35, hr * 0.15, hr * 1.4)), rot=(0, _deg(10 * side), 0))
+                ear = shapes.ellipsoid(f"{n}.ear", hr * 0.18, hr * 0.08, hr * 0.85, col, self.neck,
+                                       at=hc + Vector((side * hr * 0.35, hr * 0.15, hr * 1.4)), rot=(0, _deg(10 * side), 0))
+                self.dangle(ear, hc + Vector((side * hr * 0.3, hr * 0.12, hr * 0.6)), stiffness=1.2, gain=0.9)
         horns = self.get("horns", "none")
         horn = look.plastic("cream", 0.4, 0.3)
         if horns == "small":
