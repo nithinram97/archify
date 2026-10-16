@@ -389,10 +389,28 @@ class Environment:
     def _room_lights(self):
         L = self.light
         k = L.room
-        self._area("key", getattr(L, "key_position", (-3.0, -4.5, 4.2)), 900 * k * L.key,
-                   mix("#fff0dc", L.room_color, 0.6), 4.0 if L.key <= 1 else 2.0)
-        self._area("fill", (4.0, -3.5, 2.5), 350 * k * L.fill, mix("#dce8ff", L.room_color, 0.3), 5.0)
-        self._area("top", (0, 0, 3.5), 250 * k * L.fill, mix("#fff6ea", L.room_color, 0.5), 6.0)
+        ceil = getattr(self.set, "ceiling_h", None) if self.set is not None else None
+        key_at = getattr(L, "key_position", (-3.0, -4.5, 4.2))
+        if ceil:      # under the ceiling, coming in from the open side
+            key_at = (key_at[0], min(key_at[1], -4.5), min(key_at[2], ceil - 0.25))
+        self._area("key", key_at, 900 * k * L.key, mix("#fff0dc", L.room_color, 0.6), 4.0 if L.key <= 1 else 2.0)
+        self._area("fill", (4.0, -3.5, min(2.5, (ceil or 9) - 0.3)), 350 * k * L.fill,
+                   mix("#dce8ff", L.room_color, 0.3), 5.0)
+        panels = getattr(self.set, "panels", [])
+        if panels:    # strip lights in the ceiling (one light per row, to keep renders quick)
+            rows = sorted({round(y, 3) for _, y in panels})
+            xs = [x for x, _ in panels]
+            span = max(xs) - min(xs) + 0.6
+            each = 620 * L.fill ** 0.5 / len(rows) ** 0.5
+            for y in rows:
+                lt = self._area("strip light", ((max(xs) + min(xs)) / 2, y, ceil - 0.06), each, "#eef6ff", 1.0,
+                                target=((max(xs) + min(xs)) / 2, y, 0))
+                lt.data.shape = "RECTANGLE"
+                lt.data.size, lt.data.size_y = span, 1.15
+        elif ceil:
+            self._area("top", (0, 0, ceil - 0.05), 250 * k * L.fill, mix("#fff6ea", L.room_color, 0.5), 3.0)
+        else:
+            self._area("top", (0, 0, 3.5), 250 * k * L.fill, mix("#fff6ea", L.room_color, 0.5), 6.0)
         # daylight through the windows, in the colour of the sun
         for x, y, z in (self.set.windows if self.set is not None else []):
             glow = L.sun_energy / 3.2

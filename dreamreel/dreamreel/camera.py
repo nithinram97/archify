@@ -197,6 +197,8 @@ class Director:
         W, D = st.width / 2 - 0.15, st.depth / 2 - 0.15
         p.x = max(-W, min(W, p.x))
         p.y = min(D, p.y)
+        if getattr(st, "ceiling_h", None):
+            p.z = min(p.z, st.ceiling_h - 0.12)
         return p
 
     # ------------------------------------------------------------------ seeing past things
@@ -243,8 +245,10 @@ class Director:
         flat = Vector((off.x, off.y, 0))
         el = math.atan2(off.z, flat.length) if flat.length > 1e-6 else math.pi / 2
         yaws = (0, 25, -25) if kind in ("two_shot", "over_shoulder", "group") else (0, 25, -25, 50, -50, 80, -80)
+        # an angle asked for (a worm's-eye shot, say) is kept: look round the side or come in closer instead
+        rises = (0,) if getattr(self, "_angle_locked", False) else (0, 12, 25, 40)
         for yaw in yaws:
-            for rise in (0, 12, 25, 40):
+            for rise in rises:
                 if yaw == 0 and rise == 0:
                     continue
                 e = min(math.radians(85), el + math.radians(rise))
@@ -295,8 +299,12 @@ class Director:
         if st.subjects >= 2 and other is None:
             raise ValueError(f"the {st.label} shot needs a second subject (other = ...)")
         before = len(self.shots)
-        st().frame(self, t, of=of, other=other, angle=angle or "eye_level", side=side or "auto",
-                   lens=lens, dutch=float(dutch or 0))
+        self._angle_locked = angle not in (None, "eye_level")
+        try:
+            st().frame(self, t, of=of, other=other, angle=angle or "eye_level", side=side or "auto",
+                       lens=lens, dutch=float(dutch or 0))
+        finally:
+            self._angle_locked = False
         if len(self.shots) == before:
             raise ValueError(f"the {st.label} shot didn't produce a camera position")
         shot = self.shots[-1]
@@ -642,6 +650,9 @@ class Director:
 
     def top_down(self, height, ortho_scale):
         """Look straight down from above (for maps of a set)."""
+        for o in bpy.data.objects:          # see into rooms with ceilings
+            if o.get("dr_ceiling"):
+                o.hide_render = True
         self.rig.constraints.clear()
         self.rig.location = (0, 0, height)
         self.rig.rotation_euler = (0, 0, 0)

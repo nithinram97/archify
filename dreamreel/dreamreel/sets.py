@@ -297,6 +297,20 @@ FURNISH = {
                                                           "items": ["cup"]},
              {"type": "table", "place": "right", "width": 0.9, "chairs": 2, "items": ["cup"]},
              {"type": "painting", "place": "back-right"}, {"type": "lamp", "place": "front-left"}],
+    "lab": [{"type": "blackboard", "place": "back"}, {"type": "lab_bench", "place": "center", "items": ["tray", "tool-cup"]},
+            {"type": "lab_bench", "place": "left", "items": ["jar", "beaker", "bottle"]},
+            {"type": "lab_bench", "place": "right", "items": ["scale", "jar", "beaker"]},
+            {"type": "shelves", "place": "back-right"}, {"type": "poster", "place": "back-right", "design": "elements",
+                                                          "height": 2.2},
+            {"type": "clock", "place": "back"}, {"type": "door", "place": "back-left"}],
+}
+
+# how each kind of furnished room looks unless the set file says otherwise
+FURNISH_LOOK = {
+    "lab": {"walls": "#a9c3bf", "floor": "#7f8c89", "ceiling": "tiles"},
+    "classroom": {"ceiling": "tiles"},
+    "office": {"ceiling": "tiles", "floor": "carpet"},
+    "cafe": {"ceiling": "plain"},
 }
 
 
@@ -314,7 +328,7 @@ def furnish(kind, own):
         if p["type"] in have and p["type"] in ("door", "window", "sofa", "bed", "counter", "fridge", "tv",
                                                 "blackboard", "clock", "bookshelf", "wardrobe"):
             continue
-        if not wall and p["place"] in taken_floor:
+        if not wall and p["place"] in taken_floor and p["type"] not in ("door",):
             continue
         if not wall:
             taken_floor.add(p["place"])
@@ -332,6 +346,8 @@ class Room(Set):
         Param("floor", "choice", default="wood", choices=tuple(FLOORS)),
         Param("trim", "color", default="white", label="Skirting"),
         Param("wallpaper", "color", label="Wallpaper stripes"),
+        Param("ceiling", "choice", default="none", choices=("none", "plain", "tiles"),
+              label="Ceiling (tiles: with strip lights)"),
     ]
 
     def __init__(self, spec, name="set"):
@@ -339,7 +355,10 @@ class Room(Set):
         self.size = SIZES[size] if isinstance(size, str) else tuple(size)
         self.wall_h = spec.get("wall_height", 2.4)
         if spec.get("furnish"):
+            spec = dict(FURNISH_LOOK.get(spec["furnish"], {}), **spec)
             spec = dict(spec, props=furnish(spec["furnish"], spec.get("props")))
+        self.ceiling_h = None
+        self.panels = []     # (x, y) of ceiling strip lights
         super().__init__(spec, name)
 
     def build_environment(self):
@@ -363,6 +382,38 @@ class Room(Set):
             for i in range(int(W / 0.4)):
                 shapes.box("stripe", 0.14, 0.005, Hh - 0.1, look.matte(spec["wallpaper"]),
                            at=(-W / 2 + 0.2 + i * 0.4, D / 2 - 0.003, 0.1), bevel=0)
+        if spec.get("ceiling", "none") != "none":
+            self.build_ceiling(spec["ceiling"])
+
+    def build_ceiling(self, kind):
+        """A ceiling, so low angles look up at something; "tiles" is an office or school ceiling with
+        strip lights that light the room."""
+        W, D, Hh = self.width, self.depth, self.wall_h
+        self.ceiling_h = Hh
+        tiles = kind == "tiles"
+        c = shapes.box("ceiling", W + 0.2, D + 0.2, 0.08, look.matte("#e9ebe6" if tiles else "white", 0.9),
+                       at=(0, 0, Hh), bevel=0)
+        c["dr_ceiling"] = True
+        if not tiles:
+            return
+        grid = look.matte("#b9bdb8", 0.6)
+        step = 0.6
+        for i in range(int(W / step) + 1):
+            g = shapes.box("ceiling.grid", 0.02, D, 0.012, grid, at=(-W / 2 + i * step, 0, Hh - 0.012), bevel=0)
+            g["dr_ceiling"] = True
+        for j in range(int(D / step) + 1):
+            g = shapes.box("ceiling.grid", W, 0.02, 0.012, grid, at=(0, -D / 2 + j * step, Hh - 0.012), bevel=0)
+            g["dr_ceiling"] = True
+        panel = look.plastic("#f4f9ff", 0.4, 0.0, emission=3.0)
+        nx = max(1, int(W / 2.2))
+        ny = max(1, int(D / 1.8))
+        for i in range(nx):
+            for j in range(ny):
+                x = -W / 2 + W * (i + 0.5) / nx
+                y = -D / 2 + D * (j + 0.5) / ny
+                p = shapes.box("ceiling.light", 0.55, 1.15, 0.02, panel, at=(x, y, Hh - 0.03), bevel=0)
+                p["dr_ceiling"] = True
+                self.panels.append((x, y))
 
 
 class Outdoor(Set):

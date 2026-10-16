@@ -104,6 +104,16 @@ def main():
     assert not any(p["type"] == "table" for p in props), "the table's place was taken by your sofa"
     floor = [p["place"] for p in props if not getattr(dr.get("prop", p["type"]), "wall", False)]
     assert len(floor) == len(set(floor)), floor
+    # a lab, with a tiled ceiling and strip lights; the camera stays under the ceiling
+    s, mia = scene({"kind": "room", "furnish": "lab", "size": "large"})
+    assert s.set.ceiling_h and s.set.panels
+    assert any(o.name.startswith("strip light") for o in bpy.data.objects)
+    assert {"lab_bench", "shelves", "blackboard"} <= {p.split("-")[0] for p in s.set.props}
+    assert "tray" in s.set.marks
+    s.cut.shot("establishing", at=0.0, angle="high")
+    s.cut.build()
+    for sh in s.cut.final:
+        assert sh.state.pos.z < s.set.ceiling_h, sh.label
     s, mia = scene({"kind": "room", "furnish": "bedroom"})
     assert "bed" in s.set.seats and "desk-chair" in s.set.seats
     mia.sit("bed")

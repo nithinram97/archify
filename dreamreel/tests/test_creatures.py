@@ -20,6 +20,7 @@ PLANS = {
     "bug": {},
     "spider": {},
     "blob": {"float": True},
+    "frog": dict(iris="#8a5fd1", size=0.6),
 }
 
 
@@ -52,6 +53,20 @@ def main():
                 home = c.home_at(leg, dr.character.Vector((end[0], end[1])), c.heading(s.length))
                 assert (dr.character.Vector(foot) - home).length < 0.5 * c.size, (plan, leg, foot, home)
         print(f"{plan:10} ok  {len(c.skel.joints):2} joints, {len(c.feet)} feet, can: {', '.join(sorted(c.capabilities))}")
+    # the frog: hops (body and feet leave the ground), croaks, flicks its tongue, has hands
+    s = dr.Scene({"kind": "room"})
+    f = s.cast(frog=dict(type="creature", body="frog", size=0.55))
+    f.place("left", facing="right")
+    f.walk_to("right")
+    f.do("croak")
+    f.do("tongue")
+    f.do("cheer")
+    s.finish()
+    hips = [value_at(f.hips, "location", i * 0.05)[2] for i in range(60)]
+    feet = [value_at(f.feet["leg.L"], "location", i * 0.05)[2] for i in range(60)]
+    assert max(hips) > 0.2 and max(feet) > 0.1, (max(hips), max(feet))
+    assert {"croak", "tongue", "arms", "hop"} <= f.capabilities
+    assert f.sac.scale[0] < 0.5 and f.tongue.scale[1] < 0.05, "sac and tongue are hidden at rest"
     print("OK")
 
 

@@ -343,6 +343,44 @@ class Blob(BodyPlan):
         return 0.25 * c.size, 0.45 / max(0.6, speed) ** 0.5
 
 
+class Frog(BodyPlan):
+    """Frogs and toads: a squat body, a wide flat head with eyes on top, long folded hind legs for
+    jumping and short arms with webbed, pad-tipped fingers (so frogs can wave, cheer and point)."""
+    description = "Frogs and toads: hops, croaks, has a long tongue and little hands"
+    capabilities = {"hop", "arms", "swim", "croak", "tongue"}
+    locomotion = "hop"
+    default_head = "frog"
+    default_colors = ("#8cc63f", "#e6efb0")
+    arm_style = "frog"
+    foot_style = "webbed"
+    hop_height = 0.55          # times the frog's size
+
+    def skeleton(self, c):
+        S, G, LL = c.size, _p(c, "girth"), _p(c, "legs_length")
+        k = Skeleton()
+        r = 0.15 * S * G
+        k.joint("pelvis", (0, 0.11 * S, 0.13 * S), r * 0.95)
+        k.joint("spine", (0, -0.02 * S, 0.165 * S), r * 1.05, "pelvis")
+        k.joint("chest", (0, -0.12 * S, 0.2 * S), r * 0.92, "spine")
+        k.joint("neck", (0, -0.16 * S, 0.25 * S), r * 0.55, "chest")
+        k.head, k.chest = "neck", "chest"
+        k.head_r = 0.17 * S
+        k.head_offset = Vector((0, -0.06 * S, 0.0))
+        for side, nm in ((1, "L"), (-1, "R")):
+            k.joint(f"hip.{nm}", (side * 0.1 * S, 0.15 * S, 0.12 * S), 0.075 * S * G, "pelvis")
+            k.joint(f"knee.{nm}", (side * 0.27 * S, 0.02 * S * LL, 0.13 * S), 0.045 * S * G, f"hip.{nm}")
+            k.joint(f"foot.{nm}", (side * 0.19 * S, 0.2 * S * LL, 0.03 * S), 0.03 * S * G, f"knee.{nm}")
+            k.leg(f"leg.{nm}", f"hip.{nm}", f"knee.{nm}", f"foot.{nm}", bend=(side * 0.8, -1, 0.5))
+            k.shoulders.append((side, Vector((side * 0.12 * S, -0.17 * S, 0.19 * S))))
+        return k
+
+    def gait(self, c, run):
+        return {leg.name: 0.0 for leg in c.skel.legs}, 0.6     # both legs push off together
+
+    def stride(self, c, speed, run):
+        return 0.55 * c.size * (1.4 if run else 1.0), (0.32 if run else 0.42) / max(0.6, speed) ** 0.5
+
+
 def _tail(k, parent, start, length, radius, up=0.05, n=4):
     prev = parent
     x, y, z = start
@@ -364,7 +402,7 @@ def _wings(k, parent, shoulder, span, feathers=False):
 
 
 # ---------------------------------------------------------------------- the creature
-HEADS = ("round", "snout", "beak", "fish", "bug", "none")
+HEADS = ("round", "snout", "beak", "fish", "bug", "frog", "none")
 EARS = ("none", "pointy", "round", "floppy", "long")
 HORNS = ("none", "small", "ram", "unicorn")
 
@@ -394,6 +432,7 @@ class Creature(Character):
         Param("wings", "bool", default=False),
         Param("float", "bool", default=False, label="Floats (blobs)"),
         Param("eyes", "choice", default="normal", choices=("small", "normal", "big")),
+        Param("iris", "color", label="Eye colour"),
         Param("hair", "hair", default="none", label="Hair / mane"),
         Param("hair_color", "color", default="brown", label="Hair colour"),
         Param("extras", "extras", default=[]),
@@ -735,12 +774,62 @@ class Creature(Character):
         n, S = self.name, self.size
         anchor = shapes.empty(f"{n}.chest")
         self.attach(anchor, k.chest)
+        if getattr(self.plan, "arm_style", None) == "frog":
+            self.build_frog_arms(anchor)
+            return
         for side, at in k.shoulders:
             piv = shapes.empty(f"{n}.arm.{'L' if side > 0 else 'R'}", anchor, at)
             arm = shapes.capsule(f"{n}.arm", 0.05 * S, 0.2 * S * float(self.get("legs_length", 1) or 1), self.color("skin"),
                                  piv, rot=(0, _deg(-12 * side), 0), hang=True)
             shapes.sphere(f"{n}.hand", 0.065 * S, self.color("skin"), arm, at=(0, 0, -(0.2 * S + 0.1 * S)))
             self.arms[side] = piv
+
+    def build_frog_arms(self, anchor):
+        """Short arms that reach down and forward to the ground, with splayed webbed fingers. The
+        rest pose is built in, so every arm gesture (wave, cheer, point...) works from it."""
+        n, S, col = self.name, self.size, self.color("skin")
+        pad = look.plastic(self.spec.get("belly") or col, 0.45, 0.2)
+        for side, at in self.skel.shoulders:
+            piv = shapes.empty(f"{n}.arm.{'L' if side > 0 else 'R'}", anchor, at)
+            upper = shapes.capsule(f"{n}.arm", 0.03 * S, 0.16 * S, col, piv, rot=(_deg(-40), _deg(-18 * side), 0),
+                                   hang=True)
+            hand = shapes.empty(f"{n}.hand", upper, (0, 0, -0.215 * S))
+            hand.rotation_euler = (_deg(38), 0, 0)
+            palm = shapes.ellipsoid(f"{n}.palm", 0.035 * S, 0.03 * S, 0.012 * S, col, hand)
+            palm.location.z = -0.006 * S
+            for f in range(4):
+                a = _deg(-60 + f * 40)
+                d = Vector((math.sin(a) * side, -math.cos(a), 0))
+                finger = shapes.capsule(f"{n}.finger", 0.008 * S, 0.045 * S, col, hand,
+                                        at=tuple(d * 0.04 * S + Vector((0, 0, -0.008 * S))),
+                                        rot=(_deg(90), 0, math.atan2(d.x, -d.y)))
+                finger.rotation_mode = "XYZ"
+                shapes.sphere(f"{n}.fingerpad", 0.012 * S, pad, hand,
+                              at=tuple(d * 0.075 * S + Vector((0, 0, -0.008 * S))), segments=12)
+            self.arms[side] = piv
+
+    def build_webbed_feet(self):
+        """Long webbed toes that lie flat on the ground and turn with the frog."""
+        n, S, col = self.name, self.size, self.color("skin")
+        pad = look.plastic(self.spec.get("belly") or col, 0.45, 0.2)
+        for leg, target in self.feet.items():
+            side = 1 if leg.endswith("L") else -1
+            foot = shapes.empty(f"{n}.webfoot", target)
+            con = foot.constraints.new("COPY_ROTATION")
+            con.target = self.root
+            con.use_x = con.use_y = False
+            for t in range(3):
+                a = _deg(side * (15 + t * 22))
+                d = Vector((math.sin(a), -math.cos(a), 0))
+                toe = shapes.capsule(f"{n}.toe", 0.01 * S, 0.09 * S, col, foot,
+                                     at=tuple(d * 0.06 * S + Vector((0, 0, 0.01 * S))),
+                                     rot=(_deg(90), 0, math.atan2(d.x, -d.y)))
+                toe.rotation_mode = "XYZ"
+                shapes.sphere(f"{n}.toepad", 0.015 * S, pad, foot, at=tuple(d * 0.12 * S + Vector((0, 0, 0.012 * S))),
+                              segments=12)
+            web = shapes.ellipsoid(f"{n}.web", 0.06 * S, 0.06 * S, 0.006 * S, col, foot,
+                                   at=(side * 0.025 * S, -0.04 * S, 0.008 * S))
+            web.rotation_euler.z = _deg(side * 25)
 
     # ------------------------------------------------------------------ head and features
     def build_head(self):
@@ -760,6 +849,25 @@ class Creature(Character):
         elif kind == "beak":
             shapes.cylinder(f"{n}.beak", hr * 0.32, hr * 0.75, look.plastic("orange", 0.4, 0.3), self.neck,
                             at=hc + Vector((0, -hr * 0.8, -hr * 0.15)), rot=(_deg(90), 0, 0), r2=0.0, bevel=0)
+        elif kind == "frog":
+            shapes.ellipsoid(f"{n}.head", hr * 1.3, hr * 1.05, hr * 0.62, col, self.neck, at=hc)
+            belly = self.spec.get("belly") or col
+            shapes.ellipsoid(f"{n}.chin", hr * 1.12, hr * 0.85, hr * 0.42, belly, self.neck,
+                             at=hc + Vector((0, -hr * 0.12, -hr * 0.22)))
+            self.eye_bulges = []
+            for side in (1, -1):
+                at = hc + Vector((side * hr * 0.6, -hr * 0.28, hr * 0.5))
+                shapes.sphere(f"{n}.bulge", hr * 0.42, col, self.neck, at=at)
+                self.eye_bulges.append(at)
+            # the throat sac (croaking) and the tongue, hidden until used
+            self.sac = shapes.ellipsoid(f"{n}.sac", hr * 0.6, hr * 0.55, hr * 0.45, look.plastic(belly, 0.3, 0.4),
+                                        self.neck, at=hc + Vector((0, -hr * 0.78, -hr * 0.48)))
+            self.sac.scale = (0.3, 0.3, 0.3)
+            tongue_root = shapes.empty(f"{n}.tonguepivot", self.neck, hc + Vector((0, -hr * 1.0, -hr * 0.12)))
+            shapes.capsule(f"{n}.tongue", hr * 0.12, hr * 1.6, look.plastic("#e8708a", 0.35, 0.3), tongue_root,
+                           rot=(_deg(-90), 0, 0), hang=True).scale = (1.0, 1.0, 0.5)
+            tongue_root.scale = (1, 0.01, 1)
+            self.tongue = tongue_root
         elif kind == "fish":
             pass   # the body is the head
         elif kind == "bug":
@@ -784,9 +892,35 @@ class Creature(Character):
         if kind in ("bug",):
             for e in self.eyes:
                 e.scale = (1.5, 1.2, 1.5)
+        if kind == "frog":
+            n = self.name
+            white = look.plastic("#f4ecc0", 0.25, 0.4)
+            lid = look.plastic(self.spec["color"], 0.4, 0.3)
+            es = {"small": 0.8, "normal": 1.0, "big": 1.2}.get(self.get("eyes"), 1.0)
+            for side, eye, at in zip((1, -1), self.eyes, self.eye_bulges):
+                ball = at + Vector((0, -hr * 0.16, hr * 0.04))
+                shapes.sphere(f"{n}.eyeball", hr * 0.36 * es, white, self.neck, at=ball)
+                eye.location = ball + Vector((0, -hr * 0.33 * es, 0))
+                eye.scale = (1.5 * es, 1.0, 1.4 * es)
+                if self.get("iris"):   # a coloured iris gets a pupil
+                    shapes.sphere(f"{n}.pupil", 0.016 * self.H, look.plastic("#0e0d0d", 0.15, 0.8), eye,
+                                  at=(0, -0.017 * self.H, 0), segments=16)
+                cap = shapes.sphere(f"{n}.lid", hr * 0.385 * es, lid, self.neck, at=ball, segments=24)
+                shapes.cut_below(cap, Vector((0, 0, hr * 0.17 * es)), Vector((0, 0.35, 1)))
+                self.brows[side].location = at + Vector((0, -hr * 0.05, hr * 0.42))
+            self.mouth.location = hc + Vector((0, -hr * 1.0, -hr * 0.16))
+            self.mouth_mesh.scale = (2.8, 1.0, 0.55)      # wide (moods animate the pivot, not this)
+            for side in (1, -1):
+                shapes.sphere(f"{n}.nostril", hr * 0.05, look.plastic("#2a3a1a", 0.4, 0.2), self.neck,
+                              at=hc + Vector((side * hr * 0.2, -hr * 1.0, hr * 0.12)), segments=10)
+
+    def eye_color(self):
+        return self.get("iris") or super().eye_color()
 
     def build_features(self):
         n, hr, hc, col = self.name, self.hr, self.hc, self.color("skin")
+        if getattr(self.plan, "foot_style", None) == "webbed":
+            self.build_webbed_feet()
         ears = self.get("ears", "none")
         for side in (1, -1):
             if ears == "pointy":
@@ -931,14 +1065,26 @@ class Creature(Character):
             return
         if loco == "hop":
             base = 0.0
+            up = getattr(self.plan, "hop_height", 0.18) * self.size
             hold(self.hips, "location", ws)
             hold(self.body, "scale", ws)
+            for target in self.feet.values():
+                hold(target, "location", ws)
             for i in range(n_steps):
                 t = ws + i * step_t
                 key(self.hips, "location", t, (0, 0, base))
                 key(self.body, "scale", t, (1.12, 1.12, 0.82))
-                key(self.hips, "location", t + step_t * 0.5, (0, 0, base + 0.18 * self.size), "ease_out")
+                key(self.hips, "location", t + step_t * 0.5, (0, 0, base + up), "ease_out")
                 key(self.body, "scale", t + step_t * 0.3, (0.92, 0.92, 1.15))
+                # legs push off together, trail in the air and land under the body again
+                for leg, target in self.feet.items():
+                    cur = Vector(value_at(target, "location", t))
+                    key(target, "location", t + step_t * 0.08, tuple(cur))
+                    pos, hdg = path.at(min(end, t + step_t * 0.55))
+                    mid = self.home_at(leg, pos, hdg) + Vector((0, 0, up * 0.75))
+                    key(target, "location", t + step_t * 0.55, tuple(mid))
+                    pos, hdg = path.at(min(end, t + step_t * 0.95))
+                    key(target, "location", t + step_t * 0.95, tuple(self.home_at(leg, pos, hdg)))
             key(self.hips, "location", end, (0, 0, base))
             key(self.body, "scale", end, (1.1, 1.1, 0.85))
             key(self.body, "scale", end + 0.15, (1, 1, 1))

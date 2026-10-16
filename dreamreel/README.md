@@ -94,7 +94,7 @@ my-film/
 ## Any body, any creature
 
 Characters are either jointed toy figures or **creatures** built from a body plan: biped,
-quadruped, bird, fish, serpent, bug, spider or blob. Proportions, heads, ears, horns, wings,
+quadruped, bird, fish, serpent, bug, spider, frog or blob. Proportions, heads, ears, horns, wings,
 patterns and colours come from a few settings. Creatures walk, trot, gallop, scuttle, swim,
 slither, hop and fly, with feet that stay planted on the ground. Every one of them talks and shows
 moods with the same face system.
@@ -104,7 +104,8 @@ moods with the same face system.
 
 ## Any place, any light, any weather
 
-Rooms furnish themselves (living room, kitchen, bedroom, office, classroom, café). Outdoors, a
+Rooms furnish themselves (living room, kitchen, bedroom, office, classroom, café, science lab),
+with ceilings and strip lights when the camera looks up. Outdoors, a
 biome lays out the land and what grows on it by rules: meadow, forest, autumn woods, beach, desert,
 snow, mountains or the moon. A whole town street (buildings, shops, pavements, lamps, parked cars)
 comes from one line. Every scene picks its time of day (dawn to night) and weather (clouds,

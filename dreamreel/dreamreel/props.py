@@ -20,7 +20,7 @@ import random
 
 from mathutils import Vector
 
-from . import look, shapes
+from . import look, plugins, shapes
 from .plugins import Param, Plugin
 from .sets import Mark, Seat, ZONES
 
@@ -633,3 +633,178 @@ class Car(Prop):
         s.block(pos, 2.0 if abs(math.sin(f)) > 0.5 else 0.9, 0.9 if abs(math.sin(f)) > 0.5 else 2.0)
         s.marks.setdefault(name, Mark(name, (pos.x, pos.y - 0.9), facing=math.pi))
         return root
+
+
+# ---------------------------------------------------------------------- a science lab
+def _metal(color="#c9ced3"):
+    return look.plastic(color, 0.25, 0.0)
+
+
+class Tray(Item):
+    description = "A metal dissection tray"
+
+    def build(self, s, x, y, z, rng):
+        m = _metal()
+        shapes.box("tray", 0.46, 0.32, 0.012, m, at=(x, y, z), bevel=0.004)
+        for sx in (-1, 1):
+            shapes.box("tray.rim", 0.012, 0.32, 0.035, m, at=(x + sx * 0.224, y, z), bevel=0.003)
+        for sy in (-1, 1):
+            shapes.box("tray.rim", 0.46, 0.012, 0.035, m, at=(x, y + sy * 0.154, z), bevel=0.003)
+        shapes.box("tray.wax", 0.43, 0.29, 0.008, look.matte("#2f3436", 0.35), at=(x, y, z + 0.012), bevel=0)
+        s.focus.setdefault("tray", Vector((x, y, z + 0.03)))
+        s.add_mark("tray", (x, y - 0.55), facing="back")
+        s.surfaces = getattr(s, "surfaces", {})
+        s.surfaces["tray"] = (x, y, z + 0.02)
+
+
+class ToolCup(Item):
+    name = "tool-cup"
+    description = "A cup of scalpels, probes and tweezers"
+
+    def build(self, s, x, y, z, rng):
+        x += 0.3
+        shapes.cylinder("tool-cup", 0.045, 0.11, look.plastic("#3a3d40", 0.5, 0.2), at=(x, y, z))
+        m = _metal("#d9dde0")
+        for k in range(4):
+            tool = shapes.cylinder("tool", 0.005, 0.2, m, at=(x + rng.uniform(-0.02, 0.02), y + rng.uniform(-0.02, 0.02),
+                                                                 z + 0.02), bevel=0, segments=6)
+            tool.rotation_euler = (rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), 0)
+
+
+class Jar(Item):
+    description = "A specimen jar with something floating in it"
+
+    def build(self, s, x, y, z, rng):
+        shapes.cylinder("jar", 0.07, 0.2, look.glass("#dff2e6"), at=(x, y, z))
+        shapes.cylinder("jar.lid", 0.074, 0.03, "charcoal", at=(x, y, z + 0.2))
+        shapes.cylinder("jar.liquid", 0.064, 0.15, look.glass("#d9e8a0"), at=(x, y, z + 0.01))
+        thing = shapes.ellipsoid("jar.thing", 0.03, 0.025, 0.04, look.plastic(rng.choice(["#8a9a5b", "#c9a27a", "#5f7f9f"]),
+                                                                               0.5, 0.2), at=(x, y, z + 0.09))
+        thing.rotation_euler.y = rng.uniform(-0.6, 0.6)
+
+
+class Beaker(Item):
+    description = "A glass beaker"
+
+    def build(self, s, x, y, z, rng):
+        shapes.cylinder("beaker", 0.05, 0.13, look.glass(), at=(x, y, z))
+        shapes.cylinder("beaker.liquid", 0.046, 0.06, look.glass(rng.choice(["#7fc8e8", "#e88a8a", "#9de87f"])),
+                        at=(x, y, z + 0.005))
+
+
+class Bottle(Item):
+    description = "A brown chemical bottle with a label"
+
+    def build(self, s, x, y, z, rng):
+        shapes.cylinder("bottle", 0.055, 0.2, look.plastic("#6b3f1f", 0.15, 0.6), at=(x, y, z))
+        shapes.cylinder("bottle.neck", 0.022, 0.06, look.plastic("#6b3f1f", 0.15, 0.6), at=(x, y, z + 0.2))
+        shapes.cylinder("bottle.cap", 0.026, 0.03, "charcoal", at=(x, y, z + 0.26))
+        shapes.box("bottle.label", 0.08, 0.01, 0.09, look.matte("#f4f1ea"), at=(x, y - 0.05, z + 0.05), bevel=0)
+
+
+class Scale(Item):
+    description = "A weighing scale"
+
+    def build(self, s, x, y, z, rng):
+        shapes.box("scale", 0.2, 0.22, 0.07, look.plastic("#e8862e", 0.4, 0.3), at=(x, y, z), bevel=0.02)
+        shapes.box("scale.dial", 0.1, 0.01, 0.05, look.matte("#f4f1ea"), at=(x, y - 0.11, z + 0.01), bevel=0)
+        shapes.cylinder("scale.pan", 0.1, 0.012, _metal(), at=(x, y, z + 0.075))
+
+
+class LabBench(Prop):
+    name = "lab_bench"
+    description = "A lab bench with a black top and cupboards"
+    default_place = "center"
+    params = Prop.params + [Param("width", "number", default=1.8, min=0.8, max=3.5, step=0.1),
+                            Param("color", "color", default="#c9b49a", label="Cupboards"),
+                            Param("items", "items", label="On top")]
+
+    def build(self, s, name, p):
+        w, d, h = p.get("width", 1.8), 0.75, 0.55
+        pos = s.spot_for(p, w, d, "center")
+        c = p.get("color", "#c9b49a")
+        shapes.box(name, w - 0.06, d - 0.08, h - 0.05, c, at=(pos.x, pos.y, 0), bevel=0.01)
+        shapes.box(name + ".top", w, d, 0.05, look.plastic("#1f2224", 0.35, 0.3), at=(pos.x, pos.y, h - 0.05),
+                   bevel=0.01)
+        n = max(1, int(w / 0.45))
+        for i in range(n):
+            x = pos.x - w / 2 + (i + 0.5) * w / n
+            shapes.box(name + ".door", w / n - 0.04, 0.01, h - 0.15, c, at=(x, pos.y - d / 2 + 0.035, 0.05), bevel=0.004)
+            shapes.box(name + ".handle", 0.06, 0.02, 0.012, _metal(), at=(x, pos.y - d / 2 + 0.025, h - 0.16), bevel=0.003)
+        for item in p.get("items", []):
+            s.place_item(item, pos, h, w)
+        s.block(pos, w, d)
+        s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
+        for side, label in ((-1, "left"), (1, "right")):
+            s.marks[f"{name}-{label}"] = Mark(f"{name}-{label}", (pos.x + side * (w / 2 + 0.35), pos.y),
+                                                 facing=math.pi / 2 * (1 if side < 0 else -1))
+        return None
+
+
+class Shelves(Prop):
+    name = "shelves"
+    description = "Open shelves of jars, beakers and bottles (a lab or a pantry)"
+    default_place = "back-right"
+    params = Prop.params + [Param("width", "number", default=1.2, min=0.6, max=3, step=0.1),
+                            Param("color", "color", default="#c9b49a")]
+
+    def build(self, s, name, p):
+        w = p.get("width", 1.2)
+        pos = _wall_y(s, dict(p, place=p.get("place", "back-right")), 0.3)
+        c = p.get("color", "#c9b49a")
+        for k in range(4):
+            shapes.box(name + ".shelf", w, 0.3, 0.025, c, at=(pos.x, pos.y, 0.05 + k * 0.42), bevel=0.004)
+        for sx in (-1, 1):
+            shapes.box(name, 0.03, 0.3, 1.35, c, at=(pos.x + sx * (w / 2 - 0.015), pos.y, 0), bevel=0.004)
+        rng = random.Random(name)
+        kinds = ["jar", "beaker", "bottle", "jar"]
+        for k in range(1, 4):
+            x = pos.x - w / 2 + 0.12
+            while x < pos.x + w / 2 - 0.12:
+                plugins.get("item", rng.choice(kinds))().build(s, x, pos.y, 0.075 + k * 0.42, rng)
+                x += rng.uniform(0.16, 0.24)
+        s.block(pos, w, 0.3)
+        return None
+
+
+class Poster(Prop):
+    name = "poster"
+    description = "A poster on the back wall: a table of elements, a safety notice or a chart"
+    default_place = "back-left"
+    wall = True
+    params = Prop.params + [Param("design", "choice", default="elements", choices=("elements", "safety", "chart")),
+                            Param("height", "number", default=1.5, min=0.8, max=2.2, step=0.05)]
+
+    def build(self, s, name, p):
+        pos = s.spot_for(p, 0.8, 0.05, "back-left")
+        y = s.depth / 2 - 0.02 if not s.outdoor else pos.y
+        z = p.get("height", 1.5)
+        design = p.get("design", "elements")
+        rng = random.Random(name)
+        if design == "elements":
+            w, h = 0.95, 0.6
+            shapes.box(name, w, 0.01, h, look.matte("#f4f1ea"), at=(pos.x, y, z - h / 2), bevel=0)
+            cols = ["#e88a8a", "#f2c46d", "#9de87f", "#7fc8e8", "#c6a4e8", "#f4f1ea"]
+            for r in range(7):
+                for c in range(18):
+                    if r == 0 and 0 < c < 17 or r in (1, 2) and 1 < c < 12:
+                        continue
+                    shapes.box(name + ".cell", 0.042, 0.012, 0.05, look.matte(cols[min(5, (c // 3 + r) % 6)]),
+                               at=(pos.x - w / 2 + 0.06 + c * 0.047, y - 0.003, z - 0.08 - r * 0.062), bevel=0)
+        elif design == "safety":
+            w, h = 0.5, 0.7
+            shapes.box(name, w, 0.01, h, look.matte("#f2d13a"), at=(pos.x, y, z - h / 2), bevel=0)
+            shapes.box(name + ".band", w - 0.08, 0.012, 0.12, look.matte("#1c1a1a"), at=(pos.x, y - 0.003, z - 0.18),
+                       bevel=0)
+            mark = shapes.cylinder(name + ".sign", 0.12, 0.012, look.matte("#1c1a1a"), at=(pos.x, y - 0.004, z - 0.45),
+                                   segments=3, bevel=0)
+            mark.rotation_euler.x = math.pi / 2
+        else:
+            w, h = 0.7, 0.5
+            shapes.box(name, w, 0.01, h, look.matte("#f4f1ea"), at=(pos.x, y, z - h / 2), bevel=0)
+            for k in range(6):
+                bh = rng.uniform(0.08, 0.36)
+                shapes.box(name + ".bar", 0.07, 0.012, bh, look.matte(rng.choice(["teal", "red", "navy"])),
+                           at=(pos.x - 0.25 + k * 0.1, y - 0.003, z - h + 0.05), bevel=0)
+        s.focus.setdefault(name, Vector((pos.x, y, z - 0.3)))
+        return None

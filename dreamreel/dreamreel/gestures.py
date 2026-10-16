@@ -260,3 +260,37 @@ class RearUp(Gesture):
                 key(target_, "location", t + 1.4, (p[0], p[1], p[2] + c.leg_len * 0.7))
                 key(target_, "location", t + 1.9, tuple(p), "ease_in")
         return t + 1.9
+
+
+class Croak(Gesture):
+    description = "Puff up the throat and croak"
+    needs = ("croak",)
+
+    def perform(self, c, t, target=None):
+        sac = getattr(c, "sac", None)
+        if sac is None:
+            return t + 0.2
+        hold(sac, "scale", t)
+        for i in range(3):
+            key(sac, "scale", t + 0.15 + i * 0.4, (1.3, 1.3, 1.3), "ease_out")
+            key(sac, "scale", t + 0.35 + i * 0.4, (0.3, 0.3, 0.3))
+        c.nod_at(t + 0.1, -6)
+        return t + 1.4
+
+
+class Tongue(Gesture):
+    description = "Flick the tongue out (and back)"
+    needs = ("tongue",)
+    uses_target = True
+
+    def perform(self, c, t, target=None):
+        tongue = getattr(c, "tongue", None)
+        if tongue is None:
+            return t + 0.2
+        if target is not None:
+            c.look_at(target, at=t) if hasattr(c, "look_at") else None
+        hold(tongue, "scale", t)
+        key(tongue, "scale", t + 0.12, (1, 1, 1), "ease_out")
+        key(tongue, "scale", t + 0.35, (1, 1, 1))
+        key(tongue, "scale", t + 0.5, (1, 0.01, 1))
+        return t + 0.6

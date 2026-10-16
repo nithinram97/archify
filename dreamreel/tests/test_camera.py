@@ -74,6 +74,14 @@ def main():
     assert i + 1 < len(labels), labels
     print("framings:", ", ".join(dr.names("shot")))
     print("moves:", ", ".join(dr.names("move")))
+    # an angle asked for is kept even when furniture is in the way (look round or come closer instead)
+    s, mia, tom = scene()
+    s.cut.shot("medium_close", of="tom", at=0.0, angle="worms_eye")
+    s.wait(1)
+    s.finish()
+    shot = s.cut.final[0]
+    head = tom.head_point(0.5)
+    assert shot.state.pos.z < head.z, ("worm's eye stays below the face", shot.state.pos, head)
     print("OK")
 
 

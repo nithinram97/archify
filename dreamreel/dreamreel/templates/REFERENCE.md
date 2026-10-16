@@ -24,18 +24,19 @@ Every character has `name`, `voice` (a Piper voice such as `en_US-amy-medium`) a
 
 | Field | Values |
 |---|---|
-| `body` | biped, quadruped, bird, fish, serpent, bug, spider, blob |
+| `body` | biped, quadruped, bird, fish, serpent, bug, spider, blob, frog |
 | `size` | overall scale (1 = dog-sized quadruped, child-sized biped) |
 | `length`, `legs_length`, `neck`, `tail`, `girth` | proportions (1 = normal) |
 | `leg_pairs` | for bugs (3 = insect) |
 | `color`, `belly` | main and underside colours |
 | `pattern`, `pattern_color` | none, spots, stripes |
-| `head` | round, snout, beak, fish, bug, none (each body has a sensible default) |
+| `head` | round, snout, beak, fish, bug, frog, none (each body has a sensible default) |
 | `ears` | none, pointy, round, floppy, long |
 | `horns` | none, small, ram, unicorn |
 | `wings` | true for wings (and flying) |
 | `float` | true makes a blob float (a ghost) |
 | `eyes`, `hair` (a mane), `hair_color`, `extras` | as for toys |
+| `iris` | an eye colour (with a pupil), e.g. `"#8a5fd1"` |
 
 What each body can do:
 
@@ -48,6 +49,7 @@ What each body can do:
 | serpent | slithering | tail_wag |
 | bug, spider | scuttling (tripod gait) | |
 | blob | hopping | |
+| frog | hopping (big jumps, feet and all) | arm gestures (wave, cheer, point...), croak, tongue, swim |
 
 All bodies: say, feel (moods), look_at, turn_to, nod, shake_head, jump, bow, roar, sniff, spin.
 
@@ -59,8 +61,9 @@ ginger.
 
 `kind = "room"`: `size` (small, medium, large), `walls`, `floor` (wood, tiles, carpet, concrete,
 grass, sand, stone), `trim`, `wallpaper`, and `furnish` to have it furnished for you: living_room,
-kitchen, bedroom, office, classroom, cafe. Your own `[[props]]` come first; the furniture fills
-the places that are still free.
+kitchen, bedroom, office, classroom, cafe, lab. Your own `[[props]]` come first; the furniture fills
+the places that are still free. `ceiling` (none, plain, tiles) puts a ceiling on the room so low
+angles look up at something; tiles come with strip lights that light the room.
 
 `kind = "outdoor"`: `biome` (meadow, forest, autumn, beach, desert, snow, mountains, moon),
 `terrain` (flat, rolling, hills, mountains, dunes, craters; the biome chooses otherwise), `density`
@@ -109,8 +112,12 @@ by_the_plant = "left"
 | wardrobe, tv | color / facing, on | `wardrobe` |
 | painting, clock, blackboard | on the back wall (they don't take a floor place) | `blackboard` |
 | car | color, facing (left, right, camera, back) | `car` |
+| lab_bench | width, color, items | `lab_bench`, `lab_bench-left`, `lab_bench-right` |
+| shelves | width, color (full of jars, beakers and bottles) | |
+| poster | design (elements, safety, chart), height; on the back wall | |
 
-Items on tables and counters: cookie-jar, cookie, plate, cup, vase, laptop, book.
+Items on tables, counters and benches: cookie-jar, cookie, plate, cup, vase, laptop, book, tray (a
+dissection tray; makes the mark `tray`), tool-cup, jar, beaker, bottle, scale.
 A second thing of the same type gets `-2` (`chair-2`), or give it a `name`.
 
 ## Scenes: `scenes/NNN_name.toml`
@@ -161,7 +168,7 @@ lightning and wind in the trees. Slow motion slows the rain too.
 **Moods**: neutral, happy, excited, sad, angry, surprised, worried, scared, smug, sleepy.
 
 **Gestures**: wave, nod, shake_head, shrug, point, jump, cheer, facepalm, clap, think, bow, stomp
-(toys); roar, sniff, spin, tail_wag, flap, rear_up (any body that has what it needs).
+(toys); roar, sniff, spin, tail_wag, flap, rear_up, croak, tongue (any body that has what it needs).
 
 ## Camera
 
@@ -184,7 +191,7 @@ handheld = true
 | Setting | Values |
 |---|---|
 | `shot` (framing) | establishing, wide, group, full, medium_wide, medium, medium_close, close_up, extreme_close_up, two_shot (of, other), over_shoulder (of = past whom, other = onto whom), pov (through of's eyes, looking at other), insert (of = a prop or thing on a table, e.g. `cookie-jar`) |
-| `angle` | eye_level, high, low, birds_eye, worms_eye |
+| `angle` | eye_level, high, low, birds_eye, worms_eye (kept even when furniture is in the way) |
 | `side` | auto, front, three_quarter, profile, back |
 | `move` | static, push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, truck_left, truck_right, crane_up, crane_down, orbit_left, orbit_right, follow, zoom_in, zoom_out, dolly_zoom, rack_focus |
 | `amount` | how much the move does (degrees for pans, tilts and orbits; metres for trucks and cranes; a share of the distance for push and pull; a lens factor for zooms) |

@@ -52,7 +52,7 @@ each one's settings. That list is the truth; use only names from it.
 ## Creatures: any body
 
 `type = "creature"` builds a body from a **body plan**: `biped` (goblins, aliens), `quadruped` (dogs,
-horses; `wings = true` for a dragon), `bird`, `fish`, `serpent`, `bug`, `spider`, `blob` (slimes;
+horses; `wings = true` for a dragon), `bird`, `fish`, `serpent`, `bug`, `spider`, `frog` (hops, croaks, has a tongue and hands), `blob` (slimes;
 `float = true` for a ghost). Shape it with `size`, `length`, `legs_length`, `neck`, `tail`, `girth`,
 `head` (round, snout, beak, fish, bug, none), `ears`, `horns`, `color`, `belly`, `pattern`.
 Movement follows the body: `walk_to` walks, trots, gallops, scuttles, swims, slithers or hops;
@@ -62,7 +62,7 @@ Movement follows the body: `walk_to` walks, trots, gallops, scuttles, swims, sli
 ## Places, light and weather
 
 Any place can be built from a set file without modelling: rooms furnish themselves (`furnish =
-"bedroom"`), outdoor sets pick a `biome` (meadow, forest, autumn, beach, desert, snow, mountains,
+"bedroom"`, or `"lab"` for a science lab; `ceiling = "tiles"` for low angles), outdoor sets pick a `biome` (meadow, forest, autumn, beach, desert, snow, mountains,
 moon), and `kind = "street"` makes a whole town street. Time of day and weather go in each scene
 file, so one set serves a sunny morning, a rainy night and a storm. Light tells the story: golden
 hour for warmth, dusk for melancholy, night and rain for danger, fog for mystery, a storm's
