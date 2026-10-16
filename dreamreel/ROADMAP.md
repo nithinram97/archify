@@ -31,8 +31,8 @@ Next, roughly in order:
 - Import your own models (glTF) and CC0 asset packs (Kenney, Quaternius, Poly Haven).
 
 ## Places
-- More set kinds: street, office, classroom, forest, beach, space station.
-- Weather (rain, snow, wind) and time of day animation (sunset, lights coming on).
+- More set kinds: space station, castle, underwater; rivers and lakes in biomes.
+- Time of day changing during a scene (a sunset as it happens, lights coming on).
 - Sets that span several rooms, with cuts between them.
 
 ## Film-making
