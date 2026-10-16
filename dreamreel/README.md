@@ -21,7 +21,8 @@ tom.say("Is it? How strange.", mood="worried", to=mia)
 tom.do("shrug")
 ```
 
-That's a scene. Mia walks in through the door and round the table, her face changes, she talks
+That's a scene, written in Python. In a project the same scene is a list of beats in
+`scenes/010_jar.toml`, which dreamreel studio edits with menus. Mia walks in through the door and round the table, her face changes, she talks
 with her mouth in sync with her voice, Tom answers, and the camera covers it like a TV director
 would: a wide shot while people move, then over-the-shoulder shots and close-ups for the dialogue,
 always on the same side of the conversation.
@@ -84,10 +85,30 @@ my-film/
   film.toml              title, frame rate, resolution, scene order, music
   cast/mia.toml          how each character looks and sounds
   sets/kitchen.toml      each place: room or outdoor, furniture, marks
-  scenes/010_jar.py      each scene: who does what, in order
+  scenes/010_jar.toml    each scene: the set, the cast and the beats (who does what, in order)
+  extensions/*.py        this film's own features, as classes
   audio/                 your music; generated voices are cached here
   renders/               everything dreamreel renders
 ```
+
+## Any body, any creature
+
+Characters are either jointed toy figures or **creatures** built from a body plan: biped,
+quadruped, bird, fish, serpent, bug, spider or blob. Proportions, heads, ears, horns, wings,
+patterns and colours come from a few settings. Creatures walk, trot, gallop, scuttle, swim,
+slither, hop and fly, with feet that stay planted on the ground. Every one of them talks and shows
+moods with the same face system.
+
+![Nine creatures from eight body plans](docs/media/creatures.jpg)
+![A procedural four-beat dog walk](docs/media/dog-walk.jpg)
+
+## Everything is extensible
+
+Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,
+actions, props, set kinds, camera shots and voice engines. A film can add its own in its
+`extensions/` folder (`dreamreel extend prop campfire` starts one). New classes immediately work
+in cast, set and scene files and show up in the studio's menus. When a film needs something
+dreamreel doesn't have, you or your AI agent add it as a class instead of working around it.
 
 ## The look
 

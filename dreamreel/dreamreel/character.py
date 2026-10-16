@@ -50,6 +50,28 @@ def heading_to(dx, dy):
     return math.atan2(dx, -dy)
 
 
+class Stride:
+    """Where a walking character's root is at any moment of a walk: a path walked at constant speed
+    from `start` for `duration` seconds (used to plan footsteps)."""
+
+    def __init__(self, path, start, duration, total):
+        self.path, self.start, self.duration, self.total = path, start, duration, total
+        self.end = start + duration
+
+    def at(self, t):
+        """(position Vector(x, y), heading) at time t."""
+        f = min(1.0, max(0.0, (t - self.start) / self.duration)) if self.duration > 0 else 1.0
+        d = f * self.total
+        for i in range(1, len(self.path)):
+            seg = self.path[i] - self.path[i - 1]
+            L = seg.length
+            if d <= L or i == len(self.path) - 1:
+                u = min(1.0, d / L) if L > 1e-9 else 1.0
+                return self.path[i - 1] + seg * u, heading_to(seg.x, seg.y)
+            d -= L
+        return self.path[-1], 0.0
+
+
 class Character(Plugin):
     kind = "character"
     abstract = True
@@ -72,10 +94,11 @@ class Character(Plugin):
     ]
 
     drawing = None    # name of a live drawing the studio can show while editing (None: render a portrait)
+    default_capabilities = ("walk", "arms", "swing_legs", "face")
 
     @classmethod
     def describe_extra(cls):
-        return {"drawing": cls.drawing}
+        return {"drawing": cls.drawing, "capabilities": list(cls.default_capabilities)}
 
     def __init__(self, name, scene=None, **spec):
         self.name = name
@@ -95,6 +118,14 @@ class Character(Plugin):
         self.build()
 
     # ------------------------------------------------------------------ spec helpers
+    @property
+    def capabilities(self):
+        """What this body can do; gestures and actions check it (see Gesture.needs)."""
+        return set(self.default_capabilities)
+
+    def prepare(self, length):
+        """Called once the scene is complete, before rendering (creatures plant unplanted feet here)."""
+
     def get(self, key_, default=None):
         return self.spec.get(key_, default)
 
@@ -374,9 +405,7 @@ class Character(Plugin):
         path = self.scene.set.route(p0, p1) if self.scene.set else [p0, p1]
         sp = SPEEDS.get(speed, speed) if not isinstance(speed, (int, float)) else speed
         run = sp >= 1.8
-        H = self.H
-        stride = (0.42 if run else 0.32) * H * min(sp, 1.5) ** 0.3
-        step_t = (0.28 if run else 0.36) / max(0.6, sp) ** 0.6
+        stride, step_t = self.gait_timing(sp, run)
         total = sum((path[i + 1] - path[i]).length for i in range(len(path) - 1))
         if total < 0.05:
             if facing is not None:
@@ -405,7 +434,26 @@ class Character(Plugin):
                 h = self._key_heading(ti + 0.12, heading_to(nxt.x, nxt.y))
         end = ws + dur
 
-        # legs, arms and bounce, one key per footfall
+        self.animate_steps(Stride(path, ws, dur, total), n_steps, step_t, run)
+        self.scene._event("move", self, t, end)
+        if facing is not None:
+            self._end(end, wait)
+            return self.turn_to(facing, at=end, wait=wait)
+        mark = self.scene.set.marks.get(where) if isinstance(where, str) and self.scene.set else None
+        if mark is not None and mark.facing is not None:
+            self._end(end, wait)
+            return self.turn_to(math.degrees(mark.facing), at=end, wait=wait)
+        return self._end(end, wait)
+
+    def gait_timing(self, speed, run):
+        """(stride length in metres, seconds per step) for a speed factor. Bodies override this."""
+        H = self.H
+        return (0.42 if run else 0.32) * H * min(speed, 1.5) ** 0.3, (0.28 if run else 0.36) / max(0.6, speed) ** 0.6
+
+    def animate_steps(self, path, n_steps, step_t, run):
+        """Animate the body while the root travels along `path` (a Stride): legs, arms, bounce.
+        The toy swings its rigid legs and arms; other bodies plant feet (see creatures.py)."""
+        ws, end, H = path.start, path.end, self.H
         A = _deg(38 if run else 26)
         lean = _deg(10 if run else 2)
         base = self.hip_z
@@ -429,15 +477,6 @@ class Character(Plugin):
                 key(self.hips, "location", ti + step_t / 2, (0, 0, base + (0.03 if run else 0.012) * H))
         key(self.hips, "location", end, (0, 0, base))
         key(self.body, "rotation_euler", end, (0, 0, 0))
-        self.scene._event("move", self, t, end)
-        if facing is not None:
-            self._end(end, wait)
-            return self.turn_to(facing, at=end, wait=wait)
-        mark = self.scene.set.marks.get(where) if isinstance(where, str) and self.scene.set else None
-        if mark is not None and mark.facing is not None:
-            self._end(end, wait)
-            return self.turn_to(math.degrees(mark.facing), at=end, wait=wait)
-        return self._end(end, wait)
 
     def run_to(self, where, **kw):
         return self.walk_to(where, speed="run", **kw)
@@ -601,8 +640,10 @@ class Character(Plugin):
 
     # ------------------------------------------------------------------ pose helpers (for gestures)
     def arm_to(self, side, t, rot, ease="smooth"):
-        """Key one arm (1 = left, -1 = right) to a rotation (x forward/back, y out to the side, z twist)."""
-        key(self.arms[side], "rotation_euler", t, rot, ease)
+        """Key one arm (1 = left, -1 = right) to a rotation (x forward/back, y out to the side, z twist).
+        Bodies without arms ignore it, so gestures that also move arms still work on them."""
+        if side in self.arms:
+            key(self.arms[side], "rotation_euler", t, rot, ease)
 
     def arms_rest(self, t):
         for s in (1, -1):
@@ -634,9 +675,14 @@ class Character(Plugin):
     def do(self, gesture, target=None, at=None, wait=True):
         """Play a gesture (see dr.registry("gesture"); add your own with dr.Gesture)."""
         g = plugins.get("gesture", gesture)
+        missing = set(g.needs) - self.capabilities
+        if missing:
+            able = [n for n, cls in plugins.registry("gesture").items() if not set(cls.needs) - self.capabilities]
+            raise ValueError(f"{self.name} can't {g.label.lower()} (needs {', '.join(sorted(missing))}). "
+                             f"{self.name} can: {', '.join(able)}")
         t = self._start(at)
-        for s in (1, -1):
-            hold(self.arms[s], "rotation_euler", t)
+        for arm in self.arms.values():
+            hold(arm, "rotation_euler", t)
         hold(self.body, "rotation_euler", t)
         end = g().perform(self, t, target=target)
         self.scene._event("gesture", self, t, end, gesture=gesture)

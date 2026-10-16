@@ -239,6 +239,7 @@ class Scene:
             if at is not None:
                 self.at(float(at))
             self._beat = i
+            act.check(actor)
             act().run(self, actor, **params)
             self._beat = None
         except BeatError:
@@ -393,6 +394,7 @@ class Scene:
         self._finished = True
         L = self.length
         for c in self.actors.values():
+            c.prepare(L)
             c._alive(L)
         self.cut.build()
         self.bscene.frame_start = 1

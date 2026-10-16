@@ -1,12 +1,18 @@
 # Scene 030: uses this film's own extensions (extensions/party.py): a robot, a dance and a cake.
 set = "park"
-cast = ["mia", "bolt"]
+cast = ["mia", "bolt", "biscuit"]
 
 [[beats]]
 who = "mia"
 do = "sit"
 seat = "bench"
 already = true
+
+[[beats]]
+who = "biscuit"
+do = "place"
+where = "left"
+facing = "cake"
 
 [[beats]]
 who = "bolt"
@@ -39,6 +45,24 @@ gesture = "cheer"
 who = "bolt"
 do = "gesture"
 gesture = "dance"
+
+[[beats]]
+who = "biscuit"
+do = "walk_to"
+where = "front-right"
+speed = "fast"
+facing = "cake"
+with_previous = true
+
+[[beats]]
+who = "biscuit"
+do = "gesture"
+gesture = "sniff"
+
+[[beats]]
+who = "biscuit"
+do = "gesture"
+gesture = "tail_wag"
 
 [[beats]]
 who = "mia"

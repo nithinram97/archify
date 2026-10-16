@@ -52,7 +52,7 @@ def main():
 
         code, st = call(base, "GET", "/api/state")
         assert code == 200 and st["project"]["film"]["title"] == "The Last Cookie", st
-        assert set(st["cast"]) == {"mia", "tom", "gran", "bolt"} and "kitchen" in st["info"]["sets"]
+        assert set(st["cast"]) == {"mia", "tom", "gran", "bolt", "biscuit"} and "kitchen" in st["info"]["sets"]
         assert "chair-2" in st["info"]["sets"]["kitchen"]["seats"]
 
         # a new character round-trips through toml

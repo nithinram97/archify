@@ -312,9 +312,13 @@ function paramField(p, value, onChange, ctx = {}) {
     case "skin": el = colorPicker(value ?? p.default ?? "skin2", onChange, { skins: true }); break;
     case "choice": {
       const num = typeof (p.choices || [])[0] === "number";
-      const conv = (x) => (num ? +x : x);
+      const conv = (x) => (x === "" ? undefined : num ? +x : x);
       const ch = p.choices.map(String);
-      const v = String(value ?? p.default ?? ch[0]);
+      if (p.default === undefined || p.default === null) {   // no default: the class decides unless you choose
+        el = select(ch, value === undefined || value === null ? "" : String(value), (x) => onChange(conv(x)), { label: p.label, blank: "(automatic)" });
+        break;
+      }
+      const v = String(value ?? p.default);
       el = ch.length <= 4 && !ctx.inline ? seg(ch, v, (x) => onChange(conv(x))) : select(ch, v, (x) => onChange(conv(x)), { label: p.label });
       break;
     }
@@ -323,7 +327,11 @@ function paramField(p, value, onChange, ctx = {}) {
     case "items": el = multiChips(choicesOf("item"), value, onChange); break;
     case "hair": el = select(choicesOf("hair"), value ?? p.default, onChange, { label: p.label }); break;
     case "mood": el = select(choicesOf("mood"), value ?? (p.required ? p.default : ""), onChange, opt("(same mood)")); break;
-    case "gesture": el = select(choicesOf("gesture"), value ?? p.default, onChange, { label: p.label }); break;
+    case "gesture": {
+      const g = plug("gesture").filter((x) => !ctx.who || canDo(ctx.who, x));
+      el = select(g.map((x) => [x.name, x.label]), value ?? p.default, onChange, { label: p.label });
+      break;
+    }
     case "shot": el = select(choicesOf("shot"), value ?? p.default, onChange, { label: p.label }); break;
     case "voice": el = voiceField(value, onChange, ctx); break;
     case "place": el = select(cat.places, value ?? p.default ?? ctx.defaultPlace ?? "center", onChange, { label: p.label }); break;
@@ -339,7 +347,8 @@ function paramField(p, value, onChange, ctx = {}) {
       el = select([...people, ...marks.map((m) => [m, "📍 " + m]), ["camera", "🎥 the camera"]], value ?? "", onChange, opt("(no one)"));
       break;
     default:
-      el = h("input", { type: "text", value: value ?? "", oninput: (e) => onChange(e.target.value) });
+      el = plug(p.type).length ? select(choicesOf(p.type), value ?? p.default, onChange, opt("—"))
+        : h("input", { type: "text", value: value ?? "", oninput: (e) => onChange(e.target.value) });
   }
   // a required menu shows its first choice: store it, so what you see is what's saved
   if (el.tagName === "SELECT" && (value === undefined || value === null || value === "") && el.value) onChange(el.value, true);
@@ -723,8 +732,22 @@ function sceneHeader(file, spec, chk) {
         }))) : null);
 }
 
+function capsOf(who) {
+  const spec = S.state.cast[who] || {};
+  const t = plugOf("character", spec.type || "toy") || {};
+  const caps = new Set(t.capabilities || []);
+  const bodyParam = (t.params || []).find((p) => p.type === "body");
+  if (bodyParam) {   // a character type built from body plans (like "creature")
+    const plan = plugOf("body", spec.body || bodyParam.default);
+    if (plan) plan.capabilities.forEach((c) => caps.add(c));
+    if (spec.wings) { caps.add("wings"); caps.add("fly"); }
+  }
+  return caps;
+}
+const canDo = (who, item) => !(item.needs || []).some((n) => !capsOf(who).has(n));
+
 function actionsFor(who) {
-  return plug("action").filter((a) => (who === "_scene" ? a.scope === "scene" : a.scope !== "scene"));
+  return plug("action").filter((a) => (who === "_scene" ? a.scope === "scene" : a.scope !== "scene" && canDo(who, a)));
 }
 
 function beatRow(file, spec, i, chk) {

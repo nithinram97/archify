@@ -1,0 +1,9 @@
+# A creature: any body from a body plan (biped, quadruped, bird, fish, serpent, bug, spider, blob).
+type = "creature"
+name = "Biscuit"
+body = "quadruped"
+color = "#c98b4f"
+belly = "cream"
+ears = "floppy"
+size = 0.8
+voice = "en_US-ryan-medium"

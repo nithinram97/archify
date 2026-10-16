@@ -30,14 +30,24 @@ class Action(Plugin):
     kind = "action"
     abstract = True
     scope = "character"      # "character": a cast member does it; "scene": the scene itself (camera, pause...)
+    needs = ()               # body capabilities it needs ("fly", "arms"...); see Character.capabilities
     sentence = None          # how the studio reads a beat back, e.g. "{who} says “{line}”"
 
     @classmethod
     def describe_extra(cls):
-        return {"scope": cls.scope, "sentence": cls.sentence}
+        return {"scope": cls.scope, "sentence": cls.sentence, "needs": list(cls.needs)}
 
     def run(self, s, who, **params):
         raise NotImplementedError
+
+    @classmethod
+    def check(cls, who):
+        """Raise a helpful error if `who` can't do this action."""
+        if who is None or not cls.needs:
+            return
+        missing = set(cls.needs) - who.capabilities
+        if missing:
+            raise ValueError(f"{who.name} can't {cls.label} (needs {', '.join(sorted(missing))})")
 
 
 # ---------------------------------------------------------------------- characters
@@ -53,9 +63,9 @@ class Say(Action):
 
 
 class WalkTo(Action):
-    label = "walks to"
-    description = "Walk somewhere, going round furniture"
-    sentence = "{who} walks to {where}"
+    label = "goes to"
+    description = "Walk, swim, slither or hop somewhere, going round furniture"
+    sentence = "{who} goes to {where}"
     params = [Param("where", "target", required=True, label="To"),
               Param("speed", "choice", default="normal", choices=("slow", "normal", "fast", "run")),
               Param("facing", "target", label="Then faces")]
@@ -71,6 +81,33 @@ class RunTo(Action):
 
     def run(self, s, who, where):
         who.run_to(where)
+
+
+class FlyTo(Action):
+    needs = ("fly",)
+    label = "flies to"
+    description = "Take off, fly somewhere and land (needs wings)"
+    sentence = "{who} flies to {where}"
+    params = [Param("where", "target", required=True, label="To"),
+              Param("height", "number", default=1.5, min=0.3, max=10, step=0.1, label="Height (m)"),
+              Param("land", "bool", default=True, label="Land there")]
+
+    def run(self, s, who, where, height=1.5, land=True):
+        if not hasattr(who, "fly_to"):
+            raise ValueError(f"{who.name} can't fly")
+        who.fly_to(where, height=float(height), land=land)
+
+
+class LieDown(Action):
+    label = "lies down"
+    description = "Lie down where they are (animals and other bodies)"
+    sentence = "{who} lies down"
+
+    def run(self, s, who):
+        if hasattr(who, "lie_down"):
+            who.lie_down()
+        else:
+            raise ValueError(f"{who.name} can't lie down; try sits on")
 
 
 class Enter(Action):

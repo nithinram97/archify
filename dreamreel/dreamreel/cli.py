@@ -261,6 +261,27 @@ EXTEND_TEMPLATES = {
         shapes.sphere(f"{{self.name}}.badge", 0.03 * self.H, self.color("accent"), self.body,
                       at=(0.08 * self.H, -self.body_r * 0.9, self.neck_z - 0.15 * self.H))
 ''', 'type = "{name}" in a cast file'),
+    "body": ('''class {cls}(dr.BodyPlan):
+    """{desc}"""
+    description = "{desc}"
+    capabilities = {{"walk", "tail"}}
+
+    def skeleton(self, c):
+        # joints (name, (x, y, z), radius, parent) become a smooth skinned body; facing -Y, feet at z = 0
+        S = c.size
+        k = dr.Skeleton()
+        k.joint("pelvis", (0, 0.2 * S, 0.45 * S), 0.15 * S)
+        k.joint("chest", (0, -0.2 * S, 0.5 * S), 0.16 * S, "pelvis")
+        k.joint("neck", (0, -0.35 * S, 0.75 * S), 0.07 * S, "chest")
+        k.head, k.head_r = "neck", 0.14 * S               # the head (with its face) sits on this joint
+        for name, y, parent in (("LF", -0.2, "chest"), ("RF", -0.2, "chest"), ("LH", 0.2, "pelvis"), ("RH", 0.2, "pelvis")):
+            x = (0.1 if name[0] == "L" else -0.1) * S
+            k.joint(f"hip.{{name}}", (x, y * S, 0.4 * S), 0.07 * S, parent)
+            k.joint(f"knee.{{name}}", (x, y * S, 0.22 * S), 0.05 * S, f"hip.{{name}}")
+            k.joint(f"foot.{{name}}", (x, y * S, 0.05 * S), 0.05 * S, f"knee.{{name}}")
+            k.leg(f"leg.{{name}}", f"hip.{{name}}", f"knee.{{name}}", f"foot.{{name}}")
+        return k
+''', 'type = "creature", body = "{name}" in a cast file'),
     "extra": ('''class {cls}(dr.Extra):
     """{desc}"""
     description = "{desc}"

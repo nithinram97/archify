@@ -5,6 +5,7 @@ Everything is a class you can extend (see plugins.py):
     import dreamreel as dr
 
     class Robot(dr.Character): ...       # a new kind of character
+    class Centaur(dr.BodyPlan): ...      # a new body plan for creatures
     class Crown(dr.Extra): ...           # something to wear
     class Dance(dr.Gesture): ...         # body language
     class Hug(dr.Action): ...            # a new verb for scenes
@@ -23,6 +24,7 @@ import bpy  # noqa: F401,E402  (loads mathutils and bmesh)
 from . import keys, look, shapes  # noqa: F401,E402
 from .plugins import Param, Plugin, describe_all, get, names, registry  # noqa: F401,E402
 from .character import BODIES, SPEEDS, Character, ToyFigure  # noqa: F401,E402
+from .creatures import BodyPlan, Creature, Skeleton  # noqa: F401,E402
 from .parts import Extra, Hair, Mood  # noqa: F401,E402
 from .gestures import Gesture  # noqa: F401,E402
 from .sets import FLOORS, SIZES, ZONES, Outdoor, Room, Set  # noqa: F401,E402
