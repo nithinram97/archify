@@ -119,6 +119,23 @@ def nature():
     print("  nature: ok")
 
 
+def street():
+    """City and old town streets are Quaternius's brick buildings; town streets are dreamreel's own."""
+    def kit(spec):
+        s = dr.Scene(dict({"kind": "street"}, **spec))
+        return s, [o for o in s.bscene.objects if o.get("dr_building") and o.data.name.startswith("city.")]
+    s, built = kit({"style": "city", "scale": "people"})
+    assert len(built) > 8, len(built)
+    front = [o for o in built if o.location.y > 0]
+    assert front and min(o.dimensions.z for o in front) > 15, ("life-size buildings", [o.dimensions.z for o in front])
+    door = s.set.marks["door"].at
+    assert any(abs(o.location.x - door.x) < 0.1 for o in front), "the door mark is at a building"
+    _, small = kit({"style": "old_town"})
+    assert small and max(o.dimensions.z for o in small) < 0.7 * 28, "toy-size buildings in a toy set"
+    assert not kit({"style": "town"})[1] and not kit({"style": "city", "furniture": "simple"})[1]
+    print("  street: ok")
+
+
 def animals():
     s = dr.Scene({"kind": "outdoor", "biome": "meadow"})
     rex, star, doe = s.cast(rex=dict(type="animal", species="husky"), star=dict(type="animal", species="horse"),
@@ -159,6 +176,8 @@ def main():
     furniture()
     if "nature" in have:
         nature()
+    if "city" in have:
+        street()
     if "animals" not in have:
         print("actors: skipped (no Quaternius animals: `dreamreel assets --download --pack animals`)")
     else:

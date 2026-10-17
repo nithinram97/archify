@@ -33,7 +33,7 @@ PACKS = {
                  "about": "furniture: tables, chairs, sofas, beds, shelves, kitchens, doors, windows, lamps, plants"},
     "nature": {"itch": "https://quaternius.itch.io/stylized-nature-megakit",
                "about": "trees, bushes, rocks, flowers, grass"},
-    "city": {"itch": "https://quaternius.itch.io/downtown-city-megakit",
+    "city": {"itch": "https://quaternius.itch.io/downtown-city-megakit", "vertex_colors": False,
              "about": "city buildings, streets, props"},
 }
 
@@ -79,6 +79,8 @@ def mesh(pack, name):
         return None
     objs = import_file(path)
     meshes = [o for o in objs if o.type == "MESH"]
+    cols = meshes[0].data.color_attributes if meshes else None
+    render_color = cols[cols.render_color_index].name if cols and cols.render_color_index >= 0 else None
     bpy.context.view_layer.update()
     parts = []
     for o in meshes:
@@ -106,9 +108,15 @@ def mesh(pack, name):
     out = bpy.data.meshes.new(f"{pack}.{name}")
     bm.to_mesh(out)
     bm.free()
-    if len(out.color_attributes):   # materials that read "the" vertex colour need one chosen
-        out.color_attributes.active_color_index = 0
-        out.color_attributes.render_color_index = 0
+    names = [c.name for c in out.color_attributes]
+    if render_color in names:       # materials read "the" vertex colour: keep the file's choice
+        out.color_attributes.active_color_index = names.index(render_color)
+        out.color_attributes.render_color_index = names.index(render_color)
+    if not PACKS.get(pack, {}).get("vertex_colors", True):     # masks for game engines, not colours
+        for mat in mats:
+            for node in list(mat.node_tree.nodes if mat and mat.node_tree else ()):
+                if node.type == "VERTEX_COLOR":
+                    mat.node_tree.nodes.remove(node)
     for mat in mats:
         out.materials.append(mat)
         bsdf = mat.node_tree.nodes.get("Principled BSDF") if mat and mat.node_tree else None

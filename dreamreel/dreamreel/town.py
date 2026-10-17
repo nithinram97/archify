@@ -12,6 +12,9 @@ The acting area is the pavement in front of the buildings; the road runs between
 and the other side of the street is there for reverse shots. Marks: door, shop, crossing, kerb,
 lamp (and the usual nine places).
 
+City and old town streets are Quaternius's brick buildings when its city pack is downloaded
+(`dreamreel assets`); the town style, and every style without the pack, is made here.
+
 Building styles are a class attribute, so a film can add its own:
 
     class Street(dr.get("set", "street")):
@@ -140,9 +143,40 @@ class Street(Set):
         self.add_mark("across", (0.0, far_kerb - 1.0), facing="back")
 
     # -------------------------------------------------------------- pieces
+    KIT = ("Building_Small_1", "Building_Medium_2_001", "Building_Large_2")    # Quaternius's city kit
+
+    def _kit_row(self, rng, y0, side, L):
+        """A row of Quaternius's brick buildings (city and old town streets), alternated and mirrored
+        so the row doesn't repeat; False if the city pack isn't downloaded."""
+        from . import quaternius
+        if not self.use_models or quaternius.mesh("city", self.KIT[0]) is None:
+            return False
+        k = self.sized(0.6, 1.0)
+        x = -L / 2 + rng.uniform(0, 3)
+        i = 0
+        while x < L / 2:
+            name = rng.choice(self.KIT)
+            m = quaternius.mesh("city", name)
+            w = (max(v.co.x for v in m.vertices) - min(v.co.x for v in m.vertices)) * k
+            depth = (max(v.co.y for v in m.vertices) - min(v.co.y for v in m.vertices)) * k
+            cx, cy = x + w / 2, y0 + side * depth / 2
+            obj = self.model(name, f"building{side}.{i}", (None, None, None), (cx, cy, 0),
+                             0.0 if side > 0 else math.pi, pack="city")
+            obj.scale = (k * rng.choice((1, -1)), k, k)
+            obj["dr_building"] = True
+            if side > 0:
+                self.doors.append((cx, False))
+                if abs(cx) < 30:
+                    self.block(Vector((cx, cy)), w, depth)
+            x += w + rng.uniform(0, 0.3) * k
+            i += 1
+        return True
+
     def _row(self, rng, style, y0, side, L):
         """A row of buildings with their fronts at y0, facing towards the street (side +1: the far
         side of the camera, -1: the near side, seen in reverse shots)."""
+        if self.spec.get("style", "town") in ("city", "old_town") and self._kit_row(rng, y0, side, L):
+            return
         x = -L / 2 + rng.uniform(0, 3)
         trim = look.matte(style["trim"], 0.6)
         glass = [look.plastic("#4f6b80", 0.12, 0.6, emission=0.0).copy() for _ in range(8)]
