@@ -206,6 +206,32 @@ class Perform(Action):
         who.perform(motion, speed=speed, mirror=mirror, in_place=in_place, start=start, end=end, how=how)
 
 
+class Act(Action):
+    label = "acts"
+    description = "Do anything you can describe, as motion made by AI (needs a booster: dreamreel boost)"
+    sentence = "{who} {what}"
+    params = [Param("what", "text", required=True, label="What they do",
+                    help="e.g. slowly gets up from the bench, stretches her back and sighs"),
+              Param("seconds", "number", default=4.0, min=1, max=12, step=0.5, label="How long (s)"),
+              Param("take", "number", default=1, min=1, max=20, step=1, label="Take",
+                    help="ask for another version of the same motion"),
+              Param("in_place", "bool", default=False, label="On the spot"), HOW]
+
+    def run(self, s, who, what, seconds=4.0, take=1, in_place=False, how=None):
+        from . import aimotion, motion, plugins
+        path = aimotion.clip_for(s, what, seconds, take) if "arms" in who.capabilities else None
+        if path:
+            clip = motion.load(path)
+            who.perform(None, clip=clip, in_place=in_place, how=how)
+            return
+        g = aimotion.fallback_gesture(what, lambda name: name in plugins.names("gesture")
+                                      or name in getattr(who, "clip_names", {}))
+        if g:
+            who.do(g, how=how)
+        else:
+            s.wait(float(seconds))
+
+
 class Hold(Action):
     label = "is holding"
     description = "Holding something from this moment (a thing in the set, or a new item such as a scalpel)"

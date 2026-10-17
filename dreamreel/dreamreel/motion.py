@@ -14,7 +14,8 @@ Motion Capture Database offers BVH files, Mixamo offers FBX (check each source's
 Clips are *retargeted*: dreamreel finds the hips, spine, head, shoulders, elbows, wrists, hips, knees
 and ankles in the clip (whatever the source names them: CMU, Mixamo, SMPL...), and turns their
 movement into the character's own pose: arm and leg directions, lean, head, hip height and travel,
-scaled to the character's size. Toy figures and creatures with two legs and arms can perform clips.
+scaled to the character's size. Toy figures and creatures with two legs and arms can perform clips, and
+so can people from the 3D packs, on their own rigs (actors.ClipActor.perform).
 
 Walking uses the library too: if there are clips tagged `walk` or `run`, walk_to picks the one closest
 to the speed asked for, finds a clean loop in it (two moments with the same pose a stride or two apart)

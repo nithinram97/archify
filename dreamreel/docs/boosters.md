@@ -41,10 +41,11 @@ Blender or the rest of dreamreel, and installs each model the first time it's as
 
 | Skill | What for | Model (licence) | Status |
 |---|---|---|---|
-| `voice.indic_parler` | Voices described in words, 21 Indian languages | AI4Bharat Indic Parler-TTS (Apache-2.0; accept its terms, needs a Hugging Face token) | Built; not yet run on a real GPU |
+| `voice.indic_parler` | Voices described in words, 21 Indian languages | AI4Bharat Indic Parler-TTS (Apache-2.0; accept its terms, needs a Hugging Face token) | Built; dreamreel's speaker code verified on a CPU with the open Parler-TTS mini model; not yet run on a GPU |
 | `voice.indic_f5` | Copying a recorded voice, 11 Indian languages | AI4Bharat IndicF5 (MIT; accept its terms, needs a Hugging Face token) | Built; not yet run on a real GPU |
+| `motion.hy_motion` | Acting from a sentence (`do = "act"`) | Tencent HY-Motion 1.0 Lite (Tencent community licence: **not for the EU, UK or South Korea**; outputs may not train other AI models) | Built; not yet run on a real GPU. On a 16 GB card (Colab's T4) its 8B text encoder runs in 4 bits |
 
-More skills (acting, models, rigging, faces, restyling) are being added; see the roadmap. "Not yet
+More skills (models, rigging, faces, restyling) are being added; see the roadmap. "Not yet
 run on a real GPU" means dreamreel's side is tested against a stand-in booster, and the model code
 follows each model's own documentation, but nobody has run it end to end yet. Please report what
 happens when you do.

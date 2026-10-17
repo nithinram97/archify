@@ -252,6 +252,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | hold | thing, hand: holding it from this moment; a thing in the set, or a new item (`scalpel`) |
 | grab | thing = a small character (a frog, a cat): carried like a thing, put down the same way |
 | perform | motion, speed, mirror, in_place, start, end, how: play a motion-capture clip (see Motion library) |
+| act | what (a sentence: "slowly gets up from the bench and stretches"), seconds (1-12), take (another version), in_place, how: motion made by AI (HY-Motion on a booster, see `dreamreel boost`), kept in motions/ai/. Without a booster: the closest gesture |
 | wait (no who) | seconds |
 | caption, title_card (no who) | text, duration |
 | slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |

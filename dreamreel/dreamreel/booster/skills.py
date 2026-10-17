@@ -77,6 +77,46 @@ def hf_download(repo, log, **kw):
     return snapshot_download(repo, token=os.environ.get("HF_TOKEN") or None, **kw)
 
 
+def venv(name, python, log):
+    """A separate Python for one model (models pin different, often older, packages than the
+    notebook's own): made with uv, which fetches the Python version it needs."""
+    root = os.path.join(WORK, "venvs", name)
+    py = os.path.join(root, "bin", "python")
+    if not os.path.exists(py):
+        if not shutil.which("uv") and not has("uv"):
+            pip(log, "uv")
+        uv = shutil.which("uv") or os.path.join(os.path.dirname(sys.executable), "uv")
+        sh([uv, "venv", "-p", python, root], log)
+    return py
+
+
+def venv_pip(py, log, *args):
+    uv = shutil.which("uv") or os.path.join(os.path.dirname(sys.executable), "uv")
+    sh([uv, "pip", "install", "--python", py, *args], log)
+
+
+def gpu_memory_gb():
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20).stdout.split()
+        return float(out[0]) / 1024 if out else 0.0
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 0.0
+
+
+def run_script(py, script, job, log, cwd=None):
+    """Run a model's script (a string) with its own Python, the job as JSON; returns its JSON answer."""
+    os.makedirs(job["out_dir"], exist_ok=True)
+    path = os.path.join(job["out_dir"], "_run.py")
+    with open(path, "w") as f:
+        f.write(script)
+    with open(os.path.join(job["out_dir"], "_job.json"), "w") as f:
+        json.dump(job, f)
+    sh([py, path, os.path.join(job["out_dir"], "_job.json")], log, cwd=cwd)
+    with open(os.path.join(job["out_dir"], "_answer.json")) as f:
+        return json.load(f)
+
+
 class Skill:
     name = ""
     about = ""
@@ -134,6 +174,90 @@ class IndicF5(IndicParler):
         pip(log, "f5-tts", "transformers", "soundfile")
 
 
+# ---------------------------------------------------------------------- acting: HY-Motion 1.0
+HY_RUN = r"""
+import json, os, sys
+job = json.load(open(sys.argv[1]))
+os.chdir(job["repo"]); sys.path.insert(0, job["repo"])
+os.environ["USE_HF_MODELS"] = "0"
+import torch
+if job.get("small_gpu"):
+    # a 16 GB card: the 8B text encoder is loaded already quantised to 4 bits, straight onto the card,
+    # computing in float16 (T4s have no bfloat16)
+    import transformers
+    from transformers import BitsAndBytesConfig
+    _orig = transformers.AutoModelForCausalLM.from_pretrained.__func__
+    def _load(cls, path, *a, **kw):
+        if "Qwen3" in str(path):
+            kw.pop("torch_dtype", None); kw.pop("low_cpu_mem_usage", None)
+            kw["device_map"] = {"": 0}
+            kw["torch_dtype"] = torch.float16
+            kw["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16,
+                                                           bnb_4bit_quant_type="nf4")
+        return _orig(cls, path, *a, **kw)
+    transformers.AutoModelForCausalLM.from_pretrained = classmethod(_load)
+    _to = torch.nn.Module.to
+    def _safe_to(self, *a, **kw):
+        if getattr(self, "is_loaded_in_4bit", False) or getattr(self, "is_quantized", False):
+            return self
+        return _to(self, *a, **kw)
+    torch.nn.Module.to = _safe_to
+from hymotion.utils.t2m_runtime import T2MRuntime
+lite = job["model"]
+rt = T2MRuntime(config_path=f"ckpts/tencent/{lite}/config.yml", ckpt_name=f"ckpts/tencent/{lite}/latest.ckpt",
+                disable_prompt_engineering=True)
+rt.generate_motion(text=job["text"], seeds_csv=str(job.get("seed", 1)), duration=float(job["seconds"]),
+                   cfg_scale=5.0, output_format="fbx", output_dir=job["out_dir"], output_filename="motion")
+files = sorted(os.listdir(job["out_dir"]))
+fbx = next((f for f in files if f.startswith("motion") and f.endswith(".fbx")), None)
+npz = next((f for f in files if f.startswith("motion") and f.endswith(".npz")), None)
+if fbx is None:
+    raise SystemExit("HY-Motion made no FBX (is fbxsdkpy installed?); files: " + ", ".join(files))
+json.dump({"motion": os.path.join(job["out_dir"], fbx), "npz": os.path.join(job["out_dir"], npz) if npz else None},
+          open(os.path.join(job["out_dir"], "_answer.json"), "w"))
+"""
+
+
+class HYMotion(Skill):
+    name = "motion.hy_motion"
+    about = "HY-Motion 1.0 (Tencent): 3D human motion from a sentence, up to 12 s"
+    license = ("Tencent HY-Motion 1.0 Community License: not for the EU, UK or South Korea; outputs may not "
+               "train other AI models")
+
+    def repo(self):
+        return os.path.join(REPOS, "HY-Motion-1.0")
+
+    def installed(self):
+        r = self.repo()
+        return (os.path.exists(os.path.join(WORK, "venvs", "hymotion", "bin", "python"))
+                and os.path.exists(os.path.join(r, "ckpts", "tencent", "HY-Motion-1.0-Lite", "latest.ckpt"))
+                and os.path.isdir(os.path.join(r, "ckpts", "Qwen3-8B")))
+
+    def install(self, log):
+        r = clone("https://github.com/Tencent-Hunyuan/HY-Motion-1.0.git", "HY-Motion-1.0", log)
+        sh("git lfs install && git lfs pull", log, cwd=r)       # the wooden rig the FBX export uses
+        py = venv("hymotion", "3.11", log)
+        venv_pip(py, log, "-r", os.path.join(r, "requirements.txt"),
+                 "--extra-index-url", "https://download.pytorch.org/whl/cu124", "--index-strategy", "unsafe-best-match")
+        from huggingface_hub import snapshot_download  # noqa: F401  (installed by hf_download)
+        hf_download("tencent/HY-Motion-1.0", log, allow_patterns=["HY-Motion-1.0-Lite/*"],
+                    local_dir=os.path.join(r, "ckpts", "tencent"))
+        hf_download("openai/clip-vit-large-patch14", log, local_dir=os.path.join(r, "ckpts", "clip-vit-large-patch14"))
+        # the text encoder: full precision on a big card, a 4-bit copy (about 6 GB) on a 16 GB one
+        qwen = "Qwen/Qwen3-8B" if gpu_memory_gb() >= 30 else "unsloth/Qwen3-8B-bnb-4bit"
+        hf_download(qwen, log, local_dir=os.path.join(r, "ckpts", "Qwen3-8B"))
+
+    def run(self, inputs, files, out_dir, log, progress):
+        text = str(inputs.get("text", "")).strip()
+        if not text:
+            raise ValueError("say what the character does")
+        job = {"repo": self.repo(), "text": text, "seconds": max(0.7, min(12.0, float(inputs.get("seconds", 4)))),
+               "seed": int(inputs.get("seed", 1)), "model": "HY-Motion-1.0-Lite", "out_dir": out_dir,
+               "small_gpu": gpu_memory_gb() < 30}
+        log(f"making motion: {text[:80]} ({job['seconds']:g} s)")
+        return run_script(os.path.join(WORK, "venvs", "hymotion", "bin", "python"), HY_RUN, job, log, cwd=self.repo())
+
+
 class Echo(Skill):
     """For tests: echoes its inputs, copies its file, and can fail on request."""
     name = "test.echo"
@@ -174,7 +298,23 @@ class Tone(IndicParler):
         return True
 
 
-SKILLS = [IndicParler(), IndicF5(), Echo(), Tone()]
+class FakeMotion(Skill):
+    """For tests: a 'made' motion is the BVH file the test hands in."""
+    name = "test.motion"
+    about = "a test motion"
+    needs_gpu = False
+    test_only = True
+
+    def installed(self):
+        return True
+
+    def run(self, inputs, files, out_dir, log, progress):
+        dest = os.path.join(out_dir, "motion.bvh")
+        shutil.copyfile(os.environ["DREAMREEL_TEST_MOTION"], dest)
+        return {"motion": dest}
+
+
+SKILLS = [IndicParler(), IndicF5(), HYMotion(), Echo(), Tone(), FakeMotion()]
 
 
 def register(skill):

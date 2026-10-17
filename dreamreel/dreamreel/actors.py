@@ -450,6 +450,103 @@ class ClipActor(Character):
             strip.extrapolation = "NOTHING"
             strip.use_auto_blend = False
 
+    # ------------------------------------------------------------------ motion capture on its own rig
+    # (bone, clip joint it starts at, clip joint it points to); parents before children
+    MOCAP_BONES = (("Abdomen", "hips", "chest"), ("Torso", "hips", "chest"), ("Neck", "neck", "head"),
+                   ("UpperArm.L", "l_arm", "l_elbow"), ("LowerArm.L", "l_elbow", "l_wrist"),
+                   ("UpperArm.R", "r_arm", "r_elbow"), ("LowerArm.R", "r_elbow", "r_wrist"),
+                   ("UpperLeg.L", "l_hip", "l_knee"), ("LowerLeg.L", "l_knee", "l_ankle"),
+                   ("UpperLeg.R", "r_hip", "r_knee"), ("LowerLeg.R", "r_knee", "r_ankle"))
+
+    def _mocap_clip(self, clip, start, end, speed, mirror):
+        """A motion-capture clip (motion.py) as a clip of this rig: each frame, the clip's limb
+        directions given to the rig's bones (the actor keeps its own proportions), its hips' rise
+        and fall, the feet where the legs end. Returns (action, [(hips travel, heading) per key])."""
+        bones = [b for b in self.MOCAP_BONES if b[0] in self.rig.pose.bones]
+        if not any(b[0].startswith("UpperArm") for b in bones):
+            raise ValueError(f"{self.name}'s rig has no arms to perform motion capture with")
+        fps = keys.CLOCK.fps
+        dur = (end - start) / max(0.05, speed)
+        step = 2                                    # a key every other frame: smooth, and quick to make
+        n = max(1, int(round(dur * fps / step)))
+        P = Poser(self)
+        pb = P.pb
+        names = [b[0] for b in bones]
+        feet = [f"Foot.{sd}" for sd in "LR" if f"Foot.{sd}" in pb]
+        hip0 = P.head("Body") if "Body" in pb else None
+        leg_len = (P.length("UpperLeg.L") + P.length("LowerLeg.L")) if "LowerLeg.L" in pb else 0.5 * self.H
+        scale = leg_len / max(1e-6, clip.hip_height)
+        act = bpy.data.actions.new(f"{self.name}.mocap.{clip.name}")
+        act.use_fake_user = True
+        travel = []
+        for i in range(n + 1):
+            p = clip.at(start + i * step / fps * speed)
+            if mirror:
+                p = {(("r_" if r[0] == "l" else "l_") + r[2:]) if r[:2] in ("l_", "r_") else r: v for r, v in p.items()}
+            h = clip.heading(p)
+            R = Matrix.Rotation(-h, 3, "Z")
+
+            def d(a, b):
+                v = R @ (p[b] - p[a])
+                return Vector((-v.x, v.y, v.z)) if mirror else v
+            for b in names + feet + (["Body"] if "Body" in pb else []):
+                pb[b].matrix_basis = Matrix()
+            bpy.context.view_layer.update()
+            if hip0 is not None:                     # the hips rise and fall with the clip's
+                rise = (p["hips"].z - clip.floor - clip.hip_height) * scale
+                body = pb["Body"].matrix.copy()
+                body.translation = P.to_arm @ (hip0 + Vector((0, 0, rise)))
+                pb["Body"].matrix = body
+                bpy.context.view_layer.update()
+            for b, a, c in bones:
+                if a not in p or c not in p:
+                    continue
+                v = d(a, c)
+                if v.length > 1e-6:
+                    P.aim(b, v)
+            for f in feet:                           # the feet where the shins end
+                low = f"LowerLeg.{f[-1]}"
+                if low in pb:
+                    fm = pb[f].matrix.copy()
+                    fm.translation = P.to_arm @ P.tail(low)
+                    pb[f].matrix = fm
+            bpy.context.view_layer.update()
+            P.keyed(act, 1 + i * step, names + feet + (["Body"] if "Body" in pb else []), location=True)
+            travel.append((Vector((p["hips"].x, p["hips"].y)) * scale, h))
+        P.rest()
+        self.rig.animation_data.action = None
+        return act, travel, step
+
+    def perform(self, motion_name, speed=1.0, mirror=False, in_place=False, at=None, wait=True, how=None,
+                start=None, end=None, clip=None):
+        """Play a motion-capture clip (the film's motions/, or an AI-made one) on this rig."""
+        from . import acting, motion
+        clip = clip or motion.library(self.scene).get(motion_name)
+        t = self._start(at)
+        eff = acting.effort_of(self, t, how)
+        sp = float(speed or 1.0) / max(0.5, eff.tempo())
+        a0 = float(start or 0.0)
+        a1 = clip.length if end is None else min(float(end), clip.length)
+        act, travel, step = self._mocap_clip(clip, a0, a1, sp, bool(mirror))
+        t1 = t + (a1 - a0) / sp
+        self.play(act, t, until=t1, blend=0.25)
+        loc0 = Vector(value_at(self.root, "location", t))
+        H0 = value_at(self.root, "rotation_euler", t)[2]
+        x0, hs0 = travel[0]
+        fps = keys.CLOCK.fps
+        for i, (xy, h) in enumerate(travel):          # the clip's travel and turning, from where they stand
+            tt = t + i * step / fps
+            dh = -(h - hs0) if mirror else h - hs0
+            if not in_place:
+                dv = Matrix.Rotation(-hs0, 3, "Z") @ Vector((xy.x - x0.x, xy.y - x0.y, 0))
+                if mirror:
+                    dv.x = -dv.x
+                dv = Matrix.Rotation(H0, 3, "Z") @ dv
+                key(self.root, "location", tt, (loc0.x + dv.x, loc0.y + dv.y, loc0.z), "linear")
+            key(self.root, "rotation_euler", tt, (0, 0, H0 + dh), "linear")
+        self.scene._event("perform", self, t, t1, motion=motion_name or clip.name)
+        return self._end(t1 + 0.25, wait)
+
     # ------------------------------------------------------------------ sitting
     def _sit_clip(self, height):
         """A seated pose for a seat `height` high, made on the rig (the packs have no sitting clip):

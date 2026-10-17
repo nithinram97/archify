@@ -801,16 +801,17 @@ class Character(Plugin):
 
     # ------------------------------------------------------------------ motion capture (motion.py)
     def perform(self, motion_name, speed=1.0, mirror=False, in_place=False, at=None, wait=True, how=None,
-                start=None, end=None):
-        """Play a motion-capture clip from the film's motion library (motions/), retargeted to this body."""
+                start=None, end=None, clip=None):
+        """Play a motion-capture clip from the film's motion library (motions/), or a clip given,
+        retargeted to this body."""
         from . import motion
-        clip = motion.library(self.scene).get(motion_name)
+        clip = clip or motion.library(self.scene).get(motion_name)
         t = self._start(at)
         eff = acting.effort_of(self, t, how)
         sp = float(speed or 1.0) / max(0.5, eff.tempo())
         t1 = motion.perform(self, clip, t, speed=sp, mirror=bool(mirror), in_place=bool(in_place),
                             start=float(start or 0.0), end=end)
-        self.scene._event("perform", self, t, t1, motion=motion_name)
+        self.scene._event("perform", self, t, t1, motion=motion_name or clip.name)
         return self._end(t1, wait)
 
     # ------------------------------------------------------------------ handling things (handling.py)
