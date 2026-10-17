@@ -692,7 +692,10 @@ class Character(Plugin):
 
     def _lipsync_audio(self, t0, speech):
         """Mouth shapes from the sounds of the line (lipsync.py), or from its loudness."""
-        cues = speech.shapes() if self.scene.voices.lipsync == "sounds" else None
+        mode = self.scene.voices.lipsync
+        cues = speech.face() if mode == "ai" else None
+        if not cues and mode in ("sounds", "ai"):
+            cues = speech.shapes()
         if not cues:
             return self._lipsync_envelope(t0, speech)
         hold(self.mouth, "scale", t0 - 0.05)

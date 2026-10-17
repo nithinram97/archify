@@ -9,7 +9,7 @@ dreamreel studio (`dreamreel studio`), so keep the files tidy and readable.
 
 | File | What it is |
 |---|---|
-| `film.toml` | title, fps, resolution, scene order (`scenes = [...]` or an `[[edit]]` list), music, `voice_engine`, `lipsync` ("sounds" or "loudness") |
+| `film.toml` | title, fps, resolution, scene order (`scenes = [...]` or an `[[edit]]` list), music, `voice_engine`, `lipsync` ("sounds", "ai" with a booster, or "loudness") |
 | `cast/<name>.toml` | one character each: `type` (`person`, `animal`: from the 3D packs; `toy`, `creature`, `model`, or one from extensions), its look, and `voice` (a Piper name, or a `[voice]` table with `language`, `describe`, `sample`: see REFERENCE.md). Write lines in the language's own script |
 | `sets/<name>.toml` | one place each: `kind` (`room`, `outdoor`, ...), its settings, `[[props]]`, `[marks]` |
 | `scenes/NNN_name.toml` | one scene each: `set`, `cast`, and `[[beats]]` in order |

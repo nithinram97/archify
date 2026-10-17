@@ -43,6 +43,39 @@ def talk(set_spec, who, folder, lipsync="sounds"):
     return out
 
 
+def ai_face(tmp):
+    import importlib.util
+    from dreamreel import boost
+    keep = {k: os.environ.get(k) for k in ("DREAMREEL_BOOST_TEST", "DREAMREEL_BOOST_URL", "DREAMREEL_BOOST_TOKEN",
+                                           "DREAMREEL_FACE_SKILL", "DREAMREEL_BOOST_WORK")}
+    spec = importlib.util.spec_from_file_location("dreamreel_booster_server4",
+                                                  os.path.join(ROOT, "dreamreel", "booster", "server.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    got = {}
+    os.environ.update(DREAMREEL_BOOST_TEST="1", DREAMREEL_FACE_SKILL="test.face",
+                      DREAMREEL_BOOST_WORK=os.path.join(tmp, "work"))
+    httpd = mod.serve(port=0, host="127.0.0.1", token="k", work=os.path.join(tmp, "work"),
+                      ready=lambda h, t: got.update(port=h.server_address[1]))
+    try:
+        os.environ.update(DREAMREEL_BOOST_URL=f"http://127.0.0.1:{got['port']}", DREAMREEL_BOOST_TOKEN="k")
+        boost._cache.clear()
+        for f in os.listdir(tmp):
+            if f.endswith(".face.json"):
+                os.remove(os.path.join(tmp, f))
+        face = talk({"kind": "room"}, {}, tmp, lipsync="ai")
+        assert any(f.endswith(".face.json") for f in os.listdir(tmp)), "read once, then kept"
+        assert face["round"] > 0.9 and face["open"] > 0.3, face
+    finally:
+        httpd.shutdown()
+        for k, v in keep.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        boost._cache.clear()
+
+
 def main():
     if not voices._piper_available() or not lipsync.available():
         print("SKIP test_lipsync: needs Piper and Rhubarb")
@@ -74,6 +107,12 @@ def main():
         # loudness only: no round lips
         loud = talk({"kind": "room"}, {}, tmp, lipsync="loudness")
         assert loud["round"] < 0.01 and loud["open"] > 0.3, loud
+        # AI reading the face in the voice (on a booster; here a stand-in face skill)
+        os.environ.pop("DREAMREEL_BOOST_URL", None)
+        lipsync._warned.clear()
+        fallback = talk({"kind": "room"}, {}, tmp, lipsync="ai")
+        assert fallback["round"] > 0.9, ("no booster: the sounds", fallback)
+        ai_face(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

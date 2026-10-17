@@ -497,6 +497,11 @@ class Speech:
         from . import lipsync
         return lipsync.cues(self.path, self.text, self.english, download)
 
+    def face(self, download=True):
+        """[(start, (open, round, wide))] from an AI reading the face in the voice, or None."""
+        from . import lipsync
+        return lipsync.face_cues(self.path, download)
+
     def envelope(self, step):
         """Loudness (0-1) every `step` seconds."""
         n = max(1, int(self.rate * step))

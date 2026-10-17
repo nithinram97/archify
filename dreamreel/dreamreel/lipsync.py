@@ -12,6 +12,8 @@ language-independent recogniser, which hears the sounds without knowing the word
     # film.toml
     lipsync = "sounds"      # the default: mouth shapes from the sounds (falls back to loudness)
     lipsync = "loudness"    # the mouth opens with how loud the voice is (no download)
+    lipsync = "ai"          # the mouth from LAM Audio2Expression on a booster (see face_cues below),
+                            # else from the sounds
 
 Results are cached next to each voice file, so a line is only listened to once.
 """
@@ -140,3 +142,51 @@ def cues(wav, text=None, english=True, download=True):
             json.dump(raw, f)
         os.replace(tmp, cache)
     return [(float(c["start"]), SHAPES.get(c["value"], SHAPES["X"])) for c in raw]
+
+
+# ---------------------------------------------------------------------- the face from the voice, by AI
+FACE_SKILL = "face.lam_a2e"
+
+
+def _w(frame, idx, *names):
+    vals = [frame[idx[n]] for n in names if n in idx]
+    return sum(vals) / len(vals) if vals else 0.0
+
+
+def face_cues(wav, download=True):
+    """[(start, (open, round, wide))] from LAM Audio2Expression's 52 ARKit face shapes for the line,
+    made on a booster (cached next to the voice file); None without one. The jaw opens with jawOpen,
+    the lips round with mouthFunnel and mouthPucker, and stretch with mouthStretch (and a little with
+    mouthSmile)."""
+    cache = wav + ".face.json"
+    if not (os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(wav)):
+        from . import boost
+        skill = os.environ.get("DREAMREEL_FACE_SKILL") or FACE_SKILL
+        b = boost.configured()
+        if not download or b is None or not b.has(skill):
+            _warn("lip sync from AI (lipsync = \"ai\") needs a booster (see `dreamreel boost`); "
+                  "mouths follow the sounds instead")
+            return None
+        try:
+            out = b.run(skill, {}, {"speech": wav}, out_dir=os.path.dirname(wav) or ".", timeout=900)
+        except boost.BoostError as e:
+            _warn(f"the booster couldn't read the face from the voice ({e}); mouths follow the sounds instead")
+            return None
+        os.replace(out["face"], cache)
+    with open(cache) as f:
+        data = json.load(f)
+    names = data.get("names") or data.get("metadata", {}).get("blendshape_names") or []
+    idx = {n: i for i, n in enumerate(names)}
+    fps = float(data.get("metadata", {}).get("fps", 30.0))
+    out = []
+    for i, fr in enumerate(data.get("frames", [])):
+        w = fr.get("weights", [])
+        if len(w) < len(names):
+            continue
+        t = float(fr.get("time", i / fps))
+        jaw = _w(w, idx, "jawOpen")
+        rnd = max(_w(w, idx, "mouthFunnel"), _w(w, idx, "mouthPucker"))
+        wide = max(_w(w, idx, "mouthStretchLeft", "mouthStretchRight"),
+                   0.5 * _w(w, idx, "mouthSmileLeft", "mouthSmileRight"))
+        out.append((t, (min(1.0, jaw * 1.4), min(1.0, rnd * 1.2), min(1.0, wide))))
+    return out or None

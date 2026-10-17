@@ -406,6 +406,44 @@ class UniRig(Skill):
         return {"model": rigged}
 
 
+# ---------------------------------------------------------------------- faces from the voice: LAM-A2E
+class LAMFace(Skill):
+    name = "face.lam_a2e"
+    about = "LAM Audio2Expression: the whole face moving with the voice (52 ARKit face shapes, 30 per second)"
+    license = "Apache-2.0"
+
+    def repo(self):
+        return os.path.join(REPOS, "LAM_Audio2Expression")
+
+    def installed(self):
+        return (os.path.exists(os.path.join(WORK, "venvs", "lam", "bin", "python"))
+                and os.path.exists(os.path.join(self.repo(), "pretrained_models", "lam_audio2exp_streaming.tar")))
+
+    def install(self, log):
+        r = clone("https://github.com/aigc3d/LAM_Audio2Expression.git", "LAM_Audio2Expression", log)
+        py = venv("lam", "3.10", log)               # its pinned packages are for Python 3.10
+        venv_pip(py, log, "torch==2.1.2", "torchaudio==2.1.2", "--index-url", "https://download.pytorch.org/whl/cu121")
+        venv_pip(py, log, "-r", os.path.join(r, "requirements.txt"))
+        hf_download("3DAIGC/LAM_audio2exp", log, local_dir=r)
+        for tar in ("LAM_audio2exp_assets.tar", "LAM_audio2exp_streaming.tar"):
+            if os.path.exists(os.path.join(r, tar)):
+                sh(["tar", "-xzf", tar], log, cwd=r)
+
+    def run(self, inputs, files, out_dir, log, progress):
+        if "speech" not in files:
+            raise ValueError("send the voice line (a WAV file)")
+        r = self.repo()
+        out = os.path.join(out_dir, "face.json")
+        log("reading the face from the voice")
+        sh([os.path.join(WORK, "venvs", "lam", "bin", "python"), "inference.py", "--config-file",
+            "configs/lam_audio2exp_config_streaming.py", "--options", f"save_path={out_dir}",
+            "weight=pretrained_models/lam_audio2exp_streaming.tar", f"audio_input={files['speech']}",
+            f"save_json_path={out}"], log, cwd=r)
+        if not os.path.exists(out):
+            raise RuntimeError("LAM wrote no face file")
+        return {"face": out}
+
+
 class Echo(Skill):
     """For tests: echoes its inputs, copies its file, and can fail on request."""
     name = "test.echo"
@@ -479,7 +517,38 @@ class FakeModel(Skill):
         return {"model": dest}
 
 
-SKILLS = [IndicParler(), IndicF5(), HYMotion(), TripoSG(), UniRig(), Echo(), Tone(), FakeMotion(), FakeModel()]
+class FakeFace(Skill):
+    """For tests: a face that opens the jaw with the loudness of the line, rounds the lips in its middle."""
+    name = "test.face"
+    about = "a test face"
+    needs_gpu = False
+    test_only = True
+
+    def installed(self):
+        return True
+
+    def run(self, inputs, files, out_dir, log, progress):
+        import array
+        import wave
+        with wave.open(files["speech"]) as w:
+            rate, raw = w.getframerate(), w.readframes(w.getnframes())
+        smp = array.array("h", raw)
+        names = ["jawOpen", "mouthFunnel", "mouthPucker", "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft",
+                 "mouthStretchRight", "browInnerUp", "eyeBlinkLeft", "eyeBlinkRight"]
+        n = int(len(smp) / rate * 30)
+        frames = []
+        for i in range(n):
+            chunk = smp[int(i * rate / 30):int((i + 1) * rate / 30)] or array.array("h", [0])
+            loud = min(1.0, (sum(x * x for x in chunk) / len(chunk)) ** 0.5 / 6000)
+            mid = 1.0 if 0.4 < i / max(1, n) < 0.6 else 0.0
+            frames.append({"weights": [loud, mid, mid, 0.3, 0.3, 0, 0, 0.5, 0, 0], "time": i / 30})
+        out = os.path.join(out_dir, "face.json")
+        json.dump({"names": names, "metadata": {"fps": 30.0, "frame_count": n}, "frames": frames}, open(out, "w"))
+        return {"face": out}
+
+
+SKILLS = [IndicParler(), IndicF5(), HYMotion(), TripoSG(), UniRig(), LAMFace(),
+          Echo(), Tone(), FakeMotion(), FakeModel(), FakeFace()]
 
 
 def register(skill):

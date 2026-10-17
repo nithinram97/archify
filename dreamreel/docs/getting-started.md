@@ -70,7 +70,8 @@ and a voice id: `fish = "..."` under `[voice]`.
 Mouths follow the sounds of each line: lips press together for M, B and P, round for "oo", open
 wide for "aa". dreamreel listens with Rhubarb Lip Sync (free, MIT, downloaded once, about 90 MB; it
 runs on any computer). To skip the download, set `lipsync = "loudness"` in `film.toml` and the mouth
-opens with how loud the voice is.
+opens with how loud the voice is. With a booster, `lipsync = "ai"` has an AI model (LAM
+Audio2Expression) read the mouth from the voice itself, in any language.
 
 ## Music
 

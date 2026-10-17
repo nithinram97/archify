@@ -1494,7 +1494,7 @@ function filmView() {
   const save = async () => {
     await api("PUT", "/api/film", { title: film.title, fps: film.fps, resolution: film.resolution, music: film.music || null,
       style: film.style && film.style !== "toy" ? film.style : null,
-      voices: film.voices === false ? false : null, lipsync: film.lipsync === "loudness" ? "loudness" : null }).catch(fail);
+      voices: film.voices === false ? false : null, lipsync: ["loudness", "ai"].includes(film.lipsync) ? film.lipsync : null }).catch(fail);
     await refresh();
     toast("Saved");
   };
@@ -1514,7 +1514,8 @@ function filmView() {
           oninput: (e) => { if (film.music) film.music.volume = +e.target.value; } })),
         h("label", { class: "field row" }, h("input", { type: "checkbox", checked: film.voices !== false, onchange: (e) => (film.voices = e.target.checked) }), "Characters speak out loud"),
         h("label", { class: "field", title: "From the sounds: lips close for M, B and P, round for \"oo\", open wide for \"aa\". Uses Rhubarb Lip Sync (free, downloaded once, about 90 MB)." },
-          "Lip sync", select([["sounds", "From the sounds of the voice (best)"], ["loudness", "From how loud it is (quick, no download)"]],
+          "Lip sync", select([["sounds", "From the sounds of the voice (best)"], ["ai", "From AI reading the voice (booster)"],
+            ["loudness", "From how loud it is (quick, no download)"]],
             film.lipsync || "sounds", (v) => (film.lipsync = v)))),
       h("div", {}, h("button", { class: "btn primary", onclick: save }, "Save"))),
     h("div", { class: "card", style: "margin-top:14px" },
