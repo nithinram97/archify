@@ -47,14 +47,15 @@ def installed():
 
 
 def files(pack, exts=(".gltf", ".glb", ".fbx")):
-    """Model files of an installed pack: {name: path} (name = file name without extension)."""
-    out = {}
-    base = folder(pack)
-    for d, _, names in os.walk(base):
+    """Model files of an installed pack: {name: path} (name = file name without extension; when a
+    pack has a model in several formats, the first of `exts` wins)."""
+    found = {}
+    for d, _, names in os.walk(folder(pack)):
         for n in sorted(names):
-            if os.path.splitext(n)[1].lower() in exts:
-                out.setdefault(os.path.splitext(n)[0], os.path.join(d, n))
-    return out
+            stem, ext = os.path.splitext(n)
+            if ext.lower() in exts:
+                found.setdefault(stem, []).append((exts.index(ext.lower()), os.path.join(d, n)))
+    return {stem: min(paths)[1] for stem, paths in found.items()}
 
 
 # ---------------------------------------------------------------------- models in sets
@@ -105,10 +106,15 @@ def mesh(pack, name):
     out = bpy.data.meshes.new(f"{pack}.{name}")
     bm.to_mesh(out)
     bm.free()
+    if len(out.color_attributes):   # materials that read "the" vertex colour need one chosen
+        out.color_attributes.active_color_index = 0
+        out.color_attributes.render_color_index = 0
     for mat in mats:
         out.materials.append(mat)
         bsdf = mat.node_tree.nodes.get("Principled BSDF") if mat and mat.node_tree else None
-        if bsdf is not None:        # the FBX files come in with alpha 0: invisible
+        if bsdf is not None and bsdf.inputs["Alpha"].is_linked:     # cut-out leaves and petals:
+            mat.use_transparent_shadow = False                          # 15x faster, much the same
+        elif bsdf is not None:          # FBX files come in with alpha 0
             glass = "glass" in mat.name.lower()
             bsdf.inputs["Alpha"].default_value = 0.2 if glass else 1.0
             if glass and hasattr(mat, "surface_render_method"):
@@ -178,7 +184,9 @@ def _itch(url, dest, progress):
     dl = op.open(r["url"]).read().decode()
     tok2 = re.search(r'name="csrf_token" value="([^"]+)"', dl).group(1)
     uploads = re.findall(r'data-upload_id="(\d+)"', dl)
-    names = re.findall(r'class="name" title="([^"]+)"', dl)
+    names = [a or b for a, b in re.findall(r'<strong[^>]*?(?:title="([^"]+)"[^>]*class="name"|class="name"[^>]*title="([^"]+)")', dl)]
+    if not uploads or len(names) != len(uploads):
+        raise RuntimeError(f"{url}: couldn't find the files to download (has the page changed?)")
     for up, name in zip(uploads, names):
         q = urllib.parse.urlencode({"source": "game_download", "after_download_lightbox": "1", "as_props": "1"})
         res = json.loads(op.open(f"{url}/file/{up}?{q}", urllib.parse.urlencode({"csrf_token": tok2}).encode()).read())

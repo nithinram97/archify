@@ -11,6 +11,9 @@ thickens towards the distance, and nothing is put where the camera usually stand
     density = 1.5           # how much scenery
     seed = 4                # a different arrangement
 
+Trees, pines, bushes, rocks, flowers, grass and mushrooms are Quaternius's nature models when that
+pack is downloaded (`dreamreel assets`), and dreamreel's own shapes otherwise.
+
 Biomes and scenery are classes, so new ones are easy to add:
 
     class Crystal(dr.Scenery):
@@ -39,19 +42,27 @@ from .plugins import Plugin
 class Scenery(Plugin):
     """Something that grows or lies about outdoors. `build` makes it round `root` (an empty at its
     base), `radius` is how much room it needs, `blocks` whether people walk round it, `sway` how
-    much it moves in the wind."""
+    much it moves in the wind. `models` are Quaternius nature models (one is picked) used instead of
+    `build` when the pack is downloaded, `height` (toy set, life-size set) how tall they stand."""
     kind = "scenery"
     abstract = True
     radius = 0.6
     blocks = True
     sway = 1.0
+    models = ()
+    height = (1.0, 1.0)
 
     def place(self, s, name, at, scale, rng, block=True, z=None):
         x, y = at.x, at.y
         z = s.ground_height(x, y) if z is None and hasattr(s, "ground_height") else (z or 0.0)
         root = shapes.empty(name, at=(x, y, z - 0.03))
         root.rotation_euler.z = rng.uniform(0, 2 * math.pi)
-        self.build(root, name, scale, rng)
+        model = None
+        if self.models and getattr(s, "use_models", False):
+            h = s.sized(*self.height) * scale * rng.uniform(0.85, 1.15)
+            model = s.model(rng.choice(self.models), name, (None, None, h), parent=root, pack="nature")
+        if model is None:
+            self.build(root, name, scale, rng)
         if self.sway:
             s.sway.append((root, self.sway))
         if self.blocks and block:
@@ -68,6 +79,8 @@ def _leafy(color, rough=0.6):
 
 class Tree(Scenery):
     description = "A round leafy tree"
+    models = tuple(f"CommonTree_{i}" for i in range(1, 6))
+    height = (2.6, 5.5)
     palette = ("leaf", "#5aa84f", "#3f8a44")
     trunk = "darkwood"
 
@@ -81,11 +94,15 @@ class Tree(Scenery):
 
 class AutumnTree(Tree):
     description = "A tree in autumn colours"
+    models = tuple(f"TwistedTree_{i}" for i in range(1, 6))
+    height = (2.6, 5.5)
     palette = ("#e08a2e", "#c9532b", "#e8b33c", "#b5482a")
 
 
 class Pine(Scenery):
     description = "A pine tree"
+    models = tuple(f"Pine_{i}" for i in range(1, 6))
+    height = (3.0, 6.5)
     radius = 0.7
     sway = 0.6
     palette = ("#2f6b45", "#3a7a4f", "#2a5e3f")
@@ -106,6 +123,7 @@ class Pine(Scenery):
 
 class SnowyPine(Pine):
     description = "A pine tree with snow on it"
+    models = ()
     snowy = True
 
 
@@ -157,6 +175,8 @@ class Cactus(Scenery):
 
 class Bush(Scenery):
     description = "A round bush"
+    models = ("Bush_Common_Flowers",)
+    height = (0.75, 1.0)
     radius = 0.5
     sway = 0.6
     palette = ("#4f8f45", "#5aa84f", "#437d3c")
@@ -170,11 +190,14 @@ class Bush(Scenery):
 
 class AutumnBush(Bush):
     description = "A bush in autumn colours"
+    models = ("Bush_Common",)
     palette = ("#c9732b", "#b5482a", "#d9a33c")
 
 
 class Rock(Scenery):
     description = "A rock or boulder"
+    models = ("Rock_Medium_1", "Rock_Medium_2", "Rock_Medium_3")
+    height = (0.5, 0.7)
     radius = 0.6
     sway = 0.0
     color = "#9a958d"
@@ -193,11 +216,14 @@ class Rock(Scenery):
 
 class MoonRock(Rock):
     description = "A grey moon rock"
+    models = ()
     color = "#8a8a8e"
 
 
 class Flowers(Scenery):
     description = "A clump of wild flowers"
+    models = ("Flower_3_Group", "Flower_4_Group", "Bush_Common_Flowers")
+    height = (0.3, 0.4)
     radius = 0.3
     blocks = False
     sway = 0.8
@@ -214,6 +240,8 @@ class Flowers(Scenery):
 
 class Grass(Scenery):
     description = "A tuft of long grass"
+    models = ("Grass_Common_Tall", "Grass_Wispy_Tall", "Grass_Common_Short")
+    height = (0.3, 0.45)
     radius = 0.25
     blocks = False
     sway = 1.5
@@ -230,11 +258,14 @@ class Grass(Scenery):
 
 class DryGrass(Grass):
     description = "A tuft of dry grass"
+    models = ()
     color = "#c9b06a"
 
 
 class Mushroom(Scenery):
     description = "A spotted toadstool"
+    models = ("Mushroom_Common", "Mushroom_Laetiporus")
+    height = (0.2, 0.25)
     radius = 0.2
     blocks = False
     sway = 0.0
@@ -252,6 +283,8 @@ class Mushroom(Scenery):
 
 class DeadTree(Scenery):
     description = "A bare, dead tree"
+    models = tuple(f"DeadTree_{i}" for i in range(1, 6))
+    height = (2.4, 5.0)
     radius = 0.4
     sway = 0.2
 

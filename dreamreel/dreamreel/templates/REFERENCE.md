@@ -121,8 +121,9 @@ road runs towards the camera, the other side of the street is there for reverse 
 Every kind of set takes `scale`: `toy` (the default: furniture for toy figures about 1 m tall) or
 `people` (life-size furniture for `person` characters: 0.76 m tables, 0.46 m chair seats). The
 furniture is Quaternius's models (`dreamreel assets --download --pack interior`) fitted to the same
-sizes; `furniture = "simple"` uses dreamreel's own shapes instead, as it does when the pack isn't
-downloaded.
+sizes, and outdoors the trees, pines, bushes, rocks, flowers, grass and mushrooms are too (`--pack
+nature`); `furniture = "simple"` uses dreamreel's own shapes instead, as it does when the packs
+aren't downloaded.
 
 A set file can also give its scenes a default `time_of_day` and `weather`.
 

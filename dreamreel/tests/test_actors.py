@@ -106,6 +106,19 @@ def furniture():
     print("  furniture: ok")
 
 
+def nature():
+    """Quaternius's trees, bushes, rocks and flowers outdoors, life-size in a people set."""
+    s = dr.Scene({"kind": "outdoor", "biome": "forest", "scale": "people"})
+    kinds = {o.data.name.split(".")[1].split("_")[0] for o in s.bscene.objects
+             if o.type == "MESH" and o.data.name.startswith("nature.")}
+    assert {"CommonTree", "Pine"} <= kinds, kinds
+    tall = max(o.dimensions.z for o in s.bscene.objects if o.type == "MESH" and o.data.name.startswith("nature.Pine"))
+    assert tall > 4.5, ("life-size pines", tall)
+    s = dr.Scene({"kind": "outdoor", "biome": "forest", "furniture": "simple"})
+    assert not any(o.type == "MESH" and o.data.name.startswith("nature.") for o in s.bscene.objects)
+    print("  nature: ok")
+
+
 def animals():
     s = dr.Scene({"kind": "outdoor", "biome": "meadow"})
     rex, star, doe = s.cast(rex=dict(type="animal", species="husky"), star=dict(type="animal", species="horse"),
@@ -144,6 +157,8 @@ def main():
     if "interior" not in have:
         print("actors: Quaternius furniture not downloaded (`dreamreel assets --download --pack interior`)")
     furniture()
+    if "nature" in have:
+        nature()
     if "animals" not in have:
         print("actors: skipped (no Quaternius animals: `dreamreel assets --download --pack animals`)")
     else:

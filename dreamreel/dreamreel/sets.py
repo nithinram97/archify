@@ -38,7 +38,7 @@ COMMON = [
     Param("scale", "choice", default="toy", choices=("toy", "people"),
           label="Furniture for (toy: small characters; people: life-size)"),
     Param("furniture", "choice", default="models", choices=("models", "simple"),
-          label="Furniture look (models: Quaternius's, when downloaded)"),
+          label="Furniture and plants (models: Quaternius's, when downloaded)"),
 ]
 
 
