@@ -1,0 +1,72 @@
+# Scene 030: uses this film's own extensions (extensions/party.py): a robot, a dance and a cake.
+set = "park"
+cast = ["mia", "bolt", "biscuit"]
+
+[[beats]]
+who = "mia"
+do = "sit"
+seat = "bench"
+already = true
+
+[[beats]]
+who = "biscuit"
+do = "place"
+where = "left"
+facing = "cake"
+
+[[beats]]
+who = "bolt"
+do = "enter"
+where = "front-left"
+
+[[beats]]
+who = "bolt"
+do = "walk_to"
+where = "cake"
+
+[[beats]]
+who = "bolt"
+do = "turn_to"
+target = "mia"
+
+[[beats]]
+who = "bolt"
+do = "say"
+line = "Surprise! A cake. Nobody can eat this one."
+mood = "excited"
+to = "mia"
+
+[[beats]]
+who = "mia"
+do = "gesture"
+gesture = "cheer"
+
+[[beats]]
+who = "bolt"
+do = "gesture"
+gesture = "dance"
+
+[[beats]]
+who = "biscuit"
+do = "walk_to"
+where = "front-right"
+speed = "fast"
+facing = "cake"
+with_previous = true
+
+[[beats]]
+who = "biscuit"
+do = "gesture"
+gesture = "sniff"
+
+[[beats]]
+who = "biscuit"
+do = "gesture"
+gesture = "tail_wag"
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "Best robot ever."
+mood = "happy"
+to = "bolt"

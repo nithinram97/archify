@@ -1,0 +1,25 @@
+// Stand-in for the private Foundry SDK: each export only carries its API name.
+export const ErmCockpitUser = { apiName: 'ErmCockpitUser' } as any;
+export const ErmDashboardRiskAndOpportunity = { apiName: 'ErmDashboardRiskAndOpportunity' } as any;
+export const ErmDashboardWaterfall = { apiName: 'ErmDashboardWaterfall' } as any;
+export const ermAddAndCreateRisksInDashboards = { apiName: 'ermAddAndCreateRisksInDashboards' } as any;
+export const ermEditDashboardSettingsv2 = { apiName: 'ermEditDashboardSettingsv2' } as any;
+export const ermEditDashboardSummarySection = { apiName: 'ermEditDashboardSummarySection' } as any;
+export const ermEditRisk = { apiName: 'ermEditRisk' } as any;
+export const ermEditRiskDev = { apiName: 'ermEditRiskDev' } as any;
+export const ermEditRiskSettingsMultiple = { apiName: 'ermEditRiskSettingsMultiple' } as any;
+export const ermEditRiskSettingsMultipleDev = { apiName: 'ermEditRiskSettingsMultipleDev' } as any;
+export const ermFullSearchRiskList = { apiName: 'ermFullSearchRiskList' } as any;
+export const ermGetDashboardList = { apiName: 'ermGetDashboardList' } as any;
+export const ermGetRisksShared = { apiName: 'ermGetRisksShared' } as any;
+export const ermGetSummaryTabData = { apiName: 'ermGetSummaryTabData' } as any;
+export const ermRiskSharingAction = { apiName: 'ermRiskSharingAction' } as any;
+export const ermRiskValidationKm = { apiName: 'ermRiskValidationKm' } as any;
+export const ermRiskValidationKmMaster = { apiName: 'ermRiskValidationKmMaster' } as any;
+export const ermSearchAggPaths = { apiName: 'ermSearchAggPaths' } as any;
+export const ermSearchCategories = { apiName: 'ermSearchCategories' } as any;
+export const ermUpdateKeyMessage = { apiName: 'ermUpdateKeyMessage' } as any;
+export const ermUpdateKeyMessageMaster = { apiName: 'ermUpdateKeyMessageMaster' } as any;
+export const ermValidateDashboardAndRisksv2 = { apiName: 'ermValidateDashboardAndRisksv2' } as any;
+export const executeAddEditWorkflow = { apiName: 'executeAddEditWorkflow' } as any;
+export const generateArmRoPayload = { apiName: 'generateArmRoPayload' } as any;

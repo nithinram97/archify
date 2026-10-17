@@ -1,0 +1,133 @@
+# Scene 010: Mia finds the cookie jar empty. Beats play in order; with_previous = true starts a beat
+# together with the one before it.
+set = "kitchen"
+cast = ["mia", "tom"]
+
+[[beats]]
+do = "title_card"
+text = "The Last Cookie"
+
+[[beats]]
+who = "tom"
+do = "sit"
+seat = "chair-2"
+already = true
+
+[[beats]]
+who = "tom"
+do = "look_at"
+target = "window"
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "enter"
+where = "door"
+
+[[beats]]
+who = "mia"
+do = "walk_to"
+where = "counter"
+
+[[beats]]
+who = "mia"
+do = "feel"
+mood = "surprised"
+
+[[beats]]
+do = "wait"
+seconds = 0.6
+
+[[beats]]
+who = "mia"
+do = "turn_to"
+target = "tom"
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "Tom. The cookie jar is empty."
+mood = "worried"
+to = "tom"
+
+[[beats]]
+who = "tom"
+do = "look_at"
+target = "mia"
+
+[[beats]]
+who = "tom"
+do = "say"
+line = "Is it? How strange."
+mood = "worried"
+to = "mia"
+
+[[beats]]
+who = "mia"
+do = "walk_to"
+where = "table"
+facing = "tom"
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "There were twelve cookies this morning."
+mood = "angry"
+to = "tom"
+
+[[beats]]
+who = "tom"
+do = "gesture"
+gesture = "shrug"
+
+[[beats]]
+who = "tom"
+do = "say"
+line = "Maybe... mice?"
+to = "mia"
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "Mice. With crumbs on their face?"
+mood = "smug"
+to = "tom"
+
+[[beats]]
+who = "tom"
+do = "gesture"
+gesture = "facepalm"
+
+[[beats]]
+who = "tom"
+do = "stand"
+
+[[beats]]
+who = "tom"
+do = "turn_to"
+target = "mia"
+
+[[beats]]
+who = "tom"
+do = "say"
+line = "Okay, okay! I saved you one."
+mood = "happy"
+to = "mia"
+
+[[beats]]
+who = "mia"
+do = "feel"
+mood = "excited"
+
+[[beats]]
+who = "mia"
+do = "gesture"
+gesture = "cheer"
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "The last cookie!"
+mood = "happy"
+to = "tom"

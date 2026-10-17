@@ -1,0 +1,8 @@
+# How Mia looks and sounds: a person from Quaternius's free 3D packs (`dreamreel assets --download`).
+# Until the packs are downloaded, a toy figure in the same colours stands in.
+type = "person"
+name = "Mia"
+body = "woman"         # woman or man
+outfit = "casual"      # see the outfits with `dreamreel assets` or in the studio's Cast page
+height = 1.62          # metres
+voice = "en_US-amy-medium"

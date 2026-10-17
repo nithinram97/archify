@@ -1,0 +1,9 @@
+# The film: everything here applies to every scene.
+title = "The Last Cookie"
+fps = 24
+resolution = [1920, 1080]
+scenes = ["010_empty_jar", "020_gran", "030_party"]   # play order (leave out to sort by file name)
+
+# [music]
+# file = "audio/music/theme.mp3"
+# volume = 0.35

@@ -1,0 +1,6 @@
+type = "person"
+name = "Tom"
+body = "man"
+outfit = "hoodie"
+height = 1.75
+voice = "en_US-ryan-medium"

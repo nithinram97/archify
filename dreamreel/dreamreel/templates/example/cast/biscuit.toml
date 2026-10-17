@@ -1,0 +1,7 @@
+# An animal from Quaternius's packs, with its own walks, runs and actions (a creature stands in until
+# the packs are downloaded). Any other body plan is a creature: type = "creature", body = "bird"...
+type = "animal"
+name = "Biscuit"
+species = "shiba_inu"  # alpaca, bull, cow, deer, donkey, fox, horse, husky, shiba_inu, stag, wolf...
+size = 1.0
+voice = "en_US-ryan-medium"
