@@ -694,6 +694,65 @@ def cmd_voices(a):
     print("Lines written in an Indian script are spoken in that language automatically.")
 
 
+def cmd_boost(a):
+    from . import boost, userkeys
+    _project_optional()
+    if a.action == "connect":
+        if not a.url:
+            raise SystemExit("dreamreel boost connect <address> <pass key>  (both are printed by the booster)")
+        url = a.url if "://" in a.url else "http://" + a.url
+        b = boost.Booster(url, a.key or "")
+        try:
+            st = b.status(fresh=True)
+        except boost.BoostError as e:
+            raise SystemExit(str(e))
+        userkeys.set_key("DREAMREEL_BOOST_URL", url)
+        userkeys.set_key("DREAMREEL_BOOST_TOKEN", a.key or "")
+        print(f"connected to the booster at {url} (graphics card: {st.get('gpu') or 'none'})")
+        return
+    if a.action == "disconnect":
+        userkeys.set_key("DREAMREEL_BOOST_URL", "")
+        userkeys.set_key("DREAMREEL_BOOST_TOKEN", "")
+        print("booster forgotten")
+        return
+    if a.action == "serve":
+        import runpy
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "booster", "server.py")
+        sys.argv = [here] + (["--port", str(a.port)] if a.port else []) + (["--prepare", a.url] if a.url else [])
+        runpy.run_path(here, run_name="__main__")
+        return
+    b = boost.configured()
+    if b is None:
+        print("No booster connected. A booster runs dreamreel's graphics-card AI (Indian voices, acting from a")
+        print("sentence, models from a picture, rigging, faces, restyling) on a free Google Colab notebook or")
+        print("any computer with a graphics card:")
+        print("  1. open notebooks/dreamreel-booster.ipynb in Colab (Runtime: T4 GPU) and run it, or run")
+        print("     `dreamreel boost serve` on a computer with a graphics card;")
+        print("  2. dreamreel boost connect <address> <pass key>   (both are printed by the booster)")
+        return
+    try:
+        st = b.status(fresh=True)
+    except boost.BoostError as e:
+        raise SystemExit(str(e))
+    if a.action == "prepare":
+        names = [n for n in (a.url or "").split(",") if n] or list(st["skills"])
+        print("preparing:", ", ".join(b.prepare(names)["preparing"]))
+        return
+    print(f"booster: {b}  graphics card: {st.get('gpu') or 'none found'}  busy: {st.get('busy', 0)}")
+    for name, d in st.get("skills", {}).items():
+        print(f"  {d['state']:14} {name:22} {d['about']}")
+
+
+def cmd_mcp(a):
+    """MCP over stdio: the protocol keeps the real stdout; anything else printed (Blender, models) goes
+    to stderr, so it can't corrupt a message."""
+    from . import mcp
+    proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
+    os.dup2(2, 1)
+    sys.stdout = sys.stderr
+    mcp.serve(a.dir, sys.stdin, proto)
+
+
 def cmd_keys(a):
     from . import userkeys
     if a.action == "set":
@@ -768,6 +827,17 @@ def main(argv=None):
     v.add_argument("--fish", help="a Fish Audio voice id")
     v.add_argument("--speed", type=float)
     v.set_defaults(fn=cmd_voices)
+
+    bo = sub.add_parser("boost", help="a booster: AI models on a graphics card (a free Colab notebook, or a computer with one)")
+    bo.add_argument("action", nargs="?", choices=("status", "connect", "disconnect", "prepare", "serve"), default="status")
+    bo.add_argument("url", nargs="?", help="connect: the booster's address; prepare/serve: skills, comma-separated")
+    bo.add_argument("key", nargs="?", help="connect: the pass key the booster printed")
+    bo.add_argument("--port", type=int, help="serve: the port (default 8780)")
+    bo.set_defaults(fn=cmd_boost)
+
+    mc = sub.add_parser("mcp", help="serve this film to AI models over MCP (Claude, ChatGPT, local models)")
+    mc.add_argument("dir", nargs="?", default=".", help="the film's folder")
+    mc.set_defaults(fn=cmd_mcp)
 
     k = sub.add_parser("keys", help="keys for AI services, saved on this computer (not in the film)")
     k.add_argument("action", nargs="?", choices=("list", "set"), default="list")

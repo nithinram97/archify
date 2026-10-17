@@ -22,6 +22,12 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 
+// replace an element's children, skipping the null/false that conditional parts leave
+function fill(el, ...kids) {
+  el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
+  return el;
+}
+
 async function api(method, path, body) {
   const r = await fetch(path, {
     method, headers: body ? { "Content-Type": "application/json" } : {},
@@ -481,7 +487,7 @@ function voiceField(value, onChange, ctx) {
             setup ? h("details", { class: "small" }, h("summary", {}, "Technical details"), h("div", { class: "muted" }, setup)) : null));
     const speed = h("input", { type: "range", min: 0.7, max: 1.4, step: 0.05, value: sp.speed || 1,
       oninput: (e) => { sp.speed = +e.target.value === 1 ? undefined : +e.target.value; emit(); } });
-    box.replaceChildren(
+    fill(box,
       h("div", { class: "fields" },
         h("label", { class: "field" }, h("span", {}, "Language"),
           select(Object.entries(L).map(([k, v]) => [k, v.native === v.name ? v.name : `${v.native} (${v.name})`]), sp.language,
@@ -1223,6 +1229,54 @@ function voicesCard() {
     h("p", { class: "muted small", style: "margin-top:8px" }, "✓ ready on this computer · ○ can speak it once set up"));
 }
 
+// a booster: graphics-card AI on a free notebook or a computer with a graphics card
+const SKILL_NAMES = { "voice.indic_parler": "Described voices (Indian languages)", "voice.indic_f5": "Copied voices (Indian languages)",
+  "motion.hy_motion": "Acting from a sentence", "mesh.trellis2": "3D models from a picture (TRELLIS.2)", "mesh.triposg": "3D models from a picture (TripoSG)",
+  "rig.unirig": "Rigging any model", "face.audio2face": "Faces driven by the voice", "restyle.wan": "Restyle a scene (experimental)" };
+function boostCard() {
+  const box = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", {}, "Booster: AI on a graphics card")),
+    h("p", { class: "muted" }, "Checking..."));
+  const draw = (b) => {
+    const head = h("div", { class: "card-head" }, h("h3", {}, "Booster: AI on a graphics card ",
+      b.connected && b.ok ? h("span", { class: "ok-tag" }, "✓ connected") : null),
+      b.connected ? h("button", { class: "btn sm ghost", onclick: () => act({ action: "disconnect" }) }, "Disconnect") : null);
+    const intro = h("p", { class: "muted small" }, "Indian AI voices, acting from a sentence, 3D models from a picture, rigging and voice-driven faces need a graphics card. ",
+      "A booster runs them for free on a Google Colab notebook (or on any computer with a graphics card) while dreamreel stays on yours.");
+    if (!b.connected || !b.ok) {
+      const url = h("input", { type: "text", placeholder: "https://....trycloudflare.com", value: b.url || "" });
+      const key = h("input", { type: "password", placeholder: "pass key", autocomplete: "off" });
+      fill(box, head, intro,
+        b.connected && !b.ok ? h("div", { class: "banner err small" }, b.error) : null,
+        h("ol", { class: "steps" },
+          h("li", {}, h("a", { class: "btn sm primary", href: b.notebook, target: "_blank", rel: "noopener" }, "Open the free booster notebook"),
+            " in Google Colab. Choose ", h("strong", {}, "Runtime → Change runtime type → T4 GPU"), ", then ", h("strong", {}, "Runtime → Run all"), "."),
+          h("li", {}, "Copy the ", h("strong", {}, "address"), " and ", h("strong", {}, "pass key"), " it prints at the end, and paste them here:",
+            h("div", { class: "row", style: "margin-top:6px" }, url, key,
+              h("button", { class: "btn sm primary", onclick: () => act({ action: "connect", url: url.value.trim(), key: key.value.trim() }) }, "Connect"))),
+          h("li", {}, "Keep the notebook's tab open while you make your film. If it stops, run it again and reconnect.")),
+        h("p", { class: "muted small" }, "Have a computer with an NVIDIA graphics card? Run ", h("code", {}, "dreamreel boost serve"), " on it and connect to its address."));
+      return;
+    }
+    const skills = Object.entries(b.skills || {});
+    fill(box, head, intro,
+      h("p", { class: "small" }, h("strong", {}, "Graphics card: "), b.gpu || "none found", " · ", h("code", {}, b.url), b.busy ? ` · busy (${b.busy})` : ""),
+      h("div", { class: "toolbox" }, skills.map(([name, d]) => h("div", { class: "tool-item" },
+        h("div", { class: "ti-name" }, SKILL_NAMES[name] || name, " ",
+          d.ready ? h("span", { class: "ok-tag" }, "✓ ready") : d.state === "installing" ? h("span", { class: "muted small" }, "⏳ installing")
+          : h("button", { class: "btn sm", onclick: () => act({ action: "prepare", skills: [name] }) }, "Install now")),
+        h("div", { class: "small muted" }, d.about),
+        d.state.startsWith("failed") ? h("div", { class: "small", style: "color:var(--danger)" }, d.state) : null,
+        h("div", { class: "small muted" }, "Licence: ", d.license)))),
+      h("p", { class: "muted small", style: "margin-top:8px" }, "Skills install the first time they're used (a few minutes each); \"Install now\" gets one ready ahead of time."));
+  };
+  const act = async (body) => {
+    try { draw(await api("POST", "/api/boost", body)); await api("GET", "/api/info").catch(() => {}); await refresh(); }
+    catch (e) { fail(e); }
+  };
+  api("GET", "/api/boost").then(draw).catch((e) => box.replaceChildren(h("p", { class: "muted" }, e.message)));
+  return box;
+}
+
 // keys for AI services: saved on this computer (never in the film folder) and never shown again
 function keysCard() {
   const keys = S.state.keys || {};
@@ -1252,6 +1306,23 @@ function keysCard() {
         h("div", { class: "keys", style: "margin-top:10px" }, more.map(row))) : null); })());
 }
 
+// connect an AI assistant (Claude, ChatGPT, local models) to this film over MCP
+function mcpCard() {
+  const root = S.state.project.root;
+  const q = (x) => /[\s"']/.test(x) ? JSON.stringify(x) : x;
+  const claude = `claude mcp add dreamreel -- dreamreel mcp ${q(root)}`;
+  const json = JSON.stringify({ mcpServers: { dreamreel: { command: "dreamreel", args: ["mcp", root] } } }, null, 2);
+  const copy = (text) => navigator.clipboard.writeText(text).then(() => toast("Copied"), () => toast("Select and copy it"));
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Direct with an AI assistant")),
+    h("p", { class: "muted small" }, "Let Claude, ChatGPT or a model on your own computer direct this film with you: it can read and write the cast, sets ",
+      "and scenes, check them, look at frames and render. It connects over MCP (the Model Context Protocol)."),
+    h("div", { class: "field" }, h("span", {}, "Claude Code"),
+      h("div", { class: "row" }, h("code", { class: "copyable" }, claude), h("button", { class: "btn sm", onclick: () => copy(claude) }, "Copy"))),
+    h("div", { class: "field" }, h("span", {}, "Claude Desktop, and other MCP apps (their settings file)"),
+      h("div", { class: "row" }, h("pre", { class: "copyable" }, json), h("button", { class: "btn sm", onclick: () => copy(json) }, "Copy"))));
+}
+
 function toolboxView() {
   const all = info().plugins || {};
   const custom = Object.values(all).flat().filter((p) => p.source !== "built-in").length;
@@ -1260,7 +1331,9 @@ function toolboxView() {
       h("div", {}, h("h1", {}, "Toolbox"), h("p", {}, "Everything your film can use. Items marked ✦ were added for this film.")),
       h("button", { class: "btn", onclick: async () => { await api("GET", "/api/info").catch(fail); await refresh(); toast("Toolbox reloaded"); } }, "↻ Reload")),
     packsCard(),
+    boostCard(),
     voicesCard(),
+    mcpCard(),
     keysCard(),
     h("div", { class: "banner ok", style: "margin-bottom:14px" },
       h("div", {}, h("strong", {}, "Need something that isn't here?"), " Ask your AI agent for it (a new prop, gesture, kind of character, camera shot...). ",

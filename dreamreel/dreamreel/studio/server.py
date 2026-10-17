@@ -474,6 +474,38 @@ class Handler(BaseHTTPRequestHandler):
                 userkeys.set_key(str(b.get("name", "")), str(b.get("value", "")))
                 st.info_cache = None
             return self._json(userkeys.status())
+        if what == "boost":
+            from .. import boost
+            if method == "POST":
+                if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                    return self._error("bad request")
+                b = self._body()
+                action = b.get("action")
+                if action == "connect":
+                    url = str(b.get("url", "")).strip()
+                    url = url if "://" in url else "http://" + url
+                    try:
+                        boost.Booster(url, str(b.get("key", "")).strip()).status(fresh=True)
+                    except boost.BoostError as e:
+                        return self._error(str(e))
+                    userkeys.set_key("DREAMREEL_BOOST_URL", url)
+                    userkeys.set_key("DREAMREEL_BOOST_TOKEN", str(b.get("key", "")).strip())
+                elif action == "disconnect":
+                    userkeys.set_key("DREAMREEL_BOOST_URL", "")
+                    userkeys.set_key("DREAMREEL_BOOST_TOKEN", "")
+                elif action == "prepare":
+                    bo = boost.configured()
+                    if bo is None:
+                        return self._error("no booster connected")
+                    try:
+                        bo.prepare([str(x) for x in b.get("skills", [])])
+                    except boost.BoostError as e:
+                        return self._error(str(e))
+                else:
+                    return self._error("unknown action")
+                boost._cache.clear()
+                st.info_cache = None
+            return self._json(boost.summary())
         if st.root is None:
             return self._error("no film open", 409)
         if what == "upload" and method == "POST":

@@ -83,7 +83,7 @@ a { color: var(--accent); }
 
 label.field.row, .field.row { flex-direction: row; align-items: center; }
 label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
-input[type=text], input[type=number], select, textarea.plain {
+input[type=text], input[type=password], input[type=number], select, textarea.plain {
   border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 8px 10px; min-width: 0; }
 select { padding-right: 28px; }
 input[type=range] { accent-color: var(--accent); }
@@ -302,3 +302,7 @@ button.pick:hover { border-color: var(--accent); }
 .field.col { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .banner.block { display: block; }
 details summary { cursor: pointer; color: var(--ink-2); }
+ol.steps { margin: 8px 0 8px 20px; display: flex; flex-direction: column; gap: 10px; }
+ol.steps input { min-width: 200px; }
+.copyable { font-family: var(--mono); font-size: 12.5px; background: var(--panel-2); border-radius: 8px; padding: 8px 10px;
+  overflow-x: auto; white-space: pre; max-width: 100%; flex: 1; margin: 0; }

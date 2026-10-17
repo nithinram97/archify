@@ -55,7 +55,7 @@ Next, roughly in order:
 - Cloud voice engines as plugins; multi-language voices and subtitles.
 
 ## Tooling
-- An MCP server so any AI model can drive dreamreel as tools.
+- (Done: an MCP server, `dreamreel mcp`, so any AI assistant can direct a film.)
 - dreamreel studio (done in 0.1): next, an "Ask the AI director" panel that takes notes in plain
   words, drag-and-drop blocking on the floor plan, and a one-click installer with no terminal.
 - Render farm / GPU cloud render command.

@@ -298,7 +298,28 @@ def _local_ready(engine):
     return speakers.ready(engine)
 
 
-class IndicParler(VoiceEngine):
+class _AIVoice(VoiceEngine):
+    """A voice model run on this computer when it's set up here, else on a connected booster."""
+    abstract = True
+
+    @classmethod
+    def available(cls):
+        from . import boost
+        return _local_ready(cls.name) or boost.can("voice." + cls.name)
+
+    def speak(self, text, voice, wav_path, **opts):
+        if _local_ready(self.name):
+            _Worker.get(self.name).run({"text": text, "out": wav_path, **opts})
+            return
+        from . import boost
+        b = boost.configured()
+        files = {"sample": opts.pop("sample")} if opts.get("sample") else {}
+        out = b.run("voice." + self.name, {"text": text, **opts}, files, os.path.dirname(wav_path) or ".",
+                    timeout=900)
+        os.replace(out["speech"], wav_path)
+
+
+class IndicParler(_AIVoice):
     name = "indic_parler"
     label = "Indic Parler-TTS"
     description = "A voice described in words, in 21 Indian languages and English (AI4Bharat, Apache-2.0)"
@@ -309,20 +330,13 @@ class IndicParler(VoiceEngine):
              "huggingface.co/ai4bharat/indic-parler-tts and set HF_TOKEN")
 
     @classmethod
-    def available(cls):
-        return _local_ready(cls.name)
-
-    @classmethod
     def can(cls, spec, language):
         # a described voice; or any voice of a language with no ready-made one
         return (language in cls.languages and not spec.sample and not spec.fish
                 and bool(spec.describe or (not spec.name and language not in PIPER_DEFAULT)))
 
-    def speak(self, text, voice, wav_path, **opts):
-        _Worker.get(self.name).run({"text": text, "out": wav_path, **opts})
 
-
-class IndicF5(VoiceEngine):
+class IndicF5(_AIVoice):
     name = "indic_f5"
     label = "IndicF5 (copies a voice)"
     description = "Copies a voice from a short recording, in 11 Indian languages (AI4Bharat, MIT)"
@@ -331,15 +345,8 @@ class IndicF5(VoiceEngine):
              "accept the model's terms at huggingface.co/ai4bharat/IndicF5 and set HF_TOKEN")
 
     @classmethod
-    def available(cls):
-        return _local_ready(cls.name)
-
-    @classmethod
     def can(cls, spec, language):
         return language in cls.languages and bool(spec.sample and spec.sample_text)
-
-    def speak(self, text, voice, wav_path, **opts):
-        _Worker.get(self.name).run({"text": text, "out": wav_path, **opts})
 
 
 # ---------------------------------------------------------------------- Fish Audio

@@ -42,3 +42,16 @@ talking about your film.
 - Ask for the story and scene list first, before any files.
 - Give notes the way you would to a person: "slower", "she should look worried", "end on a wide shot".
 - Keep the previz for timing and the final render for the end.
+
+## Any AI assistant, over MCP
+
+`dreamreel mcp <film folder>` serves the film over the Model Context Protocol, so any MCP app can
+direct it: Claude Code (`claude mcp add dreamreel -- dreamreel mcp /path/to/film`), Claude Desktop,
+ChatGPT's and other apps' MCP settings (`{"mcpServers": {"dreamreel": {"command": "dreamreel",
+"args": ["mcp", "/path/to/film"]}}}`), or a local model in an MCP client. The studio's Toolbox shows
+both lines ready to copy.
+
+Its tools: `film` (overview), `guide` (AGENTS.md and REFERENCE.md), `features` (every kind of
+character, prop, action, gesture, shot... with settings), `read` and `write` (the film's TOML and
+extension files; TOML is checked before saving), `check` (timelines or errors per scene), `look` (a
+contact sheet of frames, returned as a picture), `render` (previz or final), and `voices`.

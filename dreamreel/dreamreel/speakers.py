@@ -16,7 +16,8 @@ import os
 import sys
 import wave
 
-MODELS = {"indic_parler": "ai4bharat/indic-parler-tts", "indic_f5": "ai4bharat/IndicF5"}
+MODELS = {"indic_parler": os.environ.get("DREAMREEL_PARLER_MODEL") or "ai4bharat/indic-parler-tts",
+          "indic_f5": os.environ.get("DREAMREEL_F5_MODEL") or "ai4bharat/IndicF5"}
 NEEDS = {"indic_parler": ("torch", "parler_tts", "transformers"), "indic_f5": ("torch", "transformers", "f5_tts")}
 _loaded = {}
 

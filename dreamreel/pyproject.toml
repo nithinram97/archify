@@ -22,4 +22,4 @@ dreamreel = "dreamreel.cli:main"
 include = ["dreamreel*"]
 
 [tool.setuptools.package-data]
-dreamreel = ["templates/**/*", "studio/static/*"]
+dreamreel = ["templates/**/*", "studio/static/*", "booster/*.py"]

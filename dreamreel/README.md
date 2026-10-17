@@ -227,7 +227,9 @@ colour, never the staging, so trying one costs a re-render and nothing else.
 - [Getting started](docs/getting-started.md)
 - [dreamreel studio](docs/studio.md)
 - [Reference](dreamreel/templates/REFERENCE.md): cast, sets, actions, moods, gestures, camera
-- [Working with an AI model](docs/ai-director.md)
+- [Working with an AI model](docs/ai-director.md), including any AI assistant over MCP (`dreamreel mcp`)
+- [Boosters](docs/boosters.md): graphics-card AI on a free Colab notebook
+- [Vision](docs/vision.md): Hollywood quality, for anyone with a story
 - [Roadmap](ROADMAP.md)
 
 ## Licence
