@@ -153,10 +153,7 @@ Never add clips yourself from the internet without the film maker's say: licence
 
 ## People
 
-`type = "person"` is a stylized human (child, teen, adult); use it when the story wants people
-rather than toys. Toy figures, creatures and people can share a scene.
-
-`type = "human"` makes realistic humans from MakeHuman's assets (any age, sex, build, ethnicity, with
+People are `type = "human"`: realistic humans from MakeHuman's assets (any age, sex, build, ethnicity, with
 hair, clothes and skin textures). Use it for live-action looking films; check `dreamreel makehuman`
 first: if the assets aren't set up, ask the film maker before downloading them (about 280 MB).
 

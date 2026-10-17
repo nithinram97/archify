@@ -139,20 +139,6 @@ def mouth_parts(c, mrx, mrz, front, extra=(), teeth_z=0.42):
     c.mouth_parts = [m] + list(extra) + list(c.teeth.values())
 
 
-def lid_angles(v, side):
-    """Rotations (about the eye's x axis) of an upper and a lower lid of skin that slide over an
-    eyeball, and the tilt of the lid line, from the face controls. Lid edges are given as heights on
-    the eyeball (-1 bottom ... 1 top); a lid edge at height h is a rotation of -asin(h)."""
-    up = 0.62 + max(0.0, v["eyes"] - 1) * 0.9 - max(0.0, 1 - v["eyes"]) * 1.3   # resting: a little over the iris
-    up = min(0.98, up)
-    up += (-0.05 - up) * min(1.0, v["lids"])                                       # lids 1: half closed
-    low = -0.78 + 0.62 * min(1.0, v["squint"])
-    low = max(low, -0.98)
-    up = max(up, low + 0.05)
-    tilt = math.radians(26) * v["lid_slant"] * side
-    return -math.asin(max(-1, min(1, up))), -math.asin(max(-1, min(1, low))), tilt
-
-
 def values(mood, amount=1.0):
     """A mood's controls, pushed towards (amount < 1) or past (> 1) its extremes from neutral."""
     out = {}
@@ -182,19 +168,11 @@ def apply(c, v, t, t1):
         loc = value_at(brow, "location", t)
         key(brow, "location", t1, (bx - side * 0.014 * H * v["brow_squeeze"], loc[1],
                                    base + v["brow_lift"] * H - 0.006 * H * v["brow_squeeze"]))
-    k = getattr(c, "eye_scale", 1.0)          # how much "eyes" grows the eyeball (people: a little)
     for e in c.eyes:
-        size = 1 + (v["eyes"] - 1) * k
         hold(e, "scale", t)
-        key(e, "scale", t1, (size, 1, size))
-        e["open"] = size
+        key(e, "scale", t1, (v["eyes"], 1, v["eyes"]))
+        e["open"] = v["eyes"]
     slant = v["lid_slant"]
-    for side, (up, low) in getattr(c, "lid_pivots", {}).items():
-        a_up, a_low, tilt = lid_angles(v, side)
-        for o, rot in ((up, (a_up, tilt, 0)), (low, (a_low, -0.4 * tilt, 0))):
-            hold(o, "rotation_euler", t)
-            key(o, "rotation_euler", t1, rot)
-        up["open"] = a_up
     lids = {"upper": v["lids"], "lower": v["squint"], "angry": max(0.0, -slant), "sad": max(0.0, slant)}
     for o in getattr(c, "irises", []) + getattr(c, "scleras", []):
         kb = o.data.shape_keys.key_blocks
@@ -226,7 +204,7 @@ def apply(c, v, t, t1):
             if name in kb:
                 hold(kb[name], "value", t)
                 key(kb[name], "value", t1, val)
-    mopen = max(v["mouth_open"], v["teeth"] * getattr(c, "teeth_open", 0.0))   # people part their lips to show teeth
+    mopen = v["mouth_open"]
     hold(c.mouth, "scale", t)
     key(c.mouth, "scale", t1, (1 - 0.3 * mopen, 1, 1 + 2.2 * mopen))
     c.mouth["rest"] = mopen

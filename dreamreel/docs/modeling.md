@@ -111,16 +111,11 @@ readable as one silhouette.
 
 ## How dreamreel applies this
 
-- Generated bodies are grown as one smooth surface (a skin over a stick figure) with masses for
-  the ribcage and pelvis, tapering limbs and straights against curves, rather than separate tubes.
-- Heads are sculpted in code like clay: a sphere, then brushes that push and pull at landmarks
-  (sockets, brow, cheekbones, cheeks, muzzle, chin), in the order a sculptor would use.
-- Faces put eyes in sockets with lids that move, and lips that close.
-- Props and buildings get bevels everywhere and are built in primary, secondary, tertiary passes.
-
-For realistic humans dreamreel doesn't sculpt at all: it uses MakeHuman's base mesh and morph
-targets (CC0), built by people who studied this anatomy for years, and shapes them by age, sex,
-build and ethnicity (`type = "human"`).
+- People are MakeHuman humans (`type = "human"`): MakeHuman's CC0 base mesh and morph targets were
+  built by people who studied human anatomy for years, so dreamreel doesn't sculpt humans at all;
+  it shapes MakeHuman's body by age, sex, build and ethnicity and fits its eyes, hair and clothes.
+- Creature bodies are grown as one smooth surface over a skeleton, rather than separate tubes.
+- Props and buildings follow the primary, secondary, tertiary passes, with bevels on every edge.
 
 ## Sources
 
