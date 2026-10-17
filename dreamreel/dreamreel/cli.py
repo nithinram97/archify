@@ -14,6 +14,7 @@
     dreamreel generate frog --prompt "a chubby cartoon frog"   make a model with dreamreel's AI modeller
 """
 import argparse
+import getpass
 import math
 import os
 import shutil
@@ -243,7 +244,7 @@ def cmd_info(a):
     """Everything a tool needs to offer valid choices: every plugin with its settings, the colours,
     and each set's marks and seats."""
     import json
-    from . import look, plugins, scene as scene_mod, sets, voices
+    from . import lipsync, look, plugins, scene as scene_mod, sets, voices
     from .sets import ZONES
     p = _project()
     info = {
@@ -251,6 +252,9 @@ def cmd_info(a):
         "catalog": {
             "places": [z for z in ZONES if z != "centre"], "colors": look.COLORS,
             "voices": list(voices.SUGGESTED), "voice_engine": voices.pick_engine() is not None,
+            "voice_engines": voices.status(), "lipsync_ready": lipsync.installed() is not None,
+            "languages": {k: {"name": v[0], "native": v[1], "try": v[2], "piper": voices.PIPER_DEFAULT.get(k)}
+                          for k, v in voices.LANGUAGES.items()},
         },
         "sets": {},
         "motions": [],
@@ -661,20 +665,48 @@ def _project_optional():
 
 
 def cmd_voices(a):
-    from . import voices
+    from . import plugins, voices
+    _project_optional()
     if a.say:
-        v = a.voice or voices.DEFAULT_VOICE
         p = _project()
-        out = p.renders("voices", f"{v}.wav")
-        if not voices._piper_available():
-            raise SystemExit("voices need Piper: pip install piper-tts")
-        voices._piper(a.say, v, out)
-        print(out)
+        spec = {k: v for k, v in (("name", a.voice), ("language", a.language), ("describe", a.describe),
+                                  ("engine", a.engine), ("sample", a.sample), ("sample_text", a.sample_text),
+                                  ("fish", a.fish), ("speed", a.speed)) if v}
+
+        class Who:
+            name, voice = "audition", spec
+        vs = voices.Voices(p.root, engine=a.engine or p.film.get("voice_engine", "auto"))
+        speech = vs.speak(Who(), a.say, mood=a.mood)
+        if speech is None:
+            raise SystemExit("no voice engine here can speak that; run `dreamreel voices` to see what's set up")
+        print(speech.path)
         return
-    print("Voices come from Piper (free, offline). Install it with:  pip install piper-tts")
-    print("Browse voices at https://rhasspy.github.io/piper-samples/ and put the name in a cast file:")
-    print('  voice = "en_US-amy-medium"')
-    print(f"Default voice: {voices.DEFAULT_VOICE}. Engine available now: {voices._piper_available()}")
+    print("Voice engines (best first when several can speak a line):")
+    for name, d in voices.status().items():
+        langs = ", ".join(d["languages"]) or "any language"
+        print(f"  {'ready' if d['available'] else 'off  '}  {name:13} {d['description']}  [{langs}]")
+        if not d["available"] and d.get("setup"):
+            print(f"         to use it: {d['setup']}")
+    print("\nA cast file sets a voice by name (Piper), or as a table:")
+    print('  voice = "hi_IN-priyamvada-medium"')
+    print('  [voice]\n  language = "ta"\n  describe = "An old woman with a warm, slow voice"')
+    print("Languages:", ", ".join(f"{k} ({v[0]})" for k, v in voices.LANGUAGES.items()))
+    print("Lines written in an Indian script are spoken in that language automatically.")
+
+
+def cmd_keys(a):
+    from . import userkeys
+    if a.action == "set":
+        if not a.name:
+            raise SystemExit("which key? e.g. dreamreel keys set HF_TOKEN")
+        value = a.value if a.value is not None else getpass.getpass(f"{a.name}: ")
+        userkeys.set_key(a.name, value)
+        print(f"{a.name} {'saved' if value.strip() else 'removed'} ({userkeys.path()})")
+        return
+    for k, d in userkeys.status().items():
+        print(f"  {'set' if d['set'] else '   '}  {k:22} {d['for']}")
+        if not d["set"]:
+            print(f"        get one: {d['get']}")
 
 
 def main(argv=None):
@@ -724,10 +756,24 @@ def main(argv=None):
         r.add_argument("--force", action="store_true", help="re-render even unchanged scenes")
         r.set_defaults(fn=fn)
 
-    v = sub.add_parser("voices", help="how to give characters voices")
-    v.add_argument("--say", help="speak this text with --voice into renders/voices/ (to audition a voice)")
-    v.add_argument("--voice")
+    v = sub.add_parser("voices", help="voice engines, languages, and how to give characters voices")
+    v.add_argument("--say", help="speak this text (to try a voice); prints the sound file")
+    v.add_argument("--voice", help="a Piper voice name")
+    v.add_argument("--language", help="en, hi, ta, te, bn, mr, kn, ml, gu, pa, or, as, ur, ne")
+    v.add_argument("--describe", help="describe the voice in words (Indic Parler-TTS)")
+    v.add_argument("--engine", help="piper, indic_parler, indic_f5, fish, ...")
+    v.add_argument("--mood", help="a mood, for engines that act (happy, sad, angry, ...)")
+    v.add_argument("--sample", help="a recording of the voice to copy (IndicF5)")
+    v.add_argument("--sample-text", help="what the recording says, word for word")
+    v.add_argument("--fish", help="a Fish Audio voice id")
+    v.add_argument("--speed", type=float)
     v.set_defaults(fn=cmd_voices)
+
+    k = sub.add_parser("keys", help="keys for AI services, saved on this computer (not in the film)")
+    k.add_argument("action", nargs="?", choices=("list", "set"), default="list")
+    k.add_argument("name", nargs="?")
+    k.add_argument("value", nargs="?", help="leave out to type it hidden; empty to remove")
+    k.set_defaults(fn=cmd_keys)
 
     i = sub.add_parser("info", help="every feature and set mark as JSON (for tools)")
     i.set_defaults(fn=cmd_info)
@@ -774,6 +820,8 @@ def main(argv=None):
     sd.set_defaults(fn=cmd_studio)
 
     a = ap.parse_args(argv)
+    from . import userkeys
+    userkeys.load()
     a.fn(a)
 
 

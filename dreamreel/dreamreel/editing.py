@@ -118,6 +118,18 @@ class Editor:
         return st
 
     def text(self, content, f0, f1, channel, y=0.08, size=0.045, box=True, color=(1, 1, 1, 1)):
+        from . import fonts
+        if fonts.needs_shaping(content):        # Indian scripts: drawn by Pillow, shaped (fonts.py)
+            try:
+                png = fonts.text_image(content, self.W, self.H, y, size, box, tuple(color))
+            except Exception as e:
+                print(f"[dreamreel] couldn't draw a subtitle in its script ({e}); drawing it plainly")
+                png = None
+            if png:
+                st = self.strips.new_image(name="text", filepath=png, channel=channel, frame_start=int(f0))
+                st.frame_final_duration = max(1, int(f1 - f0))
+                st.blend_type = "ALPHA_OVER"
+                return st
         st = self.strips.new_effect(name="text", type="TEXT", channel=channel, frame_start=int(f0),
                                     length=max(1, int(f1 - f0)))
         st.text = content

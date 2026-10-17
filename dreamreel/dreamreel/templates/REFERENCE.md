@@ -5,7 +5,29 @@ Everything here is built in. `dreamreel plugins -v` lists the same, plus whateve
 
 ## Cast: `cast/<name>.toml`
 
-Every character has `name`, `voice` (a Piper voice such as `en_US-amy-medium`) and a `type`.
+Every character has `name`, `voice` and a `type`.
+
+### Voices: any language
+
+`voice = "en_US-amy-medium"` names a ready-made Piper voice (English, and Hindi `hi_IN-priyamvada-medium`,
+`hi_IN-rohan-medium`, Telugu `te_IN-maya-medium`, Malayalam `ml_IN-meera-medium`, Marathi
+`mr_IN-google-medium`, Bengali `bn_BD-google-medium`, Urdu `ur_PK-fasih-medium` ...). For anything
+else, `voice` is a table:
+
+```toml
+[voice]
+language = "ta"          # en hi ta te bn mr kn ml gu pa or as ur ne
+describe = "A warm, gentle grandmother who speaks slowly"     # a described voice (Indic Parler-TTS)
+sample = "audio/samples/ammamma.wav"                          # or copy a recorded voice (IndicF5) ...
+sample_text = "what the recording says, word for word"
+fish = "<Fish Audio voice id>"                                # or a Fish Audio voice (paid)
+speed = 0.9
+```
+
+Lines are spoken in the language of their script: write Tamil lines in Tamil script. `dreamreel voices`
+shows which engines are set up; a voice that isn't available yet is spoken by a ready-made voice of
+the language when there is one, otherwise the line is a subtitle only. Subtitles in every Indian
+script are drawn properly shaped.
 
 ### `type = "toy"` (the default): a jointed vinyl figure
 

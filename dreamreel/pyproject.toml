@@ -9,7 +9,7 @@ description = "Make animated films by writing what happens. Toy-style characters
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-dependencies = ["bpy>=5.2"]
+dependencies = ["bpy>=5.2", "pillow>=10"]  # pillow: subtitles in Indian scripts
 
 [project.optional-dependencies]
 voices = ["piper-tts"]

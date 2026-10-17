@@ -393,14 +393,199 @@ function pictureGrid(options, value, onChange, empty) {
   return grid;
 }
 
+// ---------- voices: language, and how they sound (a ready-made voice, described, copied, or Fish Audio)
+const VOICE_MODES = [["ready", "Ready-made"], ["describe", "Describe it"], ["copy", "Copy a real voice"], ["fish", "Fish Audio"]];
+const MODE_ENGINE = { ready: "piper", describe: "indic_parler", copy: "indic_f5", fish: "fish" };
+const DESCRIBE_IDEAS = ["A warm, gentle grandmother who speaks slowly", "An excited little boy, fast and high-pitched",
+  "A calm, deep-voiced father", "A cheerful young woman, bright and quick", "A grumpy old man with a rough voice",
+  "A shy girl who speaks softly"];
+const voiceSpec = (v) => (v && typeof v === "object") ? clone(v) : (v ? { name: v } : {});
+const voiceMode = (sp) => sp.sample ? "copy" : sp.describe ? "describe" : sp.fish ? "fish" : "ready";
+const engineReady = (name) => !!((catalog().voice_engines || {})[name] || {}).available;
+const languages = () => catalog().languages || { en: { name: "English", native: "English", try: "Hi! This is my voice." } };
+const langOfVoice = (name) => (name || "").split(/[_-]/)[0];
+
 function voiceField(value, onChange, ctx) {
-  const cat = catalog();
-  const inp = h("input", { type: "text", list: "voices", value: value || "", placeholder: cat.voices[0], oninput: (e) => onChange(e.target.value) });
-  return h("div", { class: "row" }, inp, h("datalist", { id: "voices" }, cat.voices.map((v) => h("option", { value: v }))),
-    h("button", { class: "btn sm", disabled: cat.voice_engine ? null : true, title: cat.voice_engine ? "" : "Voices need Piper: pip install piper-tts",
-      onclick: () => job({ kind: "voice", voice: inp.value || cat.voices[0], text: `Hi, I'm ${ctx.name || "here"}. Nice to meet you!` },
-        (j) => { const out = j.outputs[0]; if (out) new Audio(fileUrl(out, Date.now() / 1000)).play(); }) }, "▶ Hear"),
-    cat.voice_engine ? null : h("span", { class: "muted small" }, "Voices need ", h("code", {}, "pip install piper-tts")));
+  const sp = voiceSpec(value);
+  let mode = voiceMode(sp);
+  if (!sp.language) sp.language = langOfVoice(sp.name) in languages() ? langOfVoice(sp.name) : "en";
+  const box = h("div", { class: "voice-card" });
+  const emit = () => {
+    const out = {};
+    for (const k of ["language", "name", "describe", "sample", "sample_text", "fish", "speed", "engine"]) {
+      if (sp[k] !== undefined && sp[k] !== null && sp[k] !== "") out[k] = sp[k];
+    }
+    if (mode !== "ready") delete out.name;
+    if (mode !== "describe") delete out.describe;
+    if (mode !== "copy") { delete out.sample; delete out.sample_text; }
+    if (mode !== "fish") delete out.fish;
+    const keys = Object.keys(out);
+    // the simplest form stays simple in the cast file: voice = "hi_IN-priyamvada-medium"
+    if (out.name && keys.every((k) => k === "name" || (k === "language" && out.language === langOfVoice(out.name)))) onChange(out.name);
+    else if (!keys.length || (keys.length === 1 && out.language === "en")) onChange(undefined);
+    else onChange(out);
+  };
+  const draw = () => {
+    const L = languages();
+    const lang = L[sp.language] || L.en;
+    const ready = (catalog().voices || []).filter((v) => langOfVoice(v) === sp.language);
+    const eng = MODE_ENGINE[mode];
+    const ok = engineReady(eng) && (mode !== "ready" || ready.length > 0);
+    const fallback = !ok && lang.piper && engineReady("piper");
+    let body;
+    if (mode === "ready") {
+      body = ready.length
+        ? h("label", { class: "field" }, h("span", {}, "Voice"),
+            select(ready.map((v) => [v, pretty(v.replace(/^[a-z]{2}_[A-Z]{2}-/, "").replace(/-(medium|low|high|x_low)$/, ""))]),
+              sp.name && ready.includes(sp.name) ? sp.name : ready[0], (v) => { sp.name = v; emit(); }, { label: "Voice" }))
+        : h("div", { class: "banner" }, `No ready-made ${lang.name} voice yet. Describe one, or copy a real person's voice: `,
+            h("button", { class: "btn sm", onclick: () => { mode = "describe"; emit(); draw(); } }, "Describe it"));
+      if (ready.length && !(sp.name && ready.includes(sp.name))) { sp.name = ready[0]; }
+    } else if (mode === "describe") {
+      const ta = h("textarea", { rows: 2, placeholder: "e.g. " + DESCRIBE_IDEAS[0], oninput: (e) => { sp.describe = e.target.value; emit(); } });
+      ta.value = sp.describe || "";
+      body = h("div", { class: "stack" },
+        h("label", { class: "field" }, h("span", {}, "What do they sound like?"), ta),
+        h("div", { class: "chips" }, DESCRIBE_IDEAS.map((d) => h("button", { class: "chip", type: "button",
+          onclick: () => { sp.describe = d; ta.value = d; emit(); } }, d))));
+    } else if (mode === "copy") {
+      const samples = S.state.samples || [];
+      const said = h("input", { type: "text", value: sp.sample_text || "", placeholder: "Type exactly what the recording says",
+        oninput: (e) => { sp.sample_text = e.target.value; emit(); } });
+      body = h("div", { class: "stack" },
+        h("p", { class: "muted small" }, "Record someone (or yourself) saying a sentence or two, 5 to 10 seconds, somewhere quiet. ",
+          "The character will speak every line in that voice, in ", lang.name, ". Only copy a voice with that person's permission."),
+        h("div", { class: "row" },
+          samples.length ? select(samples.map((f) => [f, f.split("/").pop()]), sp.sample || "", (v) => { sp.sample = v; emit(); draw(); },
+            { blank: "(choose a recording)", label: "Recording" }) : null,
+          recordButton(ctx.name || "voice", (path) => { sp.sample = path; emit(); draw(); }),
+          uploadButton((path) => { sp.sample = path; emit(); draw(); })),
+        sp.sample ? h("audio", { controls: true, src: fileUrl(sp.sample, Date.now() / 1000), style: "width:100%" }) : null,
+        h("label", { class: "field" }, h("span", {}, "What the recording says (word for word)"), said));
+    } else {
+      body = h("label", { class: "field" }, h("span", {}, "Fish Audio voice id"),
+        h("input", { type: "text", value: sp.fish || "", placeholder: "from a voice's page on fish.audio",
+          oninput: (e) => { sp.fish = e.target.value.trim(); emit(); } }));
+    }
+    const setup = ((catalog().voice_engines || {})[eng] || {}).setup;
+    const what = { describe: "a described voice", copy: "copying a voice", fish: "Fish Audio" }[mode];
+    const status = ok ? h("span", { class: "ok-tag" }, "✓ ready")
+      : mode === "ready" ? null
+      : h("div", { class: "banner warn small block" },
+          h("div", {}, h("strong", {}, `${what[0].toUpperCase() + what.slice(1)} needs setting up. `),
+            mode === "fish" ? "Add your Fish Audio key in the Toolbox. "
+              : "It uses a free AI voice model: run it on a free booster (Google Colab) or on this computer. ",
+            fallback ? `Meanwhile a ready-made ${lang.name} voice speaks for them.` : "Meanwhile their lines show as subtitles."),
+          h("div", { class: "row", style: "margin-top:6px" },
+            h("button", { class: "btn sm", onclick: () => go("toolbox") }, "Set it up in the Toolbox"),
+            setup ? h("details", { class: "small" }, h("summary", {}, "Technical details"), h("div", { class: "muted" }, setup)) : null));
+    const speed = h("input", { type: "range", min: 0.7, max: 1.4, step: 0.05, value: sp.speed || 1,
+      oninput: (e) => { sp.speed = +e.target.value === 1 ? undefined : +e.target.value; emit(); } });
+    box.replaceChildren(
+      h("div", { class: "fields" },
+        h("label", { class: "field" }, h("span", {}, "Language"),
+          select(Object.entries(L).map(([k, v]) => [k, v.native === v.name ? v.name : `${v.native} (${v.name})`]), sp.language,
+            (v) => { sp.language = v; if (mode === "ready") sp.name = undefined; emit(); draw(); }, { label: "Language" })),
+        h("label", { class: "field" }, h("span", {}, "Speed"), speed)),
+      h("div", { class: "field col" }, h("span", {}, "How they sound"),
+        seg(VOICE_MODES, mode, (m) => { mode = m; emit(); draw(); })),
+      body,
+      h("div", { class: "row", style: "align-items:center" },
+        h("button", { class: "btn sm", disabled: (ok || fallback) ? null : true,
+          onclick: () => { emit(); job({ kind: "voice", who: ctx.name, voice: voiceSpec(currentValue()), text: lang.try },
+            (j) => { const out = j.outputs[0]; if (out) new Audio(fileUrl(out, Date.now() / 1000)).play(); else toast("No sound: see the job's log"); }); } },
+          "▶ Hear them"),
+        status));
+  };
+  let last = value;
+  const currentValue = () => last;
+  const wrapEmit = onChange;
+  onChange = (v) => { last = v; wrapEmit(v); };
+  if (mode === "ready" && !sp.name) {
+    const first = (catalog().voices || []).find((v) => langOfVoice(v) === sp.language);
+    if (first) sp.name = first;
+  }
+  draw();
+  return box;
+}
+
+// record from the microphone, as a WAV file in audio/samples (the voice copier wants plain WAV)
+function recordButton(who, onSaved) {
+  const btn = h("button", { class: "btn sm", type: "button" }, "● Record");
+  let rec = null;
+  btn.onclick = async () => {
+    if (rec) { rec.stop(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { toast("Microphone not available"); return; }
+    const chunks = [];
+    rec = new MediaRecorder(stream);
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    let left = 12;
+    const tick = setInterval(() => { left -= 1; btn.textContent = `■ Stop (${left})`; if (left <= 0) rec.stop(); }, 1000);
+    btn.textContent = `■ Stop (${left})`;
+    btn.classList.add("danger");
+    rec.onstop = async () => {
+      clearInterval(tick);
+      stream.getTracks().forEach((t) => t.stop());
+      rec = null;
+      btn.textContent = "● Record";
+      btn.classList.remove("danger");
+      try {
+        const wav = await toWav(new Blob(chunks));
+        const r = await fetch(`/api/upload?name=${encodeURIComponent(slug(who) + "-" + Date.now() % 100000 + ".wav")}`,
+          { method: "POST", headers: { "X-Dreamreel": "1", "Content-Type": "audio/wav" }, body: wav });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || r.statusText);
+        await refresh();
+        onSaved(data.path);
+        toast("Recording saved");
+      } catch (e) { fail(e); }
+    };
+    rec.start();
+  };
+  return btn;
+}
+
+function uploadButton(onSaved) {
+  const inp = h("input", { type: "file", accept: "audio/*", hidden: true });
+  inp.onchange = async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    try {
+      const isWav = /\.wav$/i.test(f.name);
+      const body = isWav ? f : await toWav(f);
+      const name = f.name.replace(/\.[^.]+$/, "") + ".wav";
+      const r = await fetch(`/api/upload?name=${encodeURIComponent(name)}`, { method: "POST", headers: { "X-Dreamreel": "1", "Content-Type": "audio/wav" }, body });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      await refresh();
+      onSaved(data.path);
+      toast("Recording added");
+    } catch (e) { fail(e); }
+  };
+  return h("span", {}, inp, h("button", { class: "btn sm", type: "button", onclick: () => inp.click() }, "⬆ Add a recording"));
+}
+
+// any sound the browser can play -> 24 kHz mono 16-bit WAV
+async function toWav(blob) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+  ctx.close();
+  const rate = 24000;
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const src = off.createBufferSource();
+  src.buffer = decoded;
+  src.connect(off.destination);
+  src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const buf = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const str = (o, t) => [...t].forEach((c, i) => buf.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); buf.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVEfmt ");
+  buf.setUint32(16, 16, true); buf.setUint16(20, 1, true); buf.setUint16(22, 1, true);
+  buf.setUint32(24, rate, true); buf.setUint32(28, rate * 2, true); buf.setUint16(32, 2, true); buf.setUint16(34, 16, true);
+  str(36, "data"); buf.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) buf.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
+  return new Blob([buf], { type: "audio/wav" });
 }
 
 // lay out a plugin's settings: small controls in a grid, wide ones (colours, chips) on their own rows
@@ -1014,6 +1199,59 @@ function packsCard({ compact = false } = {}) {
         h("span", {}, pretty(t.replace(/^animal_/, "")))))) : null);
 }
 
+// which languages each voice engine speaks, and what's ready on this computer
+function voicesCard() {
+  const engines = catalog().voice_engines || {};
+  const L = languages();
+  const names = Object.keys(engines);
+  if (!names.length) return null;
+  const speaks = (e, k) => !engines[e].languages.length || engines[e].languages.includes(k);
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Voices and languages"),
+      h("span", { class: "muted small" }, catalog().lipsync_ready ? "Lip sync from the sounds: ✓ ready" : "Lip sync from the sounds: downloads on first use (about 90 MB)")),
+    h("p", { class: "muted small" }, "Write a line in any Indian script and it's spoken in that language. Each character's voice is set on the Cast page."),
+    h("div", { class: "lang-grid" },
+      h("div", { class: "lg-head" }, "Language"), names.map((e) => h("div", { class: "lg-head", title: engines[e].description }, engines[e].label)),
+      Object.entries(L).map(([k, v]) => [
+        h("div", { class: "lg-lang" }, v.native, v.native !== v.name ? h("span", { class: "muted small" }, " ", v.name) : null),
+        names.map((e) => h("div", { class: "lg-cell" }, !speaks(e, k) ? "" : engines[e].available ? h("span", { class: "ok-tag" }, "✓") : h("span", { class: "muted" }, "○")))])),
+    h("div", { class: "toolbox", style: "margin-top:12px" }, names.map((e) => h("div", { class: "tool-item" },
+      h("div", { class: "ti-name" }, engines[e].label, " ", engines[e].available ? h("span", { class: "ok-tag" }, "✓ ready") : h("span", { class: "muted small" }, "○ not set up")),
+      h("div", { class: "small muted" }, engines[e].description),
+      !engines[e].available && engines[e].setup ? h("details", { class: "small" }, h("summary", {}, "How to set it up"),
+        h("div", { class: "muted" }, engines[e].setup)) : null))),
+    h("p", { class: "muted small", style: "margin-top:8px" }, "✓ ready on this computer · ○ can speak it once set up"));
+}
+
+// keys for AI services: saved on this computer (never in the film folder) and never shown again
+function keysCard() {
+  const keys = S.state.keys || {};
+  const names = Object.keys(keys).filter((k) => !k.startsWith("DREAMREEL_BOOST"));   // boosters have their own card
+  if (!names.length) return null;
+  const main = ["HF_TOKEN", "FISH_API_KEY", "ANTHROPIC_API_KEY"];
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("h3", {}, "Keys for AI services"),
+      h("span", { class: "muted small" }, "Saved on this computer only, never in your film's folder")),
+    (() => { const row = (k) => {
+      const d = keys[k];
+      const inp = h("input", { type: "password", autocomplete: "off", placeholder: d.set ? "•••••••• (saved)" : "paste it here" });
+      const save = async (value) => {
+        try { S.state.keys = await api("PUT", "/api/keys", { name: k, value }); await api("GET", "/api/info").catch(() => {}); await refresh();
+          toast(value ? "Key saved" : "Key removed"); } catch (e) { fail(e); }
+      };
+      return h("div", { class: "key-row" },
+        h("div", {}, h("div", { class: "ti-name" }, d.for, " ", d.set ? h("span", { class: "ok-tag" }, "✓ set") : null),
+          h("div", { class: "small muted" }, h("code", {}, k), d.from === "environment" ? " (from your environment)" : "", " · get one: ", d.get)),
+        h("div", { class: "row" }, inp,
+          h("button", { class: "btn sm primary", onclick: () => inp.value.trim() && save(inp.value.trim()) }, "Save"),
+          d.from === "saved" ? h("button", { class: "btn sm ghost", onclick: () => save("") }, "Remove") : null));
+    };
+    const more = names.filter((k) => !main.includes(k));
+    return h("div", { class: "keys" }, names.filter((k) => main.includes(k)).map(row),
+      more.length ? h("details", { open: more.some((k) => keys[k].set) ? true : null }, h("summary", {}, `More AI services (${more.length})`),
+        h("div", { class: "keys", style: "margin-top:10px" }, more.map(row))) : null); })());
+}
+
 function toolboxView() {
   const all = info().plugins || {};
   const custom = Object.values(all).flat().filter((p) => p.source !== "built-in").length;
@@ -1022,6 +1260,8 @@ function toolboxView() {
       h("div", {}, h("h1", {}, "Toolbox"), h("p", {}, "Everything your film can use. Items marked ✦ were added for this film.")),
       h("button", { class: "btn", onclick: async () => { await api("GET", "/api/info").catch(fail); await refresh(); toast("Toolbox reloaded"); } }, "↻ Reload")),
     packsCard(),
+    voicesCard(),
+    keysCard(),
     h("div", { class: "banner ok", style: "margin-bottom:14px" },
       h("div", {}, h("strong", {}, "Need something that isn't here?"), " Ask your AI agent for it (a new prop, gesture, kind of character, camera shot...). ",
         "It adds it to this film's ", h("code", {}, "extensions"), " folder and it appears in these menus. ",

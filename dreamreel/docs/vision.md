@@ -31,7 +31,7 @@ noticing the difference in craft. Concretely, department by department:
 | Lighting | Motivated light, mood per beat, colour script | Basic: time of day and weather |
 | Look and render | Physically based shading, grading, motion blur, depth of field | EEVEE looks; a film-quality render path to come |
 | Effects | Cloth, hair, water, fire, smoke | Rigid-body physics only |
-| Sound | Voices in every Indian language, music, effects, mix | Piper voices (few Indian languages yet) |
+| Sound | Voices in every Indian language, music, effects, mix | 14 languages: ready-made, described and copied voices; Fish Audio; shaped subtitles |
 
 The benchmark: re-making short films shot for shot and scoring each department against the
 original (see the benchmark notes). A department is done when it scores as well as the original.

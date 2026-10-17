@@ -43,6 +43,7 @@ def wait_job(base, jid, timeout=180):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="dreamreel-studio-")
+    os.environ["XDG_CONFIG_HOME"] = os.path.join(tmp, "config")     # keys saved by this test stay here
     try:
         film = os.path.join(tmp, "cookie")
         cli.main(["new", film, "--example"])
@@ -121,6 +122,49 @@ def main():
                 assert e.code == 404
         assert call(base, "POST", "/api/jobs", {"kind": "assets", "pack": "../../etc"})[0] == 400
 
+        # voices: languages and engines are offered; keys are saved but never sent back
+        info = st["info"]["catalog"]
+        assert info["languages"]["ta"]["native"] == "தமிழ்" and "piper" in info["voice_engines"], info.keys()
+        code, keys = call(base, "PUT", "/api/keys", {"name": "FISH_API_KEY", "value": "secret-fish"})
+        assert code == 200 and keys["FISH_API_KEY"]["set"] and "secret-fish" not in json.dumps(keys)
+        _, st = call(base, "GET", "/api/state")
+        assert st["keys"]["FISH_API_KEY"]["set"] and st["info"]["catalog"]["voice_engines"]["fish"]["available"]
+        assert "secret-fish" not in json.dumps(st)
+        assert not any("secret-fish" in open(os.path.join(d, f), errors="ignore").read()
+                       for d, _, fs in os.walk(film) for f in fs if f.endswith(".toml")), "keys stay out of films"
+        call(base, "PUT", "/api/keys", {"name": "FISH_API_KEY", "value": ""})
+        assert call(base, "PUT", "/api/keys", {"name": "PATH", "value": "x"})[0] == 400
+        # a voice recording: only from the studio page (its header), only sound files, into audio/samples
+        wav = b"RIFF" + b"\0" * 60
+
+        def upload(name, data, header=True):
+            req = urllib.request.Request(base + "/api/upload?name=" + urllib.parse.quote(name), method="POST", data=data,
+                                         headers={"Content-Type": "audio/wav", **({"X-Dreamreel": "1"} if header else {})})
+            try:
+                with urllib.request.urlopen(req) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read() or b"{}")
+        assert upload("Ammamma Voice.wav", wav, header=False)[0] == 400
+        assert upload("evil.sh", wav)[0] == 400
+        code, r = upload("../Ammamma Voice.wav", wav)
+        assert code == 200 and r["path"] == os.path.join("audio", "samples", "ammamma-voice.wav"), r
+        assert os.path.exists(os.path.join(film, r["path"]))
+        _, st = call(base, "GET", "/api/state")
+        assert st["samples"] == [r["path"]]
+        # a voice saved as a table round-trips, and the audition job takes it
+        voice = {"language": "ta", "describe": "A warm, gentle grandmother", "speed": 0.9}
+        assert call(base, "PUT", "/api/cast/zara", {"spec": {"name": "Zara", "voice": voice}})[0] == 200
+        with open(os.path.join(film, "cast", "zara.toml"), "rb") as f:
+            assert tomllib.load(f)["voice"] == voice
+        code, r = call(base, "POST", "/api/jobs", {"kind": "voice", "who": "Zara", "voice": voice,
+                                                    "text": "வணக்கம்"})
+        assert code == 200
+        j = wait_job(base, r["id"])
+        assert j["status"] in ("done", "failed") and any("Tamil" in line or "audio/voices" in line
+                                                        for line in j["log"]), j["log"][-5:]
+        assert call(base, "POST", "/api/jobs", {"kind": "voice", "voice": {"name": "../../x"}})[0] == 400
+
         # a film with an [[edit]] list: the studio follows it and keeps it up to date
         with open(os.path.join(film, "film.toml"), "rb") as f:
             ft = tomllib.load(f)
@@ -142,6 +186,7 @@ def main():
         httpd.shutdown()
         print("OK")
     finally:
+        os.environ.pop("XDG_CONFIG_HOME", None)
         shutil.rmtree(tmp, ignore_errors=True)
 
 

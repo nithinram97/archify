@@ -21,6 +21,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .. import userkeys
+
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 SCENE_FILE = re.compile(r"^[0-9]{2,4}_[a-z0-9_]{1,40}\.(toml|py)$")
@@ -275,10 +277,17 @@ class Studio:
         return sorted(os.path.join("audio", "music", f) for f in os.listdir(d)
                       if f.lower().endswith((".mp3", ".wav", ".ogg", ".flac", ".m4a"))) if os.path.isdir(d) else []
 
+    def samples(self):
+        """Recordings of voices to copy (audio/samples)."""
+        d = os.path.join(self.root, "audio", "samples")
+        return sorted(os.path.join("audio", "samples", f) for f in os.listdir(d)
+                      if f.lower().endswith(AUDIO)) if os.path.isdir(d) else []
+
     def info(self):
         """Plugins, catalogue and set marks, from `dreamreel info` (cached until a set or extension changes)."""
         pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        key = (max(os.path.getmtime(os.path.join(pkg, f)) for f in os.listdir(pkg) if f.endswith(".py")),)
+        key = (max(os.path.getmtime(os.path.join(pkg, f)) for f in os.listdir(pkg) if f.endswith(".py")),
+               os.path.getmtime(userkeys.path()) if os.path.exists(userkeys.path()) else 0)
         for sub in ("sets", "extensions"):  # new set files or extension classes change what's offered
             d = os.path.join(self.root, sub)
             if os.path.isdir(d):
@@ -301,7 +310,8 @@ class Studio:
         return {
             "project": {"root": self.root, "film": self.film()},
             "cast": self._tomls("cast"), "sets": self._tomls("sets"), "scenes": self.scenes(),
-            "renders": self.renders(), "music": self.music(), "info": self.info(),
+            "renders": self.renders(), "music": self.music(), "samples": self.samples(), "info": self.info(),
+            "keys": userkeys.status(),
         }
 
     def _films_near(self):
@@ -325,6 +335,10 @@ class Studio:
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
         os.replace(tmp, full)
+
+
+AUDIO = (".wav", ".mp3", ".ogg", ".flac", ".m4a")
+UPLOAD_LIMIT = 40 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------- HTTP
@@ -451,8 +465,37 @@ class Handler(BaseHTTPRequestHandler):
             if not st.open(self._body().get("path", "")):
                 return self._error("no film.toml in that folder")
             return self._json({"ok": True})
+        if what == "keys":
+            # keys never leave this computer, and are never sent back: only whether each one is set
+            if method == "PUT":
+                if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                    return self._error("bad request")
+                b = self._body()
+                userkeys.set_key(str(b.get("name", "")), str(b.get("value", "")))
+                st.info_cache = None
+            return self._json(userkeys.status())
         if st.root is None:
             return self._error("no film open", 409)
+        if what == "upload" and method == "POST":
+            # a voice recording to copy: browsers must send this header, which other sites can't
+            if self.headers.get("X-Dreamreel") != "1":
+                return self._error("bad request")
+            name = os.path.basename((query.get("name") or [""])[0]).lower()
+            stem, ext = os.path.splitext(name)
+            stem = re.sub(r"[^a-z0-9_-]+", "-", stem).strip("-")[:40]
+            if not stem or ext not in AUDIO:
+                return self._error(f"a sound file please ({', '.join(AUDIO)})")
+            n = int(self.headers.get("Content-Length") or 0)
+            if not 0 < n <= UPLOAD_LIMIT:
+                return self._error("that file is too big (40 MB at most)")
+            data = self.rfile.read(n)
+            rel = os.path.join("audio", "samples", stem + ext)
+            full = st.path(rel)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full + ".part", "wb") as f:
+                f.write(data)
+            os.replace(full + ".part", full)
+            return self._json({"ok": True, "path": rel})
 
         if what == "film" and method == "PUT":
             b = self._body()
@@ -598,11 +641,19 @@ class Handler(BaseHTTPRequestHandler):
         elif kind == "thumbs":
             args, label, quick = ["assets", "--thumbs"], "Pictures of people and animals", False
         elif kind == "voice":
-            voice = b.get("voice", "")
-            if not re.match(r"^[A-Za-z0-9_.-]{3,80}$", voice):
+            voice = b.get("voice") or {}
+            spec = voice if isinstance(voice, dict) else {"name": str(voice)}
+            if spec.get("name") and not re.match(r"^[A-Za-z0-9_.-]{3,80}$", str(spec["name"])):
                 return self._error("bad voice name")
-            args = ["voices", "--voice", voice, "--say", str(b.get("text", "Hello! This is my voice."))[:300]]
-            label, quick = f"Voice {voice}", True
+            args = ["voices", "--say", str(b.get("text") or "Hello! This is my voice.")[:300]]
+            for k, flag in (("name", "--voice"), ("language", "--language"), ("describe", "--describe"),
+                            ("engine", "--engine"), ("sample", "--sample"), ("sample_text", "--sample-text"),
+                            ("fish", "--fish"), ("speed", "--speed")):
+                if spec.get(k) not in (None, ""):
+                    args += [flag, str(spec[k])[:500]]
+            if b.get("mood"):
+                args += ["--mood", str(b["mood"])[:40]]
+            label, quick = f"Voice of {str(b.get('who') or spec.get('name') or 'a character')[:40]}", True
         else:
             return self._error(f"unknown job {kind!r}")
         job = JOBS.submit(kind, args, st.root, label, quick)
@@ -622,6 +673,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(folder=".", port=8765, open_browser=True):
+    userkeys.load()
     Handler.studio = Studio(folder)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"

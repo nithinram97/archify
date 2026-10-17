@@ -51,6 +51,12 @@ pip install dreamreel            # includes Blender itself (as the bpy module); 
 pip install "dreamreel[voices]"  # optional: free offline voices (Piper)
 ```
 
+**Voices in Indian languages.** Ready-made Piper voices speak English, Hindi, Telugu, Malayalam,
+Marathi, Bengali and Urdu on any computer. With a free Hugging Face token, characters can also have a
+voice described in words in 21 languages (AI4Bharat's Indic Parler-TTS) or a copy of a recorded
+voice (AI4Bharat's IndicF5), and Fish Audio's acted Drama 3 voices are an option with its key. Write
+a line in Tamil script and it's spoken in Tamil, lips in sync, with a properly shaped subtitle.
+
 Needs Python 3.13 (what Blender 5.2's `bpy` is built for). A GPU makes final renders much faster
 but isn't required.
 

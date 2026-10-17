@@ -636,7 +636,7 @@ class Character(Plugin):
             self.look_at(to, at=t, wait=False)
         if mood:
             self.feel(mood, at=t, wait=False)
-        speech = self.scene.voices.speak(self, line)
+        speech = self.scene.voices.speak(self, line, mood=mood or self.mood)
         t0 = t + 0.15
         if speech is not None:
             dur = speech.duration
