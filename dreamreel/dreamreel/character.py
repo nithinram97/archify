@@ -918,11 +918,192 @@ class Character(Plugin):
         side = self._hand(holding=name)
         th = self.scene.thing(name)
         t = self._start(at)
-        end = handling.fall(self.scene, th, t)
+        if th.character is not None:        # a creature lands on its feet
+            end = handling.fall(self.scene, th, t)
+        else:                               # a thing falls, bounces and tumbles (physics.py)
+            from . import physics
+            v = physics.velocity(self.scene, th.root, t)
+            handling.release(self.scene, th, t)
+            end = physics.simulate(self.scene, t, {th: (v, physics.spin_for(v, 0.3) + Vector((1.2, 0.7, 0)))})
         keys.key(self.arms[side], "rotation_euler", t + 0.35, (0, 0, 0))
         del self.holding[side]
         self.scene._event("handle", self, t, end, action="drops", thing=name)
-        return self._end(max(t + 0.35, end), wait)
+        return self._end(max(t + 0.35, min(end, t + 1.0)), wait)
+
+    def _toward(self, where, t):
+        """A point to aim at: a character (their chest), a thing, a mark or place (the floor there)."""
+        other = self.scene.character(where) if isinstance(where, str) else (where if isinstance(where, Character) else None)
+        if other is not None and other is not self:
+            p = other.position(t)
+            return Vector((p.x, p.y, other.height() * 0.6)), other
+        if isinstance(where, str) and self.scene.set is not None and where in self.scene.set.things:
+            from . import handling
+            return handling.thing_point(self.scene, self.scene.set.things[where], t), None
+        p = self.scene._resolve(where, t)
+        return Vector((p.x, p.y, 0.0)), None
+
+    def throw(self, thing=None, to=None, hand=None, at=None, wait=True):
+        """Throw what's held (or pick `thing` up first) to someone, who catches it, or to a place, where
+        it lands, bounces and rolls."""
+        from . import handling, physics
+        if thing is not None and thing not in self.holding.values():
+            self.pick_up(thing, hand=hand, at=at, wait=True)
+            at = None
+        name = self._held(thing)
+        side = self._hand(holding=name)
+        th = self.scene.thing(name)
+        t = self._start(at)
+        if to is None:
+            h = self.heading(t) or 0.0
+            here = self.position(t)
+            to = (here.x + 2.0 * math.sin(h), here.y - 2.0 * math.cos(h))
+        target, other = self._toward(to, t)
+        self.turn_to((target.x, target.y), at=t, wait=True)
+        t = max(self.busy, t)
+        eff = acting.effort_of(self, t)
+        _, L = handling.arm_rest(self)[side]
+        handling.evaluate(self.scene, t)
+        sh = self.arms[side].matrix_world.translation.copy()
+        h = self.heading(t) or 0.0
+        fwd = Vector((math.sin(h), -math.cos(h), 0))
+        up = Vector((0, 0, 1))
+        t1 = t + 0.4 * eff.tempo()                  # wind up: the arm goes back and up
+        keys.hold(self.arms[side], "rotation_euler", t)
+        keys.key(self.arms[side], "rotation_euler", t1, handling.aim(self, side, t, sh - fwd * 0.6 + up * 0.7), "ease_out")
+        if self.body is not None:
+            keys.hold(self.body, "rotation_euler", t)
+            keys.key(self.body, "rotation_euler", t1, (math.radians(8), 0, 0))
+        t_rel = t1 + 0.14                           # the throw: fast, let go in front and above
+        keys.key(self.arms[side], "rotation_euler", t_rel, handling.aim(self, side, t1, sh + fwd * 0.8 + up * 0.45), "linear")
+        t2 = t_rel + 0.18                           # follow through: forward and down
+        keys.key(self.arms[side], "rotation_euler", t2, handling.aim(self, side, t1, sh + fwd * 0.9 - up * 0.3), "ease_out")
+        if self.body is not None:
+            keys.key(self.body, "rotation_euler", t2, (math.radians(-10), 0, 0))
+            keys.key(self.body, "rotation_euler", t2 + 0.35, (0, 0, 0))
+        keys.key(self.arms[side], "rotation_euler", t2 + 0.45, (0, 0, 0))
+        handling.evaluate(self.scene, t_rel)
+        p = th.root.matrix_world.translation.copy()
+        catcher = other if other is not None and other.arms and other.hands and \
+            any(s not in other.holding for s in other.hands) else None
+        del self.holding[side]
+        if catcher is not None:
+            oside = catcher._hand()
+            T = physics.flight_time(p, target)
+            t_arr = t_rel + T
+            catcher.turn_to(self.name, at=max(t, catcher.busy), wait=False)
+            q = handling.carry_point(catcher, oside, t_arr) + Vector((0, 0, 0.1 * catcher.H))
+            back = (Vector((p.x, p.y, 0)) - Vector((q.x, q.y, 0)))
+            q += back.normalized() * 0.15 * catcher.H if back.length > 1e-3 else Vector()
+            handling.reach(catcher, oside, max(t_rel, t_arr - 0.45), t_arr, q)
+            handling.evaluate(self.scene, t_arr)
+            q = catcher.hands[oside].matrix_world.translation - Vector((0, 0, th.grip))
+            v = physics.ballistic(p, q, T)
+            handling.release(self.scene, th, t_rel)
+            physics.fly(th, p, v, t_rel, T)
+            handling.attach(self.scene, th, catcher.hands[oside], t_arr)
+            handling.straighten(catcher, t_arr, t_arr + 0.4)
+            keys.key(catcher.arms[oside], "rotation_euler", t_arr + 0.5,
+                     handling.aim(catcher, oside, t_arr, handling.carry_point(catcher, oside, t_arr)))
+            catcher.holding[oside] = name
+            th.holder = (catcher, oside)
+            catcher.busy = max(catcher.busy, t_arr + 0.5)
+            end = t_arr
+            what = f"throws {name} to {catcher.name}"
+        else:
+            T = physics.flight_time(p, target) * 1.25        # a lob, so it lands near the spot
+            v = physics.ballistic(p, target, T)
+            handling.release(self.scene, th, t_rel)
+            physics.simulate(self.scene, t_rel, {th: (v, physics.spin_for(v, 0.8))})
+            end = t_rel + T
+            what = f"throws {name}"
+        self.scene._event("handle", self, t, max(t2, end), action=what, thing=name)
+        return self._end(t2 + 0.2, wait)
+
+    def knock_over(self, thing, hand=None, at=None, wait=True):
+        """Knock something over (or off the table) with a sweep of the arm."""
+        from . import handling, physics
+        th = self.scene.thing(thing)
+        if th.holder is not None or th.character is not None:
+            raise ValueError(f"{th.name} isn't standing anywhere to knock over")
+        side = self._hand(hand) if hand is not None or any(s not in self.holding for s in self.hands) \
+            else next(iter(self.hands))
+        t = self._start(at)
+        p = handling.thing_point(self.scene, th, t)
+        _, reach = handling.arm_rest(self)[side]
+        if (self.position(t) - p.to_2d()).length > reach + 0.35 * self.H:
+            self.walk_to(th.approach or (p.x, p.y), at=t, wait=True)
+            t = max(self.busy, t)
+        self.turn_to((p.x, p.y), at=t, wait=True)
+        t = max(self.busy, t)
+        eff = acting.effort_of(self, t)
+        handling.evaluate(self.scene, t)
+        sh = self.arms[side].matrix_world.translation.copy()
+        mid = p + Vector((0, 0, th.grip))
+        t1 = t + 0.35 * eff.tempo()
+        handling.reach(self, side, t, t1, mid)
+        d = Vector((p.x - sh.x, p.y - sh.y, 0))
+        d = d.normalized() if d.length > 1e-3 else Vector((0, 1, 0))
+        speed = 1.0 + 0.8 * max(0.0, eff.weight) + 0.5 * max(0.0, -eff.time)
+        t2 = t1 + 0.2
+        keys.key(self.arms[side], "rotation_euler", t2, handling.aim(self, side, t1, mid + d * 0.35), "ease_out")
+        # the hand sweeps through it, high up, so it tips over its base (and maybe off the edge)
+        handling.evaluate(self.scene, t1)
+        top = max((o.matrix_world @ Vector(c)).z for o in th.root.children_recursive if o.type == "MESH"
+                  for c in o.bound_box)
+        size = max(0.04, max(max(abs((o.matrix_world @ Vector(c) - p).dot(d)) for c in o.bound_box)
+                             for o in th.root.children_recursive if o.type == "MESH"))
+        start = Vector((p.x, p.y, p.z + 0.6 * (top - p.z))) - d * (size + 0.05)
+        settle = physics.simulate(self.scene, t1, {th: None}, sweep=(start, d * speed, 0.3))
+        t3 = t2 + 0.4 * eff.tempo()
+        handling.straighten(self, t2, t3)
+        keys.key(self.arms[side], "rotation_euler", t3, (0, 0, 0))
+        self.scene._event("handle", self, t, max(t3, settle), action="knocks over", thing=th.name)
+        return self._end(t3, wait)
+
+    def kick(self, thing, to=None, at=None, wait=True):
+        """Kick something on the floor (a ball): towards someone or somewhere, or straight ahead."""
+        from . import handling, physics
+        th = self.scene.thing(thing)
+        if not self.legs:
+            raise ValueError(f"{self.name} has no legs to kick with")
+        t = self._start(at)
+        p = handling.thing_point(self.scene, th, t)
+        if to is None:
+            d = p.to_2d() - self.position(t)
+            d = d.normalized() if d.length > 1e-3 else Vector((0, -1))
+            target = Vector((p.x + d.x * 3, p.y + d.y * 3, 0.0))
+        else:
+            target, _ = self._toward(to, t)
+        d = (target - p).to_2d()
+        d = d.normalized() if d.length > 1e-3 else Vector((0, -1))
+        foot = -1 if -1 in self.legs else next(iter(self.legs))
+        side_off = Vector((-d.y, d.x)) * (0.08 * self.H * (1 if foot < 0 else -1))
+        spot = p.to_2d() - d * 0.38 * self.H + side_off
+        if (self.position(t) - spot).length > 0.08:
+            self.walk_to((spot.x, spot.y), at=t, wait=True)
+            t = max(self.busy, t)
+        self.turn_to((p.x + d.x, p.y + d.y), at=t, wait=True)
+        t = max(self.busy, t)
+        eff = acting.effort_of(self, t)
+        leg = self.legs[foot]
+        t1 = t + 0.3 * eff.tempo()            # swing back...
+        keys.hold(leg, "rotation_euler", t)
+        keys.key(leg, "rotation_euler", t1, (math.radians(35), 0, 0), "ease_out")
+        t_hit = t1 + 0.12                     # ...and through
+        keys.key(leg, "rotation_euler", t_hit, (math.radians(-45), 0, 0), "linear")
+        keys.key(leg, "rotation_euler", t_hit + 0.12, (math.radians(-55), 0, 0), "ease_out")
+        keys.key(leg, "rotation_euler", t_hit + 0.45, (0, 0, 0))
+        if self.body is not None:
+            keys.hold(self.body, "rotation_euler", t)
+            keys.key(self.body, "rotation_euler", t1, (math.radians(-6), 0, 0))
+            keys.key(self.body, "rotation_euler", t_hit + 0.45, (0, 0, 0))
+        handling.evaluate(self.scene, t_hit)
+        p = th.root.matrix_world.translation.copy()
+        T = physics.flight_time(p, target) * (0.8 + 0.2 * eff.tempo())
+        v = physics.ballistic(p, target, T)
+        settle = physics.simulate(self.scene, t_hit, {th: (v, physics.spin_for(v, 1.5))})
+        self.scene._event("handle", self, t, settle, action="kicks", thing=th.name)
+        return self._end(t_hit + 0.45, wait)
 
     def give(self, to, thing=None, at=None, wait=True):
         """Hand what's held (or `thing`) to someone: walk to them, both reach, they take it."""

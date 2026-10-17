@@ -33,8 +33,9 @@ from . import keys, plugins
 class Thing:
     """Something that can be held: an item, or a (small) character."""
 
-    def __init__(self, name, root, approach=None, character=None, grip=0.0):
+    def __init__(self, name, root, approach=None, character=None, grip=0.0, item=None):
         self.name, self.root, self.approach, self.character = name, root, approach, character
+        self.item = item           # the Item kind it was made from (for how it behaves when it falls)
         self.grip = grip           # height above its base where a hand holds it
         self.holder = None         # (character, side) while held
 

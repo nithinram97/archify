@@ -40,15 +40,18 @@ class Prop(Plugin):
 
 
 class Item(Plugin):
-    """A small thing on a table or counter. `build(s, x, y, z, rng)` puts it at (x, y) on a surface at height z."""
+    """A small thing on a table or counter. `build(s, x, y, z, rng)` puts it at (x, y) on a surface at height z.
+    How it falls and bounces (physics.py): mass (kg), bounce (0..1), friction, shape (hull, sphere, box)."""
     kind = "item"
     abstract = True
+    mass, bounce, friction, shape = 0.3, 0.2, 0.6, "hull"
 
     def build(self, s, x, y, z, rng):
         raise NotImplementedError
 
 
 class CookieJar(Item):
+    mass, bounce = 0.6, 0.15
     name = "cookie-jar"
 
     def build(self, s, x, y, z, rng):
@@ -59,21 +62,25 @@ class CookieJar(Item):
 
 
 class Cookie(Item):
+    mass, bounce = 0.02, 0.1
     def build(self, s, x, y, z, rng):
         shapes.cylinder("cookie", 0.05, 0.015, "#c98b4f", at=(x, y - 0.1, z))
 
 
 class Plate(Item):
+    mass, bounce = 0.4, 0.2
     def build(self, s, x, y, z, rng):
         shapes.cylinder("plate", 0.12, 0.015, "white", at=(x, y, z))
 
 
 class Cup(Item):
+    mass, bounce = 0.25, 0.2
     def build(self, s, x, y, z, rng):
         shapes.cylinder("cup", 0.045, 0.09, rng.choice(["red", "teal", "yellow"]), at=(x, y, z))
 
 
 class Vase(Item):
+    mass, bounce = 0.6, 0.1
     description = "A vase of flowers"
 
     def build(self, s, x, y, z, rng):
@@ -84,14 +91,27 @@ class Vase(Item):
 
 
 class Laptop(Item):
+    mass, bounce, shape = 1.5, 0.05, "box"
     def build(self, s, x, y, z, rng):
         shapes.box("laptop", 0.32, 0.22, 0.015, "#c9ccd1", at=(x, y, z))
         shapes.box("laptop", 0.32, 0.015, 0.2, "#c9ccd1", at=(x, y + 0.11, z), rot=(math.radians(-15), 0, 0))
 
 
 class Book(Item):
+    mass, bounce, friction, shape = 0.5, 0.05, 0.8, "box"
     def build(self, s, x, y, z, rng):
         shapes.box("book", 0.2, 0.14, 0.04, rng.choice(["red", "blue", "green"]), at=(x, y, z), bevel=0.005)
+
+
+class Ball(Item):
+    description = "A bouncy ball (put it on the floor: props = [{type = \"ball\", place = \"front\"}])"
+    mass, bounce, friction, shape = 0.4, 0.72, 0.5, "sphere"
+
+    def build(self, s, x, y, z, rng):
+        r = 0.11
+        c1, c2 = rng.choice([("red", "white"), ("blue", "yellow"), ("teal", "white"), ("orange", "navy")])
+        shapes.sphere("ball", r, c1, at=(x, y, z + r))
+        shapes.cylinder("ball.band", r * 1.01, r * 0.5, c2, at=(x, y, z + r * 0.75), segments=24)
 
 
 class Table(Prop):
@@ -644,6 +664,7 @@ def _metal(color="#c9ced3"):
 
 
 class Tray(Item):
+    mass, bounce, shape = 0.8, 0.15, "box"
     description = "A metal dissection tray"
 
     def build(self, s, x, y, z, rng):
@@ -660,6 +681,7 @@ class Tray(Item):
 
 
 class Scalpel(Item):
+    mass, bounce = 0.04, 0.3
     description = "A scalpel"
 
     def build(self, s, x, y, z, rng):
@@ -671,6 +693,7 @@ class Scalpel(Item):
 
 
 class ToolCup(Item):
+    mass, bounce = 0.3, 0.15
     name = "tool-cup"
     description = "A cup of scalpels, probes and tweezers"
 
@@ -685,6 +708,7 @@ class ToolCup(Item):
 
 
 class Jar(Item):
+    mass, bounce = 0.7, 0.1
     description = "A specimen jar with something floating in it"
 
     def build(self, s, x, y, z, rng):
@@ -697,6 +721,7 @@ class Jar(Item):
 
 
 class Beaker(Item):
+    mass, bounce = 0.2, 0.15
     description = "A glass beaker"
 
     def build(self, s, x, y, z, rng):
@@ -706,6 +731,7 @@ class Beaker(Item):
 
 
 class Bottle(Item):
+    mass, bounce = 0.5, 0.1
     description = "A brown chemical bottle with a label"
 
     def build(self, s, x, y, z, rng):
@@ -716,6 +742,7 @@ class Bottle(Item):
 
 
 class Scale(Item):
+    mass, bounce, shape = 1.2, 0.05, "box"
     description = "A weighing scale"
 
     def build(self, s, x, y, z, rng):

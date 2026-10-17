@@ -274,6 +274,40 @@ class Drop(Action):
         who.drop(thing)
 
 
+class Throw(Action):
+    label = "throws"
+    description = "Throw something to someone (they catch it) or somewhere (it lands and rolls)"
+    sentence = "{who} throws {thing} to {to}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", label="What"), Param("to", "target", label="To")]
+
+    def run(self, s, who, thing=None, to=None):
+        who.throw(thing, to=to)
+
+
+class KnockOver(Action):
+    name = "knock_over"
+    label = "knocks over"
+    description = "Knock something over, or off the table, with a sweep of the arm"
+    sentence = "{who} knocks over {thing}"
+    needs = ("arms",)
+    params = [Param("thing", "thing", required=True, label="What")]
+
+    def run(self, s, who, thing):
+        who.knock_over(thing)
+
+
+class Kick(Action):
+    label = "kicks"
+    description = "Kick something on the floor (a ball) to someone or somewhere"
+    sentence = "{who} kicks {thing} to {to}"
+    needs = ("swing_legs",)
+    params = [Param("thing", "thing", required=True, label="What"), Param("to", "target", label="To")]
+
+    def run(self, s, who, thing, to=None):
+        who.kick(thing, to=to)
+
+
 class Leave(Action):
     label = "leaves"
     description = "Disappear (for example after walking to the door)"

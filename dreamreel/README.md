@@ -120,7 +120,8 @@ squash and stretch, long hair and floppy ears swing and settle. Every gesture an
 the character's mood or by a manner you give it (`how = "nervously"`), using the four Laban effort
 qualities (weight, time, space, flow), so an angry wave and a sad wave are different performances.
 Characters pick things up, carry them, hand them over and put them down, and can grab small
-creatures. Add motion-capture clips (BVH or FBX) to a film's `motions/` folder and any character can
+creatures. They throw and catch, knock things over and kick balls, and those things fall, bounce,
+roll and tumble with real physics. Add motion-capture clips (BVH or FBX) to a film's `motions/` folder and any character can
 perform them: dances, cartwheels, fights, retargeted to their body; walks use library walk cycles.
 See [docs/acting.md](docs/acting.md).
 

@@ -135,7 +135,9 @@ Items on tables, counters and benches: cookie-jar, cookie, plate, cup, vase, lap
 dissection tray; makes the mark `tray`), tool-cup, jar, beaker, bottle, scale.
 A second thing of the same type gets `-2` (`chair-2`), or give it a `name`. Items on surfaces are
 *things* that characters can pick up, carry, give and put down, named after the item (`cup`,
-`cup-2`); a scalpel is an item too.
+`cup-2`); a scalpel is an item too. An item on its own in `props` stands on the floor:
+`{type = "ball", place = "front-left"}`. Dropped, thrown, knocked and kicked things move with real
+physics: they fall, bounce, roll, tip over and knock into each other, then stay where they end up.
 
 ## Scenes: `scenes/NNN_name.toml`
 
@@ -171,7 +173,10 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | pick_up | thing (walks over if needed), hand (right, left) |
 | put_down | thing (what they hold), on (a table, counter, bench, desk or tray; else the floor) |
 | give | to, thing |
-| drop | thing (it falls to the floor) |
+| drop | thing (it falls, bounces and comes to rest) |
+| throw | thing (picked up first if not held), to: a character catches it; a place, it lands and rolls |
+| knock_over | thing: a sweep of the arm tips it over, or off the table |
+| kick | thing (a ball on the floor), to: a character, mark or place |
 | hold | thing, hand: holding it from this moment; a thing in the set, or a new item (`scalpel`) |
 | grab | thing = a small character (a frog, a cat): carried like a thing, put down the same way |
 | perform | motion, speed, mirror, in_place, start, end, how: play a motion-capture clip (see Motion library) |

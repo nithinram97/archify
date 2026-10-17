@@ -163,6 +163,8 @@ Things on tables, counters and benches can be picked up, carried, handed over an
 (`pick_up`, `give`, `put_down`, `drop`); `hold` puts something in a hand from the start of a beat
 (`hold`, thing = "scalpel"); `grab` picks up a small character. Characters walk over to what they
 reach for, so there's no need to move them there first. Two hands hold two things.
+`throw`, `knock_over`, `kick` and `drop` use physics: where a thing ends up is worked out, not
+chosen, so pick it up from wherever it landed (`pick_up` walks there).
 
 ## Rules
 

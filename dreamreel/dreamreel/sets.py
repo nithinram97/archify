@@ -153,6 +153,11 @@ class Set(Plugin):
     # ------------------------------------------------------------------ props
     def add_prop(self, p):
         kind = p["type"]
+        if kind not in plugins.names("prop") and kind in plugins.names("item"):
+            # an item on its own (a ball): on the floor, where it can be picked up, kicked, thrown
+            pos = Vector(p["at"][:2]) if "at" in p else self.zone(p.get("place", "front"))
+            ground = self.ground_height(pos.x, pos.y) if hasattr(self, "ground_height") else 0.0
+            return self.add_thing(kind, (pos.x, pos.y, ground), random.Random(kind + str(len(self.things))))
         name = p.get("name", kind)
         while name in self.props:
             name = f"{kind}-{len([k for k in self.props if k.startswith(kind)]) + 1}"
@@ -229,7 +234,7 @@ class Set(Plugin):
         objs = [bpy.data.objects[n] for n in set(bpy.data.objects.keys()) - before if n != root.name]
         top = max((max((o.matrix_world @ Vector(b)).z for b in o.bound_box) for o in objs if o.type == "MESH"),
                   default=at[2] + 0.05)
-        self.things[name] = Thing(name, root, approach=approach or on, grip=(top - at[2]) * 0.45)
+        self.things[name] = Thing(name, root, approach=approach or on, grip=(top - at[2]) * 0.45, item=item)
         if name != item:
             self.focus.setdefault(name, self.focus.get(item))
         return name
