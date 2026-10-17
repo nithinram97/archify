@@ -1,5 +1,8 @@
 # Roadmap
 
+The goal and the quality bar every feature is measured against are in [docs/vision.md](docs/vision.md):
+Hollywood quality, for anyone with a story, with little or no budget.
+
 dreamreel 0.1 can make a short dialogue film with toy-figure characters in rooms and simple outdoor
 places, with voices, subtitles and automatic camera coverage.
 

@@ -4,6 +4,9 @@
 sets, the acting and the camera work in Blender, and renders the film. No animation skills, no
 Blender knowledge, no keyframes.
 
+Made in India for dreamers everywhere: Hollywood-quality animated films with little or no budget, on
+an ordinary laptop, in your own language. See [the vision](docs/vision.md).
+
 ![Frames from the example film, "The Last Cookie"](docs/media/contact-sheet.jpg)
 
 ```python
