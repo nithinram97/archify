@@ -97,9 +97,15 @@ motion capture and handles things like a toy figure. If the model has facial sha
 smile, jawOpen; ARKit and VRM names work), moods, blinks and talking drive them; without them its
 face doesn't change. Check the licence of any model you use.
 
-`dreamreel generate NAME --prompt "..."` (or `--image picture.png`) makes a model with AI, using
-Tripo (tripo3d.ai, a paid online service: the film maker's own key in `TRIPO_API_KEY`), saves it as
-`models/NAME.glb` and writes `cast/NAME.toml`; add `--prop` for a thing instead of a character.
+`dreamreel generate NAME --prompt "..."` (or `--image picture.png`) has dreamreel's modelling agent
+make a model: an AI model writes a recipe in dreamreel's modelling kit, sees renders of it from
+four sides and corrects it (`--rounds`, default 3). It saves `models/NAME.glb`, the recipe
+`models/NAME.json` (edit it and rebuild with `--spec models/NAME.json`) and `cast/NAME.toml`, rigged
+on the skeleton in the recipe; add `--prop` for a thing instead of a character. The AI is the
+film's `[ai]` in film.toml (`provider` = anthropic, openai, gemini, openrouter, ollama, lmstudio
+or custom with `url`; `model`), or `--provider`/`--model`; keys come from the environment
+(ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, DREAMREEL_AI_KEY). Ollama and
+LM Studio run free on the film maker's own computer.
 Your own models go in sets too: `[[props]] type = "model"`, `file = "models/lamp.glb"`, `height`,
 `facing`, `place`.
 
@@ -397,6 +403,7 @@ so trying a different one is quick.
 | `dreamreel previz [scene]` / `render [scene]` | fast film / final film (`--percent`, `--force`) |
 | `dreamreel plugins [kind] [-v]` | every feature and its settings |
 | `dreamreel extend KIND NAME` | start a new feature as a class in `extensions/` |
-| `dreamreel generate NAME --prompt/--image` | make a character (or `--prop`) with AI (Tripo, own key) |
+| `dreamreel generate NAME --prompt/--image` | make a character (or `--prop`) with the AI modeller |
+| `dreamreel kit` | the modelling kit model recipes are written in |
 | `dreamreel assets [--download] [--pack P]` | Quaternius's free 3D packs: people, animals, furniture... |
 | `dreamreel voices` | how to set up voices |

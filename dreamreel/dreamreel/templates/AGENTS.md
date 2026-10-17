@@ -162,9 +162,11 @@ downloading them. Sets with people in them want `scale = "people"` (life-size fu
 A character can be a 3D model from `models/` (`type = "model"`, `file = "models/hero.glb"`): rigged
 or not, it acts like a toy figure. Use one when the film maker brings a model or asks for a look
 toy figures can't give. Never download models yourself without the film maker's say: licences differ.
-`dreamreel generate` makes one with AI (Tripo): it is paid and sends the prompt or picture to an
-online service, so only use it when the film maker asks and has set `TRIPO_API_KEY`. Check what it
-made with `dreamreel cast` before using it in scenes.
+`dreamreel generate` has dreamreel's AI modeller make one. It uses the AI the film maker set up
+(`[ai]` in film.toml): with an online provider that costs them money and sends the description out,
+so only run it when they ask; a local one (Ollama, LM Studio) is free. You can also write or improve
+a recipe yourself (models/NAME.json, in the kit `dreamreel kit` describes) and build it
+with `dreamreel generate NAME --spec models/NAME.json`. Check what was made with `dreamreel cast`.
 
 ## Handling things
 

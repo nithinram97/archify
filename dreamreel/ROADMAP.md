@@ -34,9 +34,10 @@ Next, roughly in order:
 
 ## Characters
 - Quaternius everywhere: buses and trains, street props and a modular-kit builder for varied buildings (people, animals, furniture, nature, city buildings and cars are done); the base characters with the Universal Animation Library (talking, dancing).
-- AI models (Tripo), further: rig them with Tripo's rigger and retarget its animation presets; a local
-  image-to-3D option (TripoSG, open) for computers with a GPU; facial shape keys added to generated
-  heads so they can talk and emote. (`dreamreel generate` and lightening heavy models are done.)
+- The AI modeller, further: rigs for four legs, wings and tails; an animation preset library any
+  rigged model can play; facial shape keys on made heads so they talk and emote; style filters
+  (voxel, brick, clay); splitting models into parts; exporting to other formats. (The modelling
+  agent with any AI, part-aware rigging and lightening heavy models are done.)
 - A character designer: describe a person in a sentence and get a cast file with a turnaround image.
 - CC0 asset packs as props and sets (Kenney, Quaternius, Poly Haven); fingers on imported models.
 

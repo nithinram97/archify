@@ -11,7 +11,7 @@
     dreamreel studio                 the same, in a friendly app in your browser
     dreamreel plugins                every feature you can use (built-in and from extensions/)
     dreamreel extend prop cake       start a new feature as a class in extensions/
-    dreamreel generate frog --prompt "a chubby cartoon frog"   make a model with AI (Tripo, your key)
+    dreamreel generate frog --prompt "a chubby cartoon frog"   make a model with dreamreel's AI modeller
 """
 import argparse
 import math
@@ -287,21 +287,34 @@ def cmd_assets(a):
 
 
 def cmd_generate(a):
-    """Make a model with Tripo (AI, online, your own API key) and add it to the film."""
-    from . import tripo
+    """Make a character or a thing with dreamreel's modelling agent (any AI model; see ai.py)."""
+    import json
+    import tempfile
+    from . import ai, modeler
     p = _project()
-    if not (a.prompt or a.image):
-        raise SystemExit("say what to make: --prompt \"a chubby cartoon frog\" or --image picture.png")
-    path = os.path.join(p.root, "models", f"{a.name}.glb")
-    if os.path.exists(path) and not a.force:
-        raise SystemExit(f"models/{a.name}.glb already exists (--force to make it again)")
+    glb = os.path.join(p.root, "models", f"{a.name}.glb")
+    kind = "prop" if a.prop else "character"
     try:
-        tripo.generate(path, prompt=a.prompt, image=a.image, character=not a.prop, faces=a.faces)
-    except tripo.TripoError as e:
+        if a.spec:                        # rebuild from a (hand-edited) recipe: no AI needed
+            with open(os.path.join(p.root, a.spec) if not os.path.isabs(a.spec) else a.spec) as f:
+                recipe = modeler.check(json.load(f))
+        else:
+            if not (a.prompt or a.image):
+                raise SystemExit("say what to make: --prompt \"a chubby cartoon frog\" or --image picture.png "
+                                 "(or --spec models/NAME.json to rebuild a recipe)")
+            if os.path.exists(glb) and not a.force:
+                raise SystemExit(f"models/{a.name}.glb already exists (--force to make it again)")
+            model = ai.configured(a.provider, a.model, a.url)
+            print(f"modelling {a.name} with {model} ({a.rounds} rounds of looking and correcting)")
+            with tempfile.TemporaryDirectory() as tmp:
+                recipe = modeler.generate(model, a.prompt, a.image, kind=kind, rounds=a.rounds, workdir=tmp)
+        recipe["name"] = a.name
+        modeler.save(recipe, glb)
+    except (ai.AIError, modeler.RecipeError) as e:
         raise SystemExit(str(e))
-    print(f"saved models/{a.name}.glb (made by Tripo: check its terms before sharing it)")
-    if a.prop:
-        print(f"put it in a set: [[props]] type = \"model\", file = \"models/{a.name}.glb\", height = 1.0")
+    print(f"saved models/{a.name}.glb and its recipe models/{a.name}.json")
+    if kind == "prop":
+        print(f"put it in a set: [[props]] type = \"model\", file = \"models/{a.name}.glb\", height = ...")
         return
     cast = os.path.join(p.root, "cast", f"{a.name}.toml")
     if os.path.exists(cast) and not a.force:
@@ -310,8 +323,14 @@ def cmd_generate(a):
     os.makedirs(os.path.dirname(cast), exist_ok=True)
     with open(cast, "w") as f:
         f.write(f'name = "{a.name.capitalize()}"\ntype = "model"\nfile = "models/{a.name}.glb"\nheight = {a.height}\n')
-    print(f"cast/{a.name}.toml is ready: rigged when cast, it walks, gestures and handles things."
-          " Check it with `dreamreel cast` (set turn = 180 if it faces away).")
+    print(f"cast/{a.name}.toml is ready: rigged when cast, it walks, gestures and handles things. "
+          "Check it with `dreamreel cast`.")
+
+
+def cmd_kit(a):
+    """Print the modelling kit recipes are written in (for people and AI agents writing them)."""
+    from . import modeler
+    print(modeler.KIT)
 
 
 def cmd_motions(a):
@@ -715,15 +734,20 @@ def main(argv=None):
     asp.add_argument("--download", action="store_true", help="fetch the packs (CC0) into the cache")
     asp.add_argument("--pack", help="just this pack (see the list)")
     asp.set_defaults(fn=cmd_assets)
-    ge = sub.add_parser("generate", help="make a character or prop with AI (Tripo, online, needs TRIPO_API_KEY)")
+    ge = sub.add_parser("generate", help="make a character or prop with dreamreel's modelling agent (any AI model)")
     ge.add_argument("name", help="what to call it (models/NAME.glb, cast/NAME.toml)")
     ge.add_argument("--prompt", help="describe it")
-    ge.add_argument("--image", help="or a picture of it")
+    ge.add_argument("--image", help="a picture of it (for AI models that can see)")
+    ge.add_argument("--spec", help="rebuild from a recipe (models/NAME.json), no AI")
     ge.add_argument("--prop", action="store_true", help="a prop, not a character")
     ge.add_argument("--height", type=float, default=1.0, help="character height in metres")
-    ge.add_argument("--faces", type=int, default=20000, help="most faces the model may have")
+    ge.add_argument("--rounds", type=int, default=3, help="times the AI looks at its model and corrects it")
+    ge.add_argument("--provider", help="anthropic, openai, gemini, openrouter, ollama, lmstudio, custom")
+    ge.add_argument("--model", help="the provider's model name")
+    ge.add_argument("--url", help="endpoint for a custom (OpenAI-compatible) provider")
     ge.add_argument("--force", action="store_true", help="replace an existing model")
     ge.set_defaults(fn=cmd_generate)
+    sub.add_parser("kit", help="the modelling kit that model recipes are written in").set_defaults(fn=cmd_kit)
     ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
     ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))
     ex.add_argument("name")

@@ -13,6 +13,7 @@ dependencies = ["bpy>=5.2"]
 
 [project.optional-dependencies]
 voices = ["piper-tts"]
+claude = ["anthropic>=1.0"]
 
 [project.scripts]
 dreamreel = "dreamreel.cli:main"

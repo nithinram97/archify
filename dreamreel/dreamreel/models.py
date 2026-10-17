@@ -386,28 +386,142 @@ def auto_rig(meshes, height, joints=None):
     return arm
 
 
+def _islands(mesh):
+    """The mesh's separate pieces, as lists of vertex indices."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    bm.verts.ensure_lookup_table()
+    seen, out = set(), []
+    for v in bm.verts:
+        if v.index in seen:
+            continue
+        piece, stack = [], [v]
+        while stack:
+            x = stack.pop()
+            if x.index in seen:
+                continue
+            seen.add(x.index)
+            piece.append(x.index)
+            stack.extend(e.other_vert(x) for e in x.link_edges)
+        out.append(piece)
+    bm.free()
+    return out
+
+
+def _seg_dist(p, a, b):
+    ab = b - a
+    t = max(0.0, min(1.0, (p - a).dot(ab) / max(1e-9, ab.length_squared)))
+    return (p - (a + ab * t)).length
+
+
 def _weight(mesh, segs):
-    """Each vertex follows its nearest bones (smoothly between the two nearest)."""
+    """Skin weights from the shape. A separate piece no bone runs through (an eye, a button, the end
+    of a scarf) moves rigidly with the bone nearest it. Everything else follows its nearest bones,
+    smoothly between two, except that a side's arm bones only take what lies beyond that shoulder and
+    its leg bones only what lies below that hip and on its side: raising an arm can't pull the head."""
     for name, _, _ in segs:
         if name not in mesh.vertex_groups:
             mesh.vertex_groups.new(name=name)
     mw = mesh.matrix_world
+    seg = {name: (a, b) for name, a, b in segs}
+    zs = [p.z for _, a, b in segs for p in (a, b)]
+    H = max(1e-3, max(zs) - min(zs))
+    mid_x = seg["hips"][0].x if "hips" in seg else 0.0
 
-    def dist(p, a, b):
-        ab = b - a
-        t = max(0.0, min(1.0, (p - a).dot(ab) / max(1e-9, ab.length_squared)))
-        return (p - (a + ab * t)).length
-    for v in mesh.data.vertices:
-        p = mw @ v.co
-        ds = sorted((dist(p, a, b), name) for name, a, b in segs)
-        d0, n0 = ds[0]
-        d1, n1 = ds[1]
-        w0 = 1.0 / max(1e-4, d0) ** 4
-        w1 = 1.0 / max(1e-4, d1) ** 4 if d1 < d0 * 1.6 else 0.0
-        tot = w0 + w1
-        mesh.vertex_groups[n0].add([v.index], w0 / tot, "REPLACE")
-        if w1:
-            mesh.vertex_groups[n1].add([v.index], w1 / tot, "REPLACE")
+    def side_sign(s, bone):
+        a, b = seg[bone]
+        d = (b.x - a.x) if bone.endswith("_arm") else (a.x - mid_x)
+        return 1.0 if d >= 0 else -1.0
+
+    limits = {}
+    for s in "lr":
+        if f"{s}_arm" in seg:
+            sh, sg = seg[f"{s}_arm"][0], side_sign(s, f"{s}_arm")
+            for bone in (f"{s}_arm", f"{s}_elbow", f"{s}_wrist"):
+                limits[bone] = lambda p, sh=sh, sg=sg: (p.x - sh.x) * sg > -0.03 * H
+        if f"{s}_hip" in seg:
+            hp, sg = seg[f"{s}_hip"][0], side_sign(s, f"{s}_hip")
+            for bone in (f"{s}_hip", f"{s}_knee", f"{s}_ankle"):
+                limits[bone] = lambda p, hp=hp, sg=sg: p.z < hp.z + 0.03 * H and (p.x - mid_x) * sg > -0.02 * H
+
+    def through(lo, hi):
+        """Bones that run through a box."""
+        pad = 0.01 * H
+        hits = []
+        for name, (a, b) in seg.items():
+            for k in range(9):
+                q = a.lerp(b, k / 8)
+                if all(lo[i] - pad <= q[i] <= hi[i] + pad for i in range(3)):
+                    hits.append(name)
+                    break
+        return hits
+
+    verts = mesh.data.vertices
+    pieces = []
+    for piece in _islands(mesh):
+        pts = [mw @ verts[i].co for i in piece]
+        lo = Vector([min(p[i] for p in pts) for i in range(3)])
+        hi = Vector([max(p[i] for p in pts) for i in range(3)])
+        pieces.append((piece, pts, lo, hi, through(lo, hi)))
+    # a limb made as its own piece (an arm modelled separately) keeps its bones to itself
+    biggest = max(pieces, key=lambda pc: len(pc[0]))
+    own = {}
+    for pc in pieces:
+        if pc is biggest:
+            continue
+        for name in pc[4]:
+            a, b = seg[name]
+            inside = sum(all(pc[2][i] - 0.01 * H <= a.lerp(b, k / 8)[i] <= pc[3][i] + 0.01 * H for i in range(3))
+                         for k in range(9))
+            if inside >= 6 and name not in ("hips", "chest", "neck"):
+                own[name] = id(pc)
+    weights = {}
+    for pc in pieces:
+        piece, pts, lo, hi, hits = pc
+        allowed = [n for n in seg if own.get(n, id(pc)) == id(pc)]
+        if len(seg) > 1 and not hits:            # an accessory: rides one bone
+            c = sum(pts, Vector()) / len(pts)
+            ok = [n for n in allowed if n not in limits or limits[n](c)] or allowed
+            best = min(ok, key=lambda n: _seg_dist(c, *seg[n]))
+            for i in piece:
+                weights[i] = {best: 1.0}
+            continue
+        for i, p in zip(piece, pts):
+            ok = [n for n in allowed if n not in limits or limits[n](p)] or allowed
+            ds = sorted((_seg_dist(p, *seg[n]), n) for n in ok)
+            w = {ds[0][1]: 1.0 / max(1e-4, ds[0][0]) ** 4}
+            if len(ds) > 1 and ds[1][0] < ds[0][0] * 1.6:
+                w[ds[1][1]] = 1.0 / max(1e-4, ds[1][0]) ** 4
+            tot = sum(w.values())
+            weights[i] = {n: x / tot for n, x in w.items()}
+    # smooth the weights over the surface, so neighbouring skin doesn't tear between bones
+    nbrs = {}
+    for e in mesh.data.edges:
+        a, b = e.vertices
+        nbrs.setdefault(a, []).append(b)
+        nbrs.setdefault(b, []).append(a)
+    rigid = {i for pc in pieces if not pc[4] for i in pc[0]}
+    for _ in range(4):
+        new = {}
+        for i, w in weights.items():
+            ns = nbrs.get(i)
+            if i in rigid or not ns:
+                new[i] = w
+                continue
+            acc = {n: x * 0.5 for n, x in w.items()}
+            share = 0.5 / len(ns)
+            for j in ns:
+                for n, x in weights[j].items():
+                    acc[n] = acc.get(n, 0.0) + x * share
+            new[i] = acc
+        weights = new
+    for i, w in weights.items():
+        top = sorted(w.items(), key=lambda kv: -kv[1])[:4]
+        tot = sum(x for _, x in top if x > 0.02) or 1.0
+        for n, x in top:
+            if x > 0.02:
+                mesh.vertex_groups[n].add([i], x / tot, "REPLACE")
 
 
 # ---------------------------------------------------------------------- the character
@@ -454,6 +568,23 @@ class ModelCharacter(Character):
     def proportions(self):
         self.H = float(self.spec.get("height") or 1.0)
 
+    def _recipe_joints(self, holder):
+        """Joints from the recipe of a model dreamreel made (models/NAME.json), in the world; else None."""
+        import json
+        recipe_path = os.path.splitext(self._path())[0] + ".json"
+        if not os.path.exists(recipe_path):
+            return None
+        try:
+            with open(recipe_path) as f:
+                recipe = json.load(f)
+            from .modeler import skeleton
+            joints = skeleton(recipe, float(recipe.get("lift", 0.0)))
+        except (ValueError, KeyError, TypeError):
+            return None
+        if not joints:
+            return None
+        return {k: holder.matrix_world @ v for k, v in joints.items()}
+
     def build(self):
         n, H = self.name, self.H
         objs = import_file(self._path())
@@ -478,7 +609,7 @@ class ModelCharacter(Character):
                                @ Matrix.Translation(-Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))))
         bpy.context.view_layer.update()
         if arm is None:
-            arm = auto_rig(meshes, H)
+            arm = auto_rig(meshes, H, self._recipe_joints(holder))
             arm.parent = holder
             arm.matrix_parent_inverse = holder.matrix_world.inverted()
             bpy.context.view_layer.update()

@@ -146,9 +146,29 @@ body. Either way the model walks, gestures, performs motion capture, carries thi
 facial shape keys, smiles, frowns and blinks with the story's moods. Heavy models (AI-made or
 scanned, up to millions of faces) are lightened as they load so they render quickly.
 
-No model yet? `dreamreel generate frog --prompt "a chubby cartoon frog"` makes one with AI through
-[Tripo](https://www.tripo3d.ai) (a paid service: your own API key in `TRIPO_API_KEY`) and casts it;
-`--image` works from a picture, and `--prop` makes a thing for a set (`type = "model"` props).
+## Made by dreamreel's AI modeller
+
+No model yet? `dreamreel generate frog --prompt "a chubby green frog with big eyes and a red scarf"`
+makes one. dreamreel's modelling agent works the way a modeller does: an AI model builds it from
+dreamreel's modelling kit (shapes, clay-like blobs that melt together, lathed and extruded forms,
+materials), looks at renders of it from four sides, and corrects it, round after round; then
+dreamreel rigs it on the skeleton the AI placed and casts it. `--image` works from a picture,
+`--prop` makes a thing for a set (`type = "model"` props), and the recipe is kept in
+`models/NAME.json` to edit and rebuild (`--spec`).
+
+Use whichever AI you like: Claude, OpenAI, Gemini or OpenRouter with your own key, or a free model
+on your own computer with [Ollama](https://ollama.com) or LM Studio (a vision model works best, as
+the agent looks at its renders):
+
+```toml
+# film.toml
+[ai]
+provider = "ollama"            # anthropic, openai, gemini, openrouter, ollama, lmstudio, custom
+model = "qwen2.5vl"            # any model the provider has
+```
+
+The AI only writes recipes, never code, so nothing it says runs on your computer. Claude needs
+`pip install anthropic`; the others need nothing extra.
 
 ## A real camera
 
