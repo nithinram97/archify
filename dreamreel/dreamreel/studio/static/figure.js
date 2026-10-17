@@ -103,8 +103,17 @@
     // face
     const fz = (dz) => hc + dz * H;
     for (const s of [1, -1]) {
-      ell(s * 0.075 * H, fz(0.02), 0.03 * H * es, 0.043 * H * es, "#161414");
-      ell(s * 0.075 * H + 0.01 * H * es, fz(0.02) + 0.016 * H * es, 0.011 * H * es, 0.011 * H * es, "#fff");
+      const ex = s * 0.075 * H, ez = fz(0.02);
+      if (spec.eye_style === "beads") {
+        ell(ex, ez, 0.03 * H * es, 0.043 * H * es, "#161414");
+        ell(ex + 0.01 * H * es, ez + 0.016 * H * es, 0.011 * H * es, 0.011 * H * es, "#fff");
+      } else {   // white eye, coloured iris, pupil, highlight (as in the 3D figure)
+        ell(ex, ez, 0.033 * H * es, 0.046 * H * es, "#3b2922");
+        ell(ex, ez, 0.03 * H * es, 0.043 * H * es, "#f7f4ee");
+        ell(ex, ez - 0.002 * H * es, 0.019 * H * es, 0.023 * H * es, C("eye_color", "#6b4423"));
+        ell(ex, ez - 0.002 * H * es, 0.0095 * H * es, 0.0115 * H * es, "#0e0c0c");
+        ell(ex + 0.0065 * H * es, ez + 0.006 * H * es, 0.0055 * H * es, 0.0055 * H * es, "#fff");
+      }
       rrect(s * 0.075 * H - 0.027 * H, fz(0.085) - 0.011 * H, s * 0.075 * H + 0.027 * H, fz(0.085) + 0.011 * H,
         0.011 * H, hairStyle !== "none" ? hairC : "#3a3a40");
       if (spec.blush !== false) ell(s * 0.115 * H, fz(-0.035), 0.032 * H, 0.019 * H, "#f19aa6", `opacity=".9"`);

@@ -52,7 +52,7 @@ def figure():
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     bpy.ops.object.shade_smooth()
     body.shape_key_add(name="Basis")
-    for name, dz in (("eyeBlink", -0.01), ("mouthSmile", 0.01)):
+    for name, dz in (("eyeBlink", -0.01), ("mouthSmile", 0.01), ("eyeSquint", -0.005)):
         kb = body.shape_key_add(name=name)
         for v in kb.data:
             if v.co.z > 1.6:
@@ -149,7 +149,7 @@ def act(path, kind):
         lows.append((hero.rig.matrix_world @ ankle.head).z)
     assert min(lows) < 0.12 and max(lows) - min(lows) > 0.03, (kind, "feet step", lows)
     if kind == "faces":
-        assert {"blink", "smile"} <= set(hero.face_keys), hero.face_keys
+        assert {"blink", "smile", "squint"} <= set(hero.face_keys), hero.face_keys
         smile = hero.face_keys["smile"][0]
         handling.evaluate(s, t_sad)
         before = smile.value

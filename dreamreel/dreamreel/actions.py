@@ -173,10 +173,11 @@ class Feel(Action):
     label = "feels"
     description = "Change expression"
     sentence = "{who} feels {mood}"
-    params = [Param("mood", "mood", required=True, default="happy")]
+    params = [Param("mood", "mood", required=True, default="happy"),
+              Param("how_much", "number", default=1.0, min=0.3, max=1.6, step=0.1, label="How much")]
 
-    def run(self, s, who, mood):
-        who.feel(mood)
+    def run(self, s, who, mood, how_much=1.0):
+        who.feel(mood, how_much=how_much)
 
 
 class DoGesture(Action):

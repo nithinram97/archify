@@ -171,7 +171,8 @@ chosen, so pick it up from wherever it landed (`pick_up` walks there).
 - Never use raw coordinates in cast, set or scene files: use places, marks, seats and characters.
   Need a new spot? Add it to the set's `[marks]`.
 - Every line of dialogue is a `say` beat with `to` set, so cameras and subtitles are right.
-- Show feelings with `mood` and `feel`, reactions with gestures and `look_at`. A listener who
+- Show feelings with `mood` and `feel` (the big moods, like crazed, furious, terrified, crying, are
+  for the big moments; `how_much` tones any mood up or down), reactions with gestures and `look_at`. A listener who
   reacts is half of every good scene.
 - Let the automatic camera work first; add `shot` beats only to fix a specific problem.
 - Always look at rendered frames before saying something works.

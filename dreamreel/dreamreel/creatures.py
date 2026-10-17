@@ -411,6 +411,7 @@ class Creature(Character):
     """Any body, from a body plan; with a face that talks and feels like everyone else's."""
     label = "Creature"
     description = "Any body: animals, monsters, bugs, birds, fish, slimes"
+    default_eye_style = "beads"
     default_capabilities = ("face",)   # plus the body plan's (see `capabilities`)
     params = [
         Param("name", "text"),
@@ -913,6 +914,9 @@ class Creature(Character):
                 self.brows[side].location = at + Vector((0, -hr * 0.05, hr * 0.42))
             self.mouth.location = hc + Vector((0, -hr * 1.0, -hr * 0.16))
             self.mouth_mesh.scale = (2.8, 1.0, 0.55)      # wide (moods animate the pivot, not this)
+            for t in getattr(self, "teeth", {}).values():     # frogs have no teeth to show
+                bpy.data.objects.remove(t, do_unlink=True)
+            self.teeth, self.mouth_parts = {}, [self.mouth_mesh]
             for side in (1, -1):
                 shapes.sphere(f"{n}.nostril", hr * 0.05, look.plastic("#2a3a1a", 0.4, 0.2), self.neck,
                               at=hc + Vector((side * hr * 0.2, -hr * 1.0, hr * 0.12)), segments=10)

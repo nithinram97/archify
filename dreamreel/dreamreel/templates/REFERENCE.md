@@ -18,6 +18,8 @@ Every character has `name`, `voice` (a Piper voice such as `en_US-amy-medium`) a
 | `hair_color`, `top`, `bottom`, `shoes` | colours |
 | `outfit` | shirt, dress |
 | `eyes` | small, normal, big |
+| `eye_style`, `eye_color` | whites (white eyes with a coloured iris, the default) or beads (glossy toy beads); iris colour |
+| `braces` | true for braces on the teeth (seen in grins) |
 | `extras` | any of glasses, hat, cap, scarf, tie, bow, beard, moustache, headphones |
 
 ### `type = "creature"`: any body
@@ -168,7 +170,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | sit | seat, already (true: sitting from the start). Bodies without arms lie down there |
 | lie_down, stand, leave | |
 | turn_to, look_at | target |
-| feel | mood |
+| feel | mood, how_much |
 | gesture | gesture, target, how |
 | pick_up | thing (walks over if needed), hand (right, left) |
 | put_down | thing (what they hold), on (a table, counter, bench, desk or tray; else the floor) |
@@ -201,7 +203,13 @@ film.toml (0.5 subtle ... 1 natural ... 2 very cartoony) pushes all of it; each 
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
 
-**Moods**: neutral, happy, excited, sad, angry, surprised, worried, scared, smug, sleepy.
+**Moods**: neutral, happy, excited, sad, angry, surprised, worried, scared, smug, sleepy, and the
+big ones: gleeful, crazed, furious, determined (gritted teeth), terrified, screaming, shocked,
+disgusted, suspicious, crying (with tears), embarrassed (blushing), nervous (sweating), bored,
+loving. `how_much` on `feel` (0.5 a hint ... 1 ... 1.5 pushed further) sets how strongly. A new mood
+sets any of the face controls: brow_tilt, brow_lift, brow_squeeze, eyes, pupils, lids, squint,
+lid_slant, smile, frown, wide, o, smirk, mouth_open, teeth, blush, tears, sweat, head_tilt
+(`dr.Mood.define("smitten", smile=0.7, blush=1, lids=0.3)`).
 
 **Gestures**: wave, nod, shake_head, shrug, point, jump, cheer, facepalm, clap, think, bow, stomp
 (toys); roar, sniff, spin, tail_wag, flap, rear_up, croak, tongue (any body that has what it needs).

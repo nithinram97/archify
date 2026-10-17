@@ -97,7 +97,8 @@ Characters are either jointed toy figures or **creatures** built from a body pla
 quadruped, bird, fish, serpent, bug, spider, frog or blob. Proportions, heads, ears, horns, wings,
 patterns and colours come from a few settings. Creatures walk, trot, gallop, scuttle, swim,
 slither, hop and fly, with feet that stay planted on the ground. Every one of them talks and shows
-moods with the same face system.
+moods with the same face system: brows, lids, irises that shrink in terror, teeth gritted in fury,
+grins, sneers, blushes, tears and sweat, from a gentle smile to a crazed grin.
 
 ![Nine creatures from eight body plans](docs/media/creatures.jpg)
 ![A procedural four-beat dog walk](docs/media/dog-walk.jpg)

@@ -87,9 +87,12 @@ class Character(Plugin):
         Param("shoes", "color", default="charcoal"),
         Param("outfit", "choice", default="shirt", choices=("shirt", "dress")),
         Param("eyes", "choice", default="normal", choices=("small", "normal", "big")),
+        Param("eye_style", "choice", default="whites", choices=("whites", "beads"), label="Eyes look"),
+        Param("eye_color", "color", default="#6b4423", label="Eye colour"),
         Param("extras", "extras", default=[]),
         Param("blush", "bool", default=True),
         Param("nose", "bool", default=True),
+        Param("braces", "bool", default=False, label="Braces on the teeth"),
         Param("voice", "voice"),
     ]
 
@@ -237,13 +240,26 @@ class Character(Plugin):
         self.mouth (pivot) and self.mouth_mesh; moods and talking animate these."""
         H, n = self.H, self.name
         es = {"small": 0.8, "normal": 1.0, "big": 1.3}.get(self.get("eyes"), 1.0)
-        self.eyes = []
+        self.eyes, self.gazes = [], []
+        beads = self.get("eye_style", self.default_eye_style) == "beads"
         for side in (1, -1):
             piv = shapes.empty(f"{n}.eye", self.neck, self.face_point(side * 0.075 * H, 0.02 * H, 0.004))
-            eye = shapes.ellipsoid(f"{n}.eye", 0.03 * H * es, 0.02 * H, 0.043 * H * es,
-                                   look.plastic(self.eye_color(), 0.12, 0.9), piv)
-            shapes.sphere(f"{n}.glint", 0.011 * H * es, look.plastic("white", emission=1.5), eye,
-                          at=(0.01 * H * es, -0.016 * H, 0.016 * H * es))
+            if beads:       # one glossy bead (animals, and the classic toy look)
+                eye = shapes.ellipsoid(f"{n}.eye", 0.03 * H * es, 0.02 * H, 0.043 * H * es,
+                                       look.plastic(self.eye_color(), 0.12, 0.9), piv)
+                shapes.sphere(f"{n}.glint", 0.011 * H * es, look.plastic("white", emission=1.5), eye,
+                              at=(0.01 * H * es, -0.016 * H, 0.016 * H * es))
+            else:           # a white eyeball with a coloured iris, a pupil and a highlight
+                shapes.ellipsoid(f"{n}.eye", 0.03 * H * es, 0.02 * H, 0.043 * H * es,
+                                 look.plastic("#f7f4ee", 0.3, 0.3), piv)
+                gaze = shapes.empty(f"{n}.gaze", piv, (0, -0.0158 * H, -0.002 * H * es))
+                shapes.ellipsoid(f"{n}.iris", 0.019 * H * es, 0.0045 * H, 0.023 * H * es,
+                                 look.plastic(self.eye_color(), 0.25, 0.5), gaze, segments=24)
+                shapes.ellipsoid(f"{n}.pupil", 0.0095 * H * es, 0.003 * H, 0.0115 * H * es,
+                                 look.plastic("#0e0c0c", 0.15, 0.8), gaze, at=(0, -0.0028 * H, 0), segments=16)
+                shapes.sphere(f"{n}.glint", 0.0055 * H * es, look.plastic("white", emission=1.5), gaze,
+                              at=(0.0065 * H * es, -0.0062 * H, 0.008 * H * es), segments=12)
+                self.gazes.append(gaze)
             self.eyes.append(piv)
         self.brows = {}
         brow_color = self.color("hair_color") if self.get("hair", "short") != "none" else "charcoal"
@@ -267,9 +283,15 @@ class Character(Plugin):
                 shapes.ellipsoid(f"{n}.blush", 0.034 * H, 0.008 * H, 0.02 * H, look.plastic("#f19aa6", 0.6, 0.1),
                                  self.neck, at=self.face_point(side * 0.115 * H, -0.035 * H, 0.002),
                                  rot=(0, 0, _deg(side * 40)))
+        from . import face
+        face.build(self)
+
+    default_eye_style = "whites"
 
     def eye_color(self):
-        return "#161414"
+        if self.get("eye_style", self.default_eye_style) == "beads":
+            return "#161414"
+        return self.color("eye_color", "#6b4423")
 
     def build_hair(self):
         plugins.get("hair", self.get("hair", "short"))().build(self, self.color("hair_color", "brown"))
@@ -589,36 +611,16 @@ class Character(Plugin):
         return self._end(t + 0.45, wait)
 
     # ------------------------------------------------------------------ face
-    def feel(self, mood, at=None, wait=False):
-        """Change expression to a mood (see dr.registry("mood"); add your own with dr.Mood)."""
+    def feel(self, mood, at=None, wait=False, how_much=1.0):
+        """Change expression to a mood (see dr.registry("mood"); add your own with dr.Mood).
+        how_much: 0.5 a hint of it ... 1 as defined ... 1.5 pushed further (see face.py)."""
+        from . import face
         m = plugins.get("mood", mood)
         t = self._start(at)
-        self._moods = sorted(getattr(self, "_moods", []) + [(t, mood)])
-        tilt, lift, smile, frown, eye, mopen, head_tilt = (m.brow_tilt, m.brow_lift, m.smile, m.frown, m.eyes,
-                                                          m.mouth_open, m.head_tilt)
+        amount = float(how_much if how_much is not None else 1.0)
+        self._moods = sorted(getattr(self, "_moods", []) + [(t, mood, amount)], key=lambda x: x[0])
         t1 = t + 0.25
-        for side, brow in self.brows.items():
-            hold(brow, "rotation_euler", t)
-            hold(brow, "location", t)
-            key(brow, "rotation_euler", t1, (0, _deg(tilt) * side, 0))
-            base = brow.get("z0", brow.location.z)
-            brow["z0"] = base
-            loc = value_at(brow, "location", t)
-            key(brow, "location", t1, (loc[0], loc[1], base + lift * self.H))
-        for e in self.eyes:
-            hold(e, "scale", t)
-            key(e, "scale", t1, (eye, 1, eye))
-            e["open"] = eye
-        sk = self.mouth_mesh.data.shape_keys.key_blocks
-        for name, v in (("smile", smile), ("frown", frown)):
-            hold(sk[name], "value", t)
-            key(sk[name], "value", t1, v)
-        hold(self.mouth, "scale", t)
-        key(self.mouth, "scale", t1, (1 - 0.3 * mopen, 1, 1 + 2.2 * mopen))
-        self.mouth["rest"] = mopen
-        hold(self.neck, "rotation_euler", t)
-        cur = value_at(self.neck, "rotation_euler", t)
-        key(self.neck, "rotation_euler", t1, (_deg(head_tilt), cur[1], cur[2]))
+        face.apply(self, face.values(m, amount), t, t1)
         self.mood = mood
         return self._end(t1, wait)
 
@@ -1146,7 +1148,9 @@ class Character(Plugin):
 
     # ------------------------------------------------------------------ life
     def _alive(self, length):
-        """Blinks and breathing for the whole scene, added when the scene is finished."""
+        """Blinks, breathing, tears and sweat for the whole scene, added when the scene is finished."""
+        from . import face
+        face.drops(self, length)
         t = self.rng.uniform(0.6, 2.0)
         while t < length - 0.3:
             for e in self.eyes:

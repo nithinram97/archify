@@ -15,7 +15,8 @@ from the mesh's silhouette and the skin is weighted to the nearest bones.
 Then the skeleton is driven by dreamreel's usual pivots (hips, body, neck, an arm pivot at each
 shoulder and a leg pivot at each hip, with IK for elbows and knees), so every gesture, walk, motion
 capture clip and handling verb works on it. If the model has facial shape keys (blink, smile,
-jawOpen, ARKit, VRM...), moods, blinks and talking drive them.
+jawOpen, eyeSquint, eyeWide, mouthStretch, mouthPucker, noseSneer; ARKit and VRM names work), moods,
+blinks and talking drive them.
 
 Check the licence of any model you use.
 """
@@ -377,6 +378,11 @@ FACE_KEYS = {
     "open": ("jawopen", "mouthopen", "visemeaa", "fclmtha", "aa", "a"),
     "brows_up": ("browinnerup", "browsup", "browup", "surprised", "fclallsurprised"),
     "brows_down": ("browdown", "angry", "fclallangry"),
+    "squint": ("eyesquint", "squint", "cheeksquint"),
+    "wide_eyes": ("eyewide", "eyeswide", "widen"),
+    "stretch": ("mouthstretch", "stretch"),
+    "pucker": ("mouthpucker", "mouthfunnel", "pucker", "funnel", "visemeou", "ou"),
+    "sneer": ("nosesneer", "sneer"),
 }
 
 
@@ -573,10 +579,13 @@ class ModelCharacter(Character):
         m = shapes.plane(f"{n}.mouthkeys", 0.001, 0.001, None, self.neck)
         m.hide_render = True
         m.hide_viewport = True
-        m.shape_key_add(name="Basis")
-        m.shape_key_add(name="smile")
-        m.shape_key_add(name="frown")
+        from . import face
+        face.mouth_keys(m, 0.001, 0.001, self.H)
         self.mouth_mesh = m
+        lids = shapes.plane(f"{n}.lidkeys", 0.001, 0.001, None, self.neck)
+        lids.hide_render = lids.hide_viewport = True
+        face.lid_keys(lids, 0.001, 0.001, 1)
+        self.scleras, self.irises = [lids], []
         self.face_keys = {}
         for mesh in meshes:
             keys_ = mesh.data.shape_keys
@@ -594,6 +603,11 @@ class ModelCharacter(Character):
             "frown": (m.data.shape_keys, 'key_blocks["frown"].value', None, "v"),
             "brows_up": (self.brows[1], "location", 2, "max(0, min(1, v * 40))"),
             "brows_down": (self.brows[1], "location", 2, "max(0, min(1, -v * 40))"),
+            "squint": (lids.data.shape_keys, 'key_blocks["lower"].value', None, "v"),
+            "wide_eyes": (self.eyes[0], "scale", 2, "max(0, min(1, (v - 1) * 2.5))"),
+            "stretch": (m.data.shape_keys, 'key_blocks["wide"].value', None, "v"),
+            "pucker": (m.data.shape_keys, 'key_blocks["o"].value', None, "v"),
+            "sneer": (m.data.shape_keys, 'key_blocks["smirk"].value', None, "max(0, -v)"),
         }
         for role, kbs in self.face_keys.items():
             src, path, index, expr = drive[role]

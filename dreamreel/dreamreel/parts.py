@@ -28,15 +28,27 @@ def _deg(d):
 
 # ---------------------------------------------------------------------- moods
 class Mood(Plugin):
-    """An expression: how far the brows tilt and lift, the mouth shape, the eyes and the head tilt."""
+    """An expression: a setting for each face control (see face.py for what each one does)."""
     kind = "mood"
     abstract = True
     brow_tilt = 0.0     # degrees; + raises the inner ends (sad, worried), - lowers them (angry)
     brow_lift = 0.0     # fraction of height
+    brow_squeeze = 0.0  # 0-1, brows pulled together
     smile = 0.0         # 0-1
     frown = 0.0         # 0-1
     eyes = 1.0          # eye size; < 1 narrows, > 1 widens
+    pupils = 1.0        # < 1 shrinks the dark of the eye, showing the whites
+    lids = 0.0          # 0-1, upper lids down
+    squint = 0.0        # 0-1, lower lids up
+    lid_slant = 0.0     # -1 angry ... 1 sad
+    wide = 0.0          # 0-1, lips stretched wide
+    o = 0.0             # 0-1, lips rounded
+    smirk = 0.0         # -1-1, one corner up
     mouth_open = 0.0    # 0-1
+    teeth = 0.0         # 0-1: upper teeth by 0.5, both (clenched) by 1
+    blush = 0.0         # 0-1
+    tears = 0.0         # 0-1
+    sweat = 0.0         # 0-1
     head_tilt = 0.0     # degrees forward (+) or back (-)
 
     @classmethod
@@ -45,19 +57,45 @@ class Mood(Plugin):
         return type(name.title().replace("_", ""), (cls,), {"name": name, **values})
 
 
-for _n, (_t, _l, _s, _f, _e, _m, _h) in {
-    "neutral": (0, 0.0, 0.0, 0.0, 1.0, 0.0, 0),
-    "happy": (-4, 0.008, 1.0, 0.0, 1.0, 0.0, 0),
-    "excited": (-6, 0.016, 1.0, 0.0, 1.12, 0.35, -4),
-    "sad": (22, 0.0, 0.0, 0.9, 0.95, 0.0, 10),
-    "angry": (-24, -0.012, 0.0, 0.6, 0.95, 0.0, 4),
-    "surprised": (4, 0.028, 0.0, 0.0, 1.25, 0.8, -6),
-    "worried": (16, 0.006, 0.0, 0.35, 1.05, 0.0, 4),
-    "scared": (20, 0.02, 0.0, 0.45, 1.25, 0.4, 6),
-    "smug": (-10, 0.0, 0.6, 0.0, 0.85, 0.0, -5),
-    "sleepy": (8, -0.006, 0.0, 0.0, 0.45, 0.0, 8),
-}.items():
-    Mood.define(_n, brow_tilt=_t, brow_lift=_l, smile=_s, frown=_f, eyes=_e, mouth_open=_m, head_tilt=_h)
+MOODS = {
+    "neutral": {},
+    "happy": dict(brow_tilt=-4, brow_lift=0.008, smile=1.0, squint=0.25),
+    "excited": dict(brow_tilt=-6, brow_lift=0.016, smile=1.0, eyes=1.12, mouth_open=0.35, teeth=0.5, head_tilt=-4),
+    "sad": dict(brow_tilt=22, frown=0.9, eyes=0.95, lids=0.25, lid_slant=0.6, head_tilt=10),
+    "angry": dict(brow_tilt=-24, brow_lift=-0.012, brow_squeeze=0.5, frown=0.6, eyes=0.95, lid_slant=-0.6, head_tilt=4),
+    "surprised": dict(brow_tilt=4, brow_lift=0.028, eyes=1.25, mouth_open=0.8, o=0.6, head_tilt=-6),
+    "worried": dict(brow_tilt=16, brow_lift=0.006, brow_squeeze=0.3, frown=0.35, eyes=1.05, wide=0.3, head_tilt=4),
+    "scared": dict(brow_tilt=20, brow_lift=0.02, eyes=1.25, pupils=0.8, frown=0.45, wide=0.5, mouth_open=0.4,
+                   head_tilt=6),
+    "smug": dict(brow_tilt=-10, smile=0.4, smirk=0.7, eyes=0.85, lids=0.35, head_tilt=-5),
+    "sleepy": dict(brow_tilt=8, brow_lift=-0.006, lids=0.8, eyes=0.9, head_tilt=8),
+    # the extremes (FACS combinations, pushed for animation)
+    "gleeful": dict(brow_tilt=-6, brow_lift=0.012, smile=1.0, wide=0.6, teeth=0.5, squint=0.7, eyes=1.0,
+                    blush=0.4, head_tilt=-3),
+    "crazed": dict(brow_tilt=-16, brow_lift=0.024, smile=1.0, wide=0.85, teeth=1.0, eyes=1.35, pupils=0.42,
+                   lid_slant=-0.2, head_tilt=10),
+    "furious": dict(brow_tilt=-32, brow_lift=-0.016, brow_squeeze=1.0, frown=0.5, wide=0.75, teeth=1.0,
+                    mouth_open=0.25, eyes=1.0, lid_slant=-1.0, lids=0.15, head_tilt=8),
+    "determined": dict(brow_tilt=-18, brow_lift=-0.006, brow_squeeze=0.7, wide=0.9, teeth=1.0, mouth_open=0.12,
+                       squint=0.7, lid_slant=-0.4, head_tilt=5),
+    "terrified": dict(brow_tilt=26, brow_lift=0.032, brow_squeeze=0.4, eyes=1.4, pupils=0.45, frown=0.4, wide=1.0,
+                      mouth_open=0.7, teeth=0.6, head_tilt=-4, sweat=0.6),
+    "screaming": dict(brow_tilt=22, brow_lift=0.026, eyes=1.15, pupils=0.7, squint=0.3, mouth_open=1.0, wide=0.5,
+                      o=0.2, teeth=0.6, head_tilt=-10),
+    "shocked": dict(brow_tilt=6, brow_lift=0.038, eyes=1.45, pupils=0.55, mouth_open=0.75, o=0.8, head_tilt=-8),
+    "disgusted": dict(brow_tilt=-12, brow_lift=-0.004, brow_squeeze=0.6, frown=0.5, smirk=-0.8, squint=0.8,
+                      teeth=0.3, head_tilt=-6),
+    "suspicious": dict(brow_tilt=-10, brow_lift=-0.004, lids=0.5, squint=0.3, smirk=0.25, eyes=0.95, head_tilt=4),
+    "crying": dict(brow_tilt=28, brow_lift=0.01, brow_squeeze=0.6, frown=1.0, wide=0.6, mouth_open=0.45,
+                   teeth=0.4, squint=0.8, lid_slant=0.8, tears=1.0, head_tilt=10),
+    "embarrassed": dict(brow_tilt=12, smile=0.45, wide=0.2, eyes=0.9, lids=0.25, blush=1.0, head_tilt=12),
+    "nervous": dict(brow_tilt=18, brow_lift=0.01, smile=0.35, wide=0.8, teeth=1.0, eyes=1.1, pupils=0.85,
+                    sweat=1.0, head_tilt=4),
+    "bored": dict(brow_lift=-0.004, lids=0.6, frown=0.15, eyes=1.0, head_tilt=6),
+    "loving": dict(brow_tilt=10, brow_lift=0.01, smile=0.8, squint=0.6, lids=0.3, blush=0.8, head_tilt=10),
+}
+for _n, _v in MOODS.items():
+    Mood.define(_n, **_v)
 
 
 # ---------------------------------------------------------------------- hair

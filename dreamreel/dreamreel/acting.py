@@ -60,6 +60,11 @@ MOOD_EFFORT = {
     "sad": (-0.7, -0.8, -0.5, 0.2), "angry": (0.9, 0.7, 0.8, 0.6), "surprised": (0.2, 0.9, 0.3, 0.4),
     "worried": (-0.4, 0.3, -0.6, 0.7), "scared": (-0.3, 0.9, -0.5, 0.9), "smug": (0.3, -0.4, 0.6, -0.3),
     "sleepy": (-0.8, -0.9, -0.6, -0.4),
+    "gleeful": (-0.1, 0.6, 0.0, -0.7), "crazed": (0.6, 0.8, 0.4, -0.9), "furious": (1.0, 0.9, 0.9, 0.8),
+    "determined": (0.7, 0.2, 0.9, 0.7), "terrified": (-0.5, 1.0, -0.8, 1.0), "screaming": (0.4, 1.0, -0.3, 0.6),
+    "shocked": (0.1, 1.0, 0.2, 0.9), "disgusted": (0.2, 0.3, 0.4, 0.6), "suspicious": (0.1, -0.5, 0.8, 0.5),
+    "crying": (-0.8, -0.4, -0.7, 0.3), "embarrassed": (-0.6, 0.2, -0.7, 0.6), "nervous": (-0.4, 0.5, -0.7, 0.8),
+    "bored": (-0.7, -0.8, -0.3, -0.6), "loving": (-0.6, -0.4, 0.0, -0.8),
 }
 
 
@@ -99,7 +104,7 @@ def effort_of(c, t, how=None):
     if how:
         return plugins.get("manner", how)().effort()
     mood = "neutral"
-    for tm, m in getattr(c, "_moods", []):
+    for tm, m, *_ in getattr(c, "_moods", []):
         if tm <= t + 1e-6:
             mood = m
     m = plugins.get("mood", mood)
