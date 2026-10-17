@@ -482,7 +482,7 @@ class Person(ClipActor):
     params = [
         Param("name", "text", label="Name"),
         Param("body", "choice", default="woman", choices=("woman", "man")),
-        Param("outfit", "text", default="casual", label="Outfit"),
+        Param("outfit", "outfit", default="casual", label="Outfit"),
         Param("height", "number", default=None, min=0.5, max=2.2, step=0.01, label="Height (m)"),
         Param("voice", "voice"),
     ]
@@ -533,7 +533,7 @@ class Animal(ClipActor):
     description = "An animal (Quaternius): dog, wolf, fox, horse, deer, cow... with its own walks and actions"
     params = [
         Param("name", "text", label="Name"),
-        Param("species", "text", required=True, label="Species"),
+        Param("species", "species", required=True, label="Species"),
         Param("size", "number", default=1.0, min=0.2, max=3.0, step=0.05),
         Param("voice", "voice"),
     ]

@@ -188,6 +188,75 @@ def rest_on(obj, at, height, depth=True):
     return loc.z * sz
 
 
+# ---------------------------------------------------------------------- pictures for menus
+THUMBS = os.path.join(CACHE, "thumbs")
+
+
+def thumbnails(force=False, size=256, progress=print):
+    """A small picture of every person and animal installed (for the studio's pickers):
+    thumbs/woman_casual.png, thumbs/man_suit.png, thumbs/animal_husky.png..."""
+    import math
+    import bpy
+    from mathutils import Vector
+    from .actors import outfits, species
+    from .models import import_file
+    jobs = [(f"{body}_{name}", path) for body in ("woman", "man") for name, path in sorted(outfits(body).items())]
+    jobs += [(f"animal_{name}", path) for name, path in sorted(species().items())]
+    os.makedirs(THUMBS, exist_ok=True)
+    made = 0
+    for key, path in jobs:
+        out = os.path.join(THUMBS, key + ".png")
+        if os.path.exists(out) and not force:
+            continue
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        objs = import_file(path, keep_actions=True)
+        arm = next((o for o in objs if o.type == "ARMATURE"), None)
+        if arm is not None:                 # stand in the idle pose, not the rest pose
+            idle = next((a for a in bpy.data.actions if a.name.split("|")[-1].split(".")[0] in ("Idle", "Idle_Loop")), None)
+            if idle is not None:
+                arm.animation_data_create().action = idle
+        scene = bpy.context.scene
+        scene.frame_set(1)
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        pts = [o.matrix_world @ Vector(c) for o in objs if o.type == "MESH" and len(o.data.vertices) > 30
+               for c in o.evaluated_get(dg).bound_box]
+        if not pts:
+            continue
+        lo = Vector([min(p[i] for p in pts) for i in range(3)])
+        hi = Vector([max(p[i] for p in pts) for i in range(3)])
+        mid, span = (lo + hi) / 2, max(hi - lo)
+        cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
+        scene.collection.objects.link(cam)
+        scene.camera = cam
+        cam.data.type = "ORTHO"
+        cam.data.ortho_scale = span * 1.1
+        d = Vector((math.sin(math.radians(25)), -math.cos(math.radians(25)), 0.15)).normalized()
+        cam.location = mid + d * span * 3
+        cam.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
+        sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
+        sun.data.energy = 3.5
+        sun.rotation_euler = (math.radians(50), 0, math.radians(30))
+        scene.collection.objects.link(sun)
+        scene.world = bpy.data.worlds.new("w")
+        scene.world.color = (0.55, 0.55, 0.58)
+        scene.render.engine = "BLENDER_EEVEE"
+        scene.eevee.taa_render_samples = 8
+        scene.render.film_transparent = True
+        scene.render.resolution_x = scene.render.resolution_y = size
+        scene.render.image_settings.file_format = "PNG"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.filepath = out
+        bpy.ops.render.render(write_still=True)
+        made += 1
+        progress(f"  {key}")
+    return made
+
+
+def thumb_names():
+    return sorted(os.path.splitext(f)[0] for f in os.listdir(THUMBS)) if os.path.isdir(THUMBS) else []
+
+
 # ---------------------------------------------------------------------- fetching
 def _opener():
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))

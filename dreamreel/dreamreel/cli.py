@@ -256,6 +256,14 @@ def cmd_info(a):
         "motions": [],
         "models": [],
     }
+    from . import actors, quaternius
+    have = quaternius.installed()
+    info["assets"] = {
+        "packs": {n: {"installed": n in have, "about": spec["about"]} for n, spec in quaternius.PACKS.items()},
+        "outfits": {b: sorted(actors.outfits(b)) for b in ("woman", "man")},
+        "species": sorted(actors.species()),
+        "thumbs": quaternius.thumb_names(),
+    }
     from . import motion as _motion
     info["motions"] = _motion.Library(p.root).names()
     from . import models as _models
@@ -277,6 +285,10 @@ def cmd_assets(a):
     from . import quaternius as q
     if a.download:
         q.download([a.pack] if a.pack else None)
+    if a.download or a.thumbs:
+        if {"women", "men", "animals"} & q.installed():
+            print("pictures of the people and animals:")
+            q.thumbnails(force=a.thumbs)
     have = q.installed()
     print(f"Quaternius packs (CC0, quaternius.com) in {q.CACHE}:")
     for name, spec in q.PACKS.items():
@@ -733,6 +745,7 @@ def main(argv=None):
     asp = sub.add_parser("assets", help="Quaternius's free 3D packs: people, animals and more")
     asp.add_argument("--download", action="store_true", help="fetch the packs (CC0) into the cache")
     asp.add_argument("--pack", help="just this pack (see the list)")
+    asp.add_argument("--thumbs", action="store_true", help="(re)make the pictures of people and animals for menus")
     asp.set_defaults(fn=cmd_assets)
     ge = sub.add_parser("generate", help="make a character or prop with dreamreel's modelling agent (any AI model)")
     ge.add_argument("name", help="what to call it (models/NAME.glb, cast/NAME.toml)")

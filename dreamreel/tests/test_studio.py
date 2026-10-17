@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import tomllib
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -101,6 +102,24 @@ def main():
             assert tomllib.load(f)["scenes"][-1] == "040_den_talk"
         assert call(base, "GET", "/files/film.toml")[0] == 403
         assert call(base, "POST", "/api/jobs", {"kind": "shell", "cmd": "rm -rf /"})[0] == 400
+
+        # the 3D packs: what's installed, the people's outfits and animals, pictures of them for the pickers
+        packs = info["assets"]["packs"]
+        assert {"men", "women", "animals", "interior", "nature", "city", "cars"} <= set(packs)
+        person = next(p for p in info["plugins"]["character"] if p["name"] == "person")
+        assert {q["name"]: q["type"] for q in person["params"]}["outfit"] == "outfit"
+        if packs["women"]["installed"]:
+            assert "casual" in info["assets"]["outfits"]["woman"]
+        for key in info["assets"]["thumbs"][:1]:
+            req = urllib.request.urlopen(base + f"/thumbs/{key}.png")
+            assert req.read(4) == b"\x89PNG"
+        for bad in ("../film.toml", "x.txt"):
+            try:
+                urllib.request.urlopen(base + "/thumbs/" + urllib.parse.quote(bad, safe=""))
+                raise AssertionError(bad)
+            except urllib.error.HTTPError as e:
+                assert e.code == 404
+        assert call(base, "POST", "/api/jobs", {"kind": "assets", "pack": "../../etc"})[0] == 400
 
         # a film with an [[edit]] list: the studio follows it and keeps it up to date
         with open(os.path.join(film, "film.toml"), "rb") as f:

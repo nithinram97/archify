@@ -54,7 +54,8 @@ class Param:
     type: "text", "number", "bool", "color", "choice" (fixed `choices`), "choices" (several of `choices`),
           or a reference resolved from the film: "mark", "seat", "character", "target" (character, mark or
           the camera), "mood", "gesture", "shot", "hair", "extra", "place", "voice", "prop", "surface",
-          "thing", "motion" (a clip in motions/), "model" (a file in models/).
+          "thing", "motion" (a clip in motions/), "model" (a file in models/), "outfit" (a person's
+          outfit, for their body), "species" (an animal installed).
     """
 
     def __init__(self, name, type="text", default=None, label=None, choices=None, required=False,

@@ -36,9 +36,9 @@ FLOORS = {"wood": "wood", "tiles": "cream", "carpet": "beige", "concrete": "#9a9
 # every kind of set has these
 COMMON = [
     Param("scale", "choice", default="toy", choices=("toy", "people"),
-          label="Furniture for (toy: small characters; people: life-size)"),
+          label="Sized for", help="toy: toy figures about 1 m tall; people: life-size people from the 3D packs"),
     Param("furniture", "choice", default="models", choices=("models", "simple"),
-          label="Furniture and plants (models: Quaternius's, when downloaded)"),
+          label="Furniture and plants", help="models: Quaternius's 3D models (when downloaded); simple: plain shapes"),
 ]
 
 

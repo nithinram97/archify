@@ -343,6 +343,16 @@ function paramField(p, value, onChange, ctx = {}) {
     case "seat": el = select(setInfo.seats.map((m) => [m, "🪑 " + m]), value, onChange, opt("—")); break;
     case "model": el = select((info().models || []).map((m) => [m, "🧍 " + m.replace(/^models\//, "")]), value ?? "", onChange,
       { label: p.label, blank: (info().models || []).length ? "—" : "(put .glb/.fbx/.obj files in models/)" }); break;
+    case "outfit": {
+      const body = (ctx.spec && ctx.spec.body) || "woman";
+      el = pictureGrid(((assets().outfits || {})[body] || []).map((o) => [o, pretty(o), `${body}_${o}`]), value ?? p.default,
+        onChange, "Download the people pack (Toolbox → 3D packs) to dress them");
+      break;
+    }
+    case "species":
+      el = pictureGrid((assets().species || []).map((s) => [s, pretty(s), `animal_${s}`]), value, onChange,
+        "Download the animals pack (Toolbox → 3D packs) to choose one");
+      break;
     case "motion": el = select((info().motions || []).map((m) => [m, "🎞 " + m]), value ?? "", onChange,
       { label: p.label, blank: (info().motions || []).length ? "—" : "(add clips to motions/)" }); break;
     case "surface": el = select((setInfo.surfaces || []).map((m) => [m, m]), value ?? "", onChange, opt("(the floor)")); break;
@@ -365,6 +375,24 @@ function paramField(p, value, onChange, ctx = {}) {
   return el;
 }
 
+const assets = () => info().assets || {};
+const thumbUrl = (key) => (assets().thumbs || []).includes(key) ? `/thumbs/${key}.png` : null;
+
+// pick one of several things by its picture (outfits, animals)
+function pictureGrid(options, value, onChange, empty) {
+  if (!options.length) return h("div", { class: "muted small" }, empty);
+  const grid = h("div", { class: "pick-grid" });
+  const draw = (v) => grid.replaceChildren(...options.map(([val, label, key]) => {
+    const src = thumbUrl(key);
+    return h("button", { type: "button", class: "pick" + (val === v ? " on" : ""), title: label,
+      onclick: () => { onChange(val); draw(val); } },
+      src ? h("img", { src, alt: "", loading: "lazy" }) : h("div", { class: "avatar sm" }, label.slice(0, 1).toUpperCase()),
+      h("span", {}, label));
+  }));
+  draw(value);
+  return grid;
+}
+
 function voiceField(value, onChange, ctx) {
   const cat = catalog();
   const inp = h("input", { type: "text", list: "voices", value: value || "", placeholder: cat.voices[0], oninput: (e) => onChange(e.target.value) });
@@ -377,12 +405,13 @@ function voiceField(value, onChange, ctx) {
 
 // lay out a plugin's settings: small controls in a grid, wide ones (colours, chips) on their own rows
 function paramForm(params, values, onChange, ctx = {}, skip = []) {
-  const wide = new Set(["color", "skin", "extras", "items", "choices", "voice"]);
+  const wide = new Set(["color", "skin", "extras", "items", "choices", "voice", "outfit", "species"]);
   const small = [], big = [];
   for (const p of params) {
     if (skip.includes(p.name)) continue;
     const field = paramField(p, values[p.name], (v, quiet) => onChange(p.name, v, quiet), ctx);
-    const box = p.type === "bool" ? h("label", { class: "field row" }, field, p.label) : h(wide.has(p.type) ? "div" : "label", { class: "field" }, h("span", {}, p.label), field);
+    const box = p.type === "bool" ? h("label", { class: "field row", title: p.help || null }, field, p.label)
+      : h(wide.has(p.type) ? "div" : "label", { class: "field", title: p.help || null }, h("span", {}, p.label), field);
     (wide.has(p.type) ? big : small).push(box);
   }
   return h("div", { class: "stack" }, small.length ? h("div", { class: "fields" }, small) : null, big);
@@ -395,8 +424,9 @@ function castView() {
   if (S.castSel && !cast[S.castSel] && !S.castDraft[S.castSel]) S.castSel = null;
   return h("div", {},
     h("div", { class: "page-head" },
-      h("div", {}, h("h1", {}, "Cast"), h("p", {}, "Who's in your film. Pick a look; toy figures are drawn live as you go.")),
+      h("div", {}, h("h1", {}, "Cast"), h("p", {}, "Who's in your film: people and animals from the 3D packs, toy figures, creatures, or your own models.")),
       keys.length ? h("button", { class: "btn", onclick: () => job({ kind: "cast" }, () => toast("Cast photo ready in the Screening room")) }, "📸 Cast photo") : null),
+    packsCard({ compact: true }),
     h("div", { class: "cast-grid" },
       keys.map((k) => {
         const spec = S.castDraft[k] || cast[k];
@@ -409,11 +439,20 @@ function castView() {
     S.castSel ? castEditor(S.castSel) : null);
 }
 
-function characterPicture(key, spec) {
+// a picture straight from the asset packs, for people and animals (no rendering needed)
+function packPicture(spec) {
+  if (spec.type === "person") return thumbUrl(`${spec.body || "woman"}_${String(spec.outfit || "casual").toLowerCase()}`);
+  if (spec.type === "animal" && spec.species) return thumbUrl(`animal_${String(spec.species).toLowerCase()}`);
+  return null;
+}
+
+function characterPicture(key, spec, { live = false } = {}) {
   const t = plugOf("character", spec.type || "toy") || {};
   if (t.drawing === "toy") return h("div", { html: figureSVG(spec, colors()) });
+  const thumb = packPicture(spec);
+  if (thumb) return h("img", { src: thumb, alt: spec.name || key, class: "thumb-fig" });
   const r = renderOf(`renders/stills/cast_${key}.png`);
-  if (r) return h("img", { src: fileUrl(r.path, r.mtime), alt: spec.name || key, style: "object-fit:cover;border-radius:10px" });
+  if (r && !live) return h("img", { src: fileUrl(r.path, r.mtime), alt: spec.name || key, style: "object-fit:cover;border-radius:10px" });
   return h("div", { class: "avatar" }, (spec.name || key).slice(0, 1).toUpperCase());
 }
 
@@ -422,7 +461,9 @@ function newCharacter() {
   if (!name) return;
   const key = slug(name).replace(/-/g, "_") || "character";
   if (S.state.cast[key]) { toast("There's already a character called " + key); return; }
-  S.castDraft[key] = { name: name.trim(), skin: "skin2", hair: "short", hair_color: "brown", top: "teal", bottom: "navy" };
+  const people = ((assets().outfits || {}).woman || []).length;
+  S.castDraft[key] = people ? { name: name.trim(), type: "person", body: "woman", outfit: "casual" }   // Quaternius people
+    : { name: name.trim(), skin: "skin2", hair: "short", hair_color: "brown", top: "teal", bottom: "navy" };
   S.castSel = key;
   saveCharacter(key).then(render);
 }
@@ -433,25 +474,30 @@ async function saveCharacter(key) {
   delete S.castDraft[key];
   await refresh();
   toast(`Saved ${spec.name || key}`);
+  const t = plugOf("character", spec.type || "toy") || {};
+  if (t.drawing !== "toy" && !packPicture(spec)) {      // creatures, robots, your own models: show the real thing
+    job({ kind: "cast", names: [key] }, () => render());
+  }
 }
 
 function castEditor(key) {
   const spec = S.castDraft[key] || (S.castDraft[key] = clone(S.state.cast[key]));
   const types = plug("character");
   const tdef = plugOf("character", spec.type || "toy") || types[0];
-  const live = tdef && tdef.drawing === "toy";
-  const figBox = h("div", {}, characterPicture(key, spec));
+  const live = (tdef && tdef.drawing === "toy") || ["person", "animal"].includes(spec.type);
+  const figBox = h("div", {}, characterPicture(key, spec, { live }));
   const redraw = () => {
     if (!live) return;
-    figBox.replaceChildren(characterPicture(key, spec));
+    figBox.replaceChildren(characterPicture(key, spec, { live }));
     const card = $(".cast-card.on .fig");
     if (card) card.replaceChildren(characterPicture(key, spec));
   };
   const portrait = renderOf(`renders/stills/cast_${key}.png`);
-  const form = paramForm(tdef ? tdef.params : [], spec, (k, v) => {
+  const form = paramForm(tdef ? tdef.params : [], spec, (k, v, quiet) => {
     if (v === undefined) delete spec[k]; else spec[k] = v;
+    if (k === "body" && !quiet) { delete spec.outfit; render(); return; }    // outfits differ for women and men
     redraw();
-  }, { name: spec.name || key });
+  }, { name: spec.name || key, spec });
   return h("div", { class: "card", style: "margin-top:16px" },
     h("div", { class: "card-head" },
       h("h2", {}, spec.name || key),
@@ -467,7 +513,8 @@ function castEditor(key) {
       h("div", { class: "figure-big" }, live ? figBox : null,
         portrait && (live || true) ? h("img", { src: fileUrl(portrait.path, portrait.mtime), alt: "Rendered portrait",
           onclick: () => lightbox(fileUrl(portrait.path, portrait.mtime)) }) : (!live ? figBox : null),
-        h("span", { class: "muted small" }, live ? (portrait ? "Drawing (live) and last render" : "Live drawing. Render a portrait to see the real thing.")
+        h("span", { class: "muted small" }, ["person", "animal"].includes(spec.type) ? "From the 3D pack (Quaternius, free). Render a portrait to see them in your film's look."
+          : live ? (portrait ? "Drawing (live) and last render" : "Live drawing. Render a portrait to see the real thing.")
           : "Render a portrait to see this character.")),
       h("div", { class: "stack" },
         types.length > 1 ? h("label", { class: "field" }, h("span", {}, "Kind of character"),
@@ -938,6 +985,35 @@ const KIND_TITLES = [
   ["voice", "Voice engines"],
 ];
 
+// Quaternius's free (CC0) packs: what's downloaded, and pictures of the people and animals
+function packsCard({ compact = false } = {}) {
+  const packs = assets().packs || {};
+  const names = Object.keys(packs);
+  if (!names.length) return null;
+  const missing = names.filter((n) => !packs[n].installed);
+  const after = () => job({ kind: "thumbs" }, async () => { await api("GET", "/api/info").catch(fail); await refresh(); });
+  const get = (pack) => job({ kind: "assets", pack }, async () => { toast(`Downloaded ${pack || "the 3D packs"}`); after(); });
+  if (compact) {
+    if (packs.women && packs.women.installed && packs.men && packs.men.installed) return null;
+    return h("div", { class: "banner ok", style: "margin-bottom:14px" },
+      h("div", {}, h("strong", {}, "Real people and animals: "), "download Quaternius's free 3D packs (women and men in many outfits, ",
+        "dogs, horses, deer...) and cast them here, walking and acting with their own animation."),
+      h("button", { class: "btn primary", onclick: () => ["women", "men", "animals"].forEach(get) }, "⬇ Get people and animals"));
+  }
+  const thumbs = assets().thumbs || [];
+  return h("div", { class: "card" },
+    h("div", { class: "card-head" },
+      h("h3", {}, "3D packs ", h("span", { class: "muted small" }, "(Quaternius, free CC0: downloaded to your computer, not into the film)")),
+      missing.length ? h("button", { class: "btn primary", onclick: () => get(null) }, `⬇ Download all (${missing.length})`) : null),
+    h("div", { class: "toolbox" }, names.map((n) => h("div", { class: "tool-item" },
+      h("div", { class: "ti-name" }, pretty(n), " ", packs[n].installed ? h("span", { class: "ok-tag" }, "✓ ready")
+        : h("button", { class: "btn sm", onclick: () => get(n) }, "⬇ Get")),
+      h("div", { class: "small muted" }, packs[n].about)))),
+    thumbs.length ? h("div", { class: "pick-grid gallery", style: "margin-top:12px" },
+      thumbs.map((t) => h("div", { class: "pick", title: pretty(t) }, h("img", { src: `/thumbs/${t}.png`, alt: "", loading: "lazy" }),
+        h("span", {}, pretty(t.replace(/^animal_/, "")))))) : null);
+}
+
 function toolboxView() {
   const all = info().plugins || {};
   const custom = Object.values(all).flat().filter((p) => p.source !== "built-in").length;
@@ -945,6 +1021,7 @@ function toolboxView() {
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "Toolbox"), h("p", {}, "Everything your film can use. Items marked ✦ were added for this film.")),
       h("button", { class: "btn", onclick: async () => { await api("GET", "/api/info").catch(fail); await refresh(); toast("Toolbox reloaded"); } }, "↻ Reload")),
+    packsCard(),
     h("div", { class: "banner ok", style: "margin-bottom:14px" },
       h("div", {}, h("strong", {}, "Need something that isn't here?"), " Ask your AI agent for it (a new prop, gesture, kind of character, camera shot...). ",
         "It adds it to this film's ", h("code", {}, "extensions"), " folder and it appears in these menus. ",

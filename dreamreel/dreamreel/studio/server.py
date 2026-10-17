@@ -400,6 +400,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(os.path.join(STATIC, "index.html"))
             if method == "GET" and parts[0] == "static" and len(parts) == 2:
                 return self._file(os.path.join(STATIC, os.path.basename(parts[1])))
+            if method == "GET" and parts[0] == "thumbs" and len(parts) == 2:     # pictures of people and animals
+                from .. import quaternius
+                name = os.path.basename(parts[1])
+                if not re.match(r"^[a-z0-9_]+\.png$", name):
+                    return self._error("not found", 404)
+                return self._file(os.path.join(quaternius.THUMBS, name), cache=True)
             if method == "GET" and parts[0] == "files":
                 if st.root is None:
                     return self._error("no film open", 404)
@@ -582,6 +588,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error("bad set")
             args = ["plan", name] + (["--view"] if kind == "view" else [])
             label, quick = f"{'Map' if kind == 'plan' else 'View'} of {name}", False
+        elif kind == "assets":
+            pack = b.get("pack")
+            from .. import quaternius
+            if pack is not None and pack not in quaternius.PACKS:
+                return self._error("unknown pack")
+            args = ["assets", "--download"] + (["--pack", pack] if pack else [])
+            label, quick = f"Download {pack or 'all the 3D packs'}", False
+        elif kind == "thumbs":
+            args, label, quick = ["assets", "--thumbs"], "Pictures of people and animals", False
         elif kind == "voice":
             voice = b.get("voice", "")
             if not re.match(r"^[A-Za-z0-9_.-]{3,80}$", voice):
