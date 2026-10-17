@@ -89,6 +89,149 @@ for _name in ("punch", "kick", "dance", "roll", "interact", "eat", "attack", "di
         "description": f"{_name.replace('_', ' ').capitalize()} (people and animals with that animation)"})
 
 
+class Poser:
+    """Poses made on an actor's own rig, for what its clips don't have (sitting, acting gestures).
+    Positions and directions are in the actor's space: metres, z up, facing -y, its left at +x."""
+
+    def __init__(self, actor):
+        self.actor, self.arm = actor, actor.rig
+        self.pb = self.arm.pose.bones
+        self.idle = actor.clip_names.get("idle")
+        self.rest()
+        m, o = Matrix(), self.arm         # the rig in the actor's space: fixed, whatever the root is doing
+        while o is not None and o is not actor.root:
+            m = o.matrix_parent_inverse @ o.matrix_basis @ m
+            o = o.parent
+        self.from_arm = m
+        self.to_arm = m.inverted()
+        self.H = actor.H
+
+    def rest(self):
+        """Back to the idle pose (its first frame)."""
+        ad = self.arm.animation_data
+        ad.action = self.idle
+        for b in self.pb:
+            b.matrix_basis = Matrix()
+        bpy.context.scene.frame_set(int(self.idle.frame_range[0]) if self.idle else 1)
+        bpy.context.view_layer.update()
+
+    def head(self, b):
+        return self.from_arm @ self.pb[b].head
+
+    def tail(self, b):
+        return self.from_arm @ self.pb[b].tail
+
+    def length(self, b):
+        return (self.tail(b) - self.head(b)).length
+
+    def aim(self, b, direction, new_head=None):
+        """Turn a bone (with its children) to point along a direction, its head at new_head."""
+        pb = self.pb[b]
+        rest = pb.matrix.copy()
+        cur = (self.tail(b) - self.head(b)).normalized()
+        q = cur.rotation_difference(Vector(direction).normalized())
+        rot = (self.to_arm.to_quaternion() @ q @ self.from_arm.to_quaternion()).to_matrix().to_4x4()
+        m = rot @ Matrix.Translation(-rest.translation) @ rest
+        m.translation = self.to_arm @ (new_head if new_head is not None else self.head(b))
+        pb.matrix = m
+        bpy.context.view_layer.update()
+
+    def reach(self, side, target, pole):
+        """Put a hand at target (the wrist there), the elbow bending towards pole."""
+        up, low, wrist = f"UpperArm.{side}", f"LowerArm.{side}", f"Wrist.{side}"
+        S, T = self.head(up), Vector(target)
+        l1, l2 = self.length(up), self.length(low)
+        d = max(1e-4, min((T - S).length, (l1 + l2) * 0.999))
+        to = (T - S).normalized()
+        a = (l1 * l1 - l2 * l2 + d * d) / (2 * d)
+        h = math.sqrt(max(0.0, l1 * l1 - a * a))
+        p = Vector(pole)
+        p = (p - to * p.dot(to))
+        p = p.normalized() if p.length > 1e-6 else Vector((0, 0, -1))
+        elbow = S + to * a + p * h
+        self.aim(up, elbow - S)
+        self.aim(low, S + to * d - elbow)
+        self.aim(wrist, S + to * d - elbow)
+
+    def keyed(self, act, frame, bones, location=False):
+        ad = self.arm.animation_data
+        ad.action = act
+        for b in bones:
+            self.pb[b].keyframe_insert("rotation_quaternion", frame=frame)
+            if location:
+                self.pb[b].keyframe_insert("location", frame=frame)
+        ad.action = self.idle
+
+
+def _arm_bones(side):
+    return [f"UpperArm.{side}", f"LowerArm.{side}", f"Wrist.{side}"]
+
+
+def _cheer(P, k):
+    for s, sd in ((1, "L"), (-1, "R")):
+        sh = P.head(f"UpperArm.{sd}")
+        P.reach(sd, sh + Vector((s * 0.1, -0.05, 0.34 - 0.05 * k)) * P.H, (s, 0, 0))
+
+
+def _shrug(P, k):
+    for s, sd in ((1, "L"), (-1, "R")):
+        sh = P.head(f"UpperArm.{sd}")
+        P.reach(sd, sh + Vector((s * 0.2, -0.13, -0.19)) * P.H, (s * 0.3, 0.3, -1))
+
+
+def _facepalm(P, k):
+    face = P.head("Head") + Vector((-0.015, -0.11, 0.0)) * P.H
+    P.reach("R", face, (-1, 0, -1))
+
+
+def _think(P, k):
+    chin = P.head("Head") + Vector((-0.005, -0.09, -0.045)) * P.H
+    P.reach("R", chin, (-1, 0, -1))
+
+
+def _point(P, k):
+    sh = P.head("UpperArm.R")
+    P.reach("R", sh + Vector((-0.1, -0.34, 0.03)) * P.H, (-1, 0, -1))
+
+
+def _clap(P, k):
+    chest = P.head("Chest") if "Chest" in P.pb else P.head("UpperArm.L").lerp(P.head("UpperArm.R"), 0.5)
+    for s, sd in ((1, "L"), (-1, "R")):
+        P.reach(sd, chest + Vector((s * (0.06 if k else 0.012), -0.2, -0.02)) * P.H, (s, 0, -1))
+
+
+def _bow(P, k):
+    for b, d in (("Abdomen", (0, -0.45, 1)), ("Torso", (0, -0.9, 1))):
+        if b in P.pb:
+            P.aim(b, d)
+
+
+def _tail_bones(names):
+    return sorted((n for n in names if n.startswith("Tail") and n[4:].isdigit()), key=lambda n: int(n[4:]))
+
+
+def _tail_wag(P, k):
+    side = 1 if k else -1
+    for i, b in enumerate(_tail_bones(P.pb.keys())):
+        d = P.tail(b) - P.head(b)
+        P.aim(b, Matrix.Rotation(math.radians(side * (14 + 6 * i)), 3, "Z") @ d)
+
+
+# gesture: (bones it moves, [(frame, pose, variant)]); the actor's other bones carry on underneath
+GESTURE_POSES = {
+    "tail_wag": (_tail_bones, [(5, _tail_wag, 0), (10, _tail_wag, 1), (15, _tail_wag, 0), (20, _tail_wag, 1),
+                               (25, _tail_wag, 0), (30, _tail_wag, 1)]),
+    "cheer": (_arm_bones("L") + _arm_bones("R"), [(8, _cheer, 0), (13, _cheer, 1), (18, _cheer, 0), (24, _cheer, 1)]),
+    "shrug": (_arm_bones("L") + _arm_bones("R"), [(7, _shrug, 0), (22, _shrug, 0)]),
+    "facepalm": (_arm_bones("R"), [(10, _facepalm, 0), (34, _facepalm, 0)]),
+    "think": (_arm_bones("R"), [(10, _think, 0), (40, _think, 0)]),
+    "point": (_arm_bones("R"), [(8, _point, 0), (28, _point, 0)]),
+    "clap": (_arm_bones("L") + _arm_bones("R"),
+             [(6, _clap, 1), (10, _clap, 0), (14, _clap, 1), (18, _clap, 0), (22, _clap, 1), (26, _clap, 0)]),
+    "bow": (["Abdomen", "Torso"], [(10, _bow, 0), (24, _bow, 0)]),
+}
+
+
 class ClipActor(Character):
     """A rigged model that acts with its own clips (see the module docs)."""
     abstract = True
@@ -105,7 +248,16 @@ class ClipActor(Character):
         caps = {"walk", "head"} | set(getattr(self, "clip_names", {}))
         if getattr(self, "hands", None):
             caps.add("hands")
+        if self._posable():
+            caps.add("arms")
+        if getattr(self, "rig", None) is not None and "idle" in self.clip_names and _tail_bones(self.rig.data.bones.keys()):
+            caps.add("tail")
         return caps
+
+    def _posable(self):
+        rig = getattr(self, "rig", None)
+        return rig is not None and "idle" in getattr(self, "clip_names", {}) and all(
+            b in rig.data.bones for b in _arm_bones("L") + _arm_bones("R") + ["Head"])
 
     # ------------------------------------------------------------------ build
     def build(self):
@@ -158,8 +310,23 @@ class ClipActor(Character):
         self.hr = self.head_r = max(0.05, (self.H - hp.z) * 0.6) if self.H - hp.z > 0.05 else self.H * 0.08
         self.hc = self.head_center = Vector((0, 0, self.hr * 0.6))
         if head:
+            # The neck pivot turns in the actor's axes (z up, facing -y); the head bone has its own. Three
+            # helpers re-express the turn in the bone's axes (rest^-1 · turn · rest), which the bone then
+            # applies on top of whatever its clip is doing.
+            m, o = Matrix(), arm
+            while o is not None and o is not self.root:
+                m = o.matrix_parent_inverse @ o.matrix_basis @ m
+                o = o.parent
+            rest = (m @ head.matrix_local).to_quaternion()
+            axes = shapes.empty(f"{n}.head.axes")
+            axes.rotation_mode, axes.rotation_quaternion = "QUATERNION", rest.inverted()
+            turn = shapes.empty(f"{n}.head.turn", axes)
+            ct = turn.constraints.new("COPY_ROTATION")
+            ct.target, ct.owner_space, ct.target_space = self.neck, "LOCAL", "LOCAL"
+            back = shapes.empty(f"{n}.head.back", turn)
+            back.rotation_mode, back.rotation_quaternion = "QUATERNION", rest
             c = arm.pose.bones[head.name].constraints.new("COPY_ROTATION")
-            c.target, c.mix_mode, c.owner_space, c.target_space = self.neck, "ADD", "LOCAL", "LOCAL"
+            c.target, c.mix_mode, c.owner_space, c.target_space = back, "BEFORE", "LOCAL", "WORLD"
         self.mouth = shapes.empty(f"{n}.mouth", self.neck)       # talking keys it; nothing to show
         self.arms, self.legs, self.eyes, self.brows, self.holding = {}, {}, [], {}, {}
         self.hands = {}
@@ -173,6 +340,7 @@ class ClipActor(Character):
         arm.animation_data_create()
         arm.animation_data.action = None
         self.segments = []
+        self.overlays = []          # (start, action): gestures layered over what the body is doing
         feet = [f for f in self.foot_names if f in arm.data.bones][:2]
         self.gait = {g: _cycle(arm, self.clip_names[g], feet) for g in GAITS if g in self.clip_names}
 
@@ -197,7 +365,35 @@ class ClipActor(Character):
             end = self.play(gesture, t)
             self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
             return self._end(end, wait)
+        if gesture in GESTURE_POSES and ("tail" if gesture == "tail_wag" else "arms") in self.capabilities:
+            act = self._gesture_clip(gesture)
+            t = self._start(at)
+            end = t + (act.frame_range[1] + 8) / keys.CLOCK.fps
+            self.overlays.append((t, act))
+            self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
+            return self._end(end, wait)
         return super().do(gesture, target=target, at=at, wait=wait, how=how)
+
+    def _gesture_clip(self, gesture):
+        """An acting gesture as a short clip of only the bones it moves, posed on this rig."""
+        name = f"{self.name}.{gesture}"
+        if name in bpy.data.actions:
+            return bpy.data.actions[name]
+        bones, frames = GESTURE_POSES[gesture]
+        bones = bones(self.rig.pose.bones.keys()) if callable(bones) else bones
+        bones = [b for b in bones if b in self.rig.pose.bones]
+        P = Poser(self)
+        act = bpy.data.actions.new(name)
+        act.use_fake_user = True
+        P.keyed(act, 1, bones)                  # starts from the idle pose
+        for frame, pose, variant in frames:
+            P.rest()
+            pose(P, variant)
+            P.keyed(act, frame, bones)
+        P.rest()
+        P.keyed(act, frames[-1][0] + 8, bones)  # and settles back
+        self.rig.animation_data.action = None
+        return act
 
     def animate_steps(self, path, n_steps, step_t, run):
         gait = "run" if run and "run" in self.clip_names else "walk"
@@ -247,6 +443,12 @@ class ClipActor(Character):
             last = hold_end or i == len(filled) - 1
             strip.extrapolation = "HOLD_FORWARD" if last else "NOTHING"
             strip.use_auto_blend = False
+        for j, (t0, act) in enumerate(sorted(self.overlays, key=lambda o: o[0])):
+            track = ad.nla_tracks.new()                 # on top: only the bones the gesture moves
+            strip = track.strips.new(f"{_base(act.name)}.g{j}", int(keys.CLOCK.frame(t0)), act)
+            strip.blend_in, strip.blend_out = 4.0, 6.0
+            strip.extrapolation = "NOTHING"
+            strip.use_auto_blend = False
 
     # ------------------------------------------------------------------ sitting
     def _sit_clip(self, height):
@@ -255,67 +457,40 @@ class ClipActor(Character):
         name = f"{self.name}.sit.{height:.2f}"
         if name in bpy.data.actions:
             return bpy.data.actions[name]
-        arm = self.rig
-        bones = arm.data.bones
+        bones = self.rig.data.bones
         legs = {sd: (f"UpperLeg.{sd}", f"LowerLeg.{sd}", f"Foot.{sd}") for sd in "LR"}
         if "Body" not in bones or not all(b in bones for chain in legs.values() for b in chain):
             return None
-        ad = arm.animation_data
-        ad.action = self.clip_names.get("idle")
-        scene = bpy.context.scene
-        scene.frame_set(int(ad.action.frame_range[0]) if ad.action else 1)
-        bpy.context.view_layer.update()
-        # actor space (the root's): metres, z up, facing -y
-        to_arm = (self.root.matrix_world.inverted() @ arm.matrix_world).inverted()
-        from_arm = to_arm.inverted()
-        pb = arm.pose.bones
-
-        def head(b):
-            return from_arm @ pb[b].head
-
-        def tail(b):
-            return from_arm @ pb[b].tail
-
-        def aim(b, new_head, direction):
-            rest = pb[b].matrix.copy()
-            cur = (tail(b) - head(b)).normalized()
-            q = cur.rotation_difference(direction.normalized())
-            rot = (to_arm.to_quaternion() @ q @ from_arm.to_quaternion()).to_matrix().to_4x4()
-            m = rot @ Matrix.Translation(-rest.translation) @ rest
-            m.translation = to_arm @ new_head
-            pb[b].matrix = m
-            bpy.context.view_layer.update()
-
-        hip = head(legs["L"][0])
+        P = Poser(self)
+        pb, to_arm = P.pb, P.to_arm
+        hip = P.head(legs["L"][0])
         drop = Vector((0, 0.04 * self.H, height + 0.03 * self.H - hip.z))
+        self._sit_drop = getattr(self, "_sit_drop", {})
+        self._sit_drop[name] = drop.z               # how much lower the head is, seated
         body = pb["Body"].matrix.copy()
-        body.translation = to_arm @ (head("Body") + drop)
+        body.translation = to_arm @ (P.head("Body") + drop)
         pb["Body"].matrix = body
         bpy.context.view_layer.update()
-        floor = min(head(chain[2]).z for chain in legs.values())
+        floor = min(P.head(chain[2]).z for chain in legs.values())
         for sd, (up, low, foot) in legs.items():
-            thigh = (tail(up) - head(up)).length
-            shin = (tail(low) - head(low)).length
-            aim(up, head(up), Vector((0, -1, -0.08)))
-            knee = tail(up)
+            shin = P.length(low)
+            P.aim(up, (0, -1, -0.08))
+            knee = P.tail(up)
             fall = knee.z - floor
             reach = math.sqrt(max(0.0, shin * shin - fall * fall)) if shin > fall else 0.0
             ankle = Vector((knee.x, knee.y - reach * 0.35, max(floor, knee.z - shin)))
-            aim(low, knee, ankle - knee)
+            P.aim(low, ankle - knee, knee)
             fm = pb[foot].matrix.copy()
-            fm.translation = to_arm @ tail(low)
+            fm.translation = to_arm @ P.tail(low)
             pb[foot].matrix = fm
             bpy.context.view_layer.update()
         act = bpy.data.actions.new(name)
         act.use_fake_user = True
-        ad.action = act
-        for b in pb:
-            for f in (1, 25):
-                b.keyframe_insert("location", frame=f)
-                b.keyframe_insert("rotation_quaternion", frame=f)
-        ad.action = None
-        for b in pb:
-            b.matrix_basis = Matrix()
+        names = [b.name for b in pb]
+        P.keyed(act, 1, names, location=True)
+        P.keyed(act, 25, names, location=True)
+        P.rest()
+        self.rig.animation_data.action = None
         return act
 
     def sit(self, on, at=None, wait=True, already=False):
@@ -327,6 +502,8 @@ class ClipActor(Character):
             t = (0.0 if at is None else at) if already else self.busy - 0.45
             self.play(act, t, until=math.inf, blend=0.0 if already else 0.4)
             self._seated = len(self.segments) - 1
+            self._seated_spans = getattr(self, "_seated_spans", []) + [
+                [t, math.inf, getattr(self, "_sit_drop", {}).get(act.name, 0.0)]]
         return self
 
     def stand(self, at=None, wait=True):
@@ -338,6 +515,8 @@ class ClipActor(Character):
             t0, _, act, rate, hold_end, blend = self.segments[i]
             t = self.busy - 0.45
             self.segments[i] = (t0, t, act, rate, hold_end, blend)
+            if getattr(self, "_seated_spans", None):
+                self._seated_spans[-1][1] = t
             self.play("idle", t, until=t + 0.5, blend=0.35)
             self._seated = None
         return self
@@ -448,7 +627,11 @@ class ClipActor(Character):
     def head_point(self, t):
         loc = Vector(value_at(self.root, "location", t))
         h = value_at(self.root, "rotation_euler", t)[2]
-        return loc + Matrix.Rotation(h, 3, "Z") @ (self.head_offset + Vector((0, 0, self.hr * 0.4)))
+        p = loc + Matrix.Rotation(h, 3, "Z") @ (self.head_offset + Vector((0, 0, self.hr * 0.4)))
+        for t0, t1, dz in getattr(self, "_seated_spans", []):     # lower while sitting (the clips don't say)
+            if t0 <= t <= t1:
+                p.z += dz * min(1.0, (t - t0) / 0.4 + (1.0 if t0 <= 0.0 else 0.0))
+        return p
 
     def height(self):
         return self.H
@@ -486,6 +669,25 @@ class Person(ClipActor):
         Param("height", "number", default=None, min=0.5, max=2.2, step=0.01, label="Height (m)"),
         Param("voice", "voice"),
     ]
+
+    # until the packs are downloaded, a toy figure stands in, dressed in the outfit's colours
+    TOY_OUTFITS = {"casual": ("cream", "denim"), "hoodie": ("purple", "navy"), "formal": ("green", "green"),
+                   "suit": ("charcoal", "charcoal"), "worker": ("orange", "denim"), "witch": ("purple", "purple"),
+                   "punk": ("black", "denim"), "farmer": ("denim", "denim"), "king": ("navy", "brown")}
+
+    @classmethod
+    def stand_in(cls, spec):
+        """(type, spec) of a toy figure to use while the people packs aren't downloaded; None if they are."""
+        body = spec.get("body", "woman")
+        if outfits(body):
+            return None
+        top, bottom = cls.TOY_OUTFITS.get(str(spec.get("outfit", "casual")).lower(), ("teal", "navy"))
+        toy = {k: spec[k] for k in ("name", "voice") if k in spec}
+        toy.update(type="toy", top=top, bottom=bottom, hair="long" if body == "woman" else "short",
+                   height=float(spec.get("height") or (1.68 if body == "woman" else 1.8)))
+        if str(spec.get("outfit", "")).lower() == "formal":
+            toy["outfit"] = "dress"
+        return "toy", toy
 
     def validate(self):
         body, outfit = self.get("body", "woman"), str(self.get("outfit", "casual")).lower()
@@ -537,6 +739,21 @@ class Animal(ClipActor):
         Param("size", "number", default=1.0, min=0.2, max=3.0, step=0.05),
         Param("voice", "voice"),
     ]
+
+    ANIMAL_COLORS = {"husky": "grey", "wolf": "grey", "fox": "orange", "shiba_inu": "#c98b4f", "deer": "#a5684a",
+                     "stag": "#a5684a", "horse": "brown", "cow": "brown", "bull": "black", "donkey": "grey",
+                     "alpaca": "#c9a27a"}
+
+    @classmethod
+    def stand_in(cls, spec):
+        """(type, spec) of a creature to use while the animals pack isn't downloaded; None if it is."""
+        if species():
+            return None
+        sp = str(spec.get("species") or "").lower()
+        out = {k: spec[k] for k in ("name", "voice") if k in spec}
+        out.update(type="creature", body="quadruped", color=cls.ANIMAL_COLORS.get(sp, "brown"),
+                   size=ANIMAL_HEIGHTS.get(sp, 1.0) * float(spec.get("size", 1.0) or 1.0))
+        return "creature", out
 
     def validate(self):
         sp = str(self.spec.get("species") or "").lower()

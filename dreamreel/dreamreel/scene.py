@@ -121,6 +121,13 @@ class Scene:
         spec = dict(spec)
         display = spec.pop("name", key_name.capitalize())
         cls = plugins.get("character", spec.pop("type", "toy"))
+        sub = cls.stand_in(dict(spec, name=display)) if hasattr(cls, "stand_in") else None
+        if sub:                         # its 3D pack isn't downloaded: something close stands in
+            print(f"[dreamreel] {display}: {cls.label.lower()} models aren't downloaded, so a stand-in plays them "
+                  f"(get the real thing with `dreamreel assets --download`)")
+            kind, spec = sub
+            spec.pop("name", None)
+            cls = plugins.get("character", kind)
         c = cls(display, scene=self, **spec)
         c.key = key_name
         self.actors[key_name] = c

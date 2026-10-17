@@ -1,12 +1,8 @@
-# How Mia looks and sounds. Every field is optional.
+# How Mia looks and sounds: a person from Quaternius's free 3D packs (`dreamreel assets --download`).
+# Until the packs are downloaded, a toy figure in the same colours stands in.
+type = "person"
 name = "Mia"
-height = 1.0
-body = "bean"          # bean, round, tall, kid
-skin = "skin3"         # skin1 (lightest) ... skin6 (deepest), or a hex colour
-hair = "bob"           # none, short, bob, long, spiky, bun, curly, ponytail, mohawk
-hair_color = "black"
-top = "red"
-bottom = "denim"
-shoes = "white"
-extras = ["glasses"]   # glasses, hat, cap, scarf, tie, bow, beard, moustache, headphones
+body = "woman"         # woman or man
+outfit = "casual"      # see the outfits with `dreamreel assets` or in the studio's Cast page
+height = 1.62          # metres
 voice = "en_US-amy-medium"

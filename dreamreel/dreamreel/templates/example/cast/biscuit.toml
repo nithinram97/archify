@@ -1,9 +1,7 @@
-# A creature: any body from a body plan (biped, quadruped, bird, fish, serpent, bug, spider, blob).
-type = "creature"
+# An animal from Quaternius's packs, with its own walks, runs and actions (a creature stands in until
+# the packs are downloaded). Any other body plan is a creature: type = "creature", body = "bird"...
+type = "animal"
 name = "Biscuit"
-body = "quadruped"
-color = "#c98b4f"
-belly = "cream"
-ears = "floppy"
-size = 0.8
+species = "shiba_inu"  # alpaca, bull, cow, deer, donkey, fox, horse, husky, shiba_inu, stag, wolf...
+size = 1.0
 voice = "en_US-ryan-medium"

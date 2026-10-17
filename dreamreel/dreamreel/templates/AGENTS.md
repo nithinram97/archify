@@ -10,7 +10,7 @@ dreamreel studio (`dreamreel studio`), so keep the files tidy and readable.
 | File | What it is |
 |---|---|
 | `film.toml` | title, fps, resolution, scene order (`scenes = [...]` or an `[[edit]]` list), music, `voice_engine` |
-| `cast/<name>.toml` | one character each: `type` (`toy`, `creature`, or one from extensions) and its look |
+| `cast/<name>.toml` | one character each: `type` (`person`, `animal`: from the 3D packs; `toy`, `creature`, `model`, or one from extensions) and its look |
 | `sets/<name>.toml` | one place each: `kind` (`room`, `outdoor`, ...), its settings, `[[props]]`, `[marks]` |
 | `scenes/NNN_name.toml` | one scene each: `set`, `cast`, and `[[beats]]` in order |
 | `extensions/*.py` | this film's own classes: new characters, body plans, props, gestures, actions, shots... |

@@ -1,9 +1,6 @@
+type = "person"
 name = "Tom"
-body = "round"
-skin = "skin1"
-hair = "spiky"
-hair_color = "ginger"
-top = "yellow"
-bottom = "navy"
-shoes = "charcoal"
+body = "man"
+outfit = "hoodie"
+height = 1.75
 voice = "en_US-ryan-medium"

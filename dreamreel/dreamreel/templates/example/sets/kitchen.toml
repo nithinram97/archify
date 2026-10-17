@@ -1,5 +1,6 @@
 # A room with no front wall (the camera side), like a sitcom set.
 kind = "room"
+scale = "people"       # life-size furniture for people (toy: for toy figures)
 size = "medium"        # small, medium, large
 walls = "mint"
 floor = "wood"         # wood, tiles, carpet, concrete, or a colour

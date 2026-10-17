@@ -409,18 +409,19 @@ class Bench(Prop):
         root = shapes.empty(name, at=(pos.x, pos.y, 0))
         root.rotation_euler.z = f
         c = p.get("color", "wood")
+        h, k = s.sized(0.3, 0.44), s.sized(1.0, 1.25)
         for i in range(3):
-            shapes.box(name, 1.6, 0.12, 0.04, c, root, at=(0, -0.14 + i * 0.14, 0.3), bevel=0.01)
-        shapes.box(name, 1.6, 0.04, 0.3, c, root, at=(0, 0.2, 0.36), bevel=0.01)
+            shapes.box(name, 1.6, 0.12 * k, 0.04, c, root, at=(0, (-0.14 + i * 0.14) * k, h), bevel=0.01)
+        shapes.box(name, 1.6, 0.04, 0.3 * k, c, root, at=(0, 0.2 * k, h + 0.06), bevel=0.01)
         for sd in (-1, 1):
-            shapes.box(name, 0.06, 0.45, 0.3, "charcoal", root, at=(sd * 0.7, 0, 0), bevel=0.01)
+            shapes.box(name, 0.06, 0.45 * k, h, "charcoal", root, at=(sd * 0.7, 0, 0), bevel=0.01)
         fwd = Vector((math.sin(f), -math.cos(f)))
         side = Vector((math.cos(f), math.sin(f)))
         for i, sd in enumerate((-1, 1)):
             sname = name if i == 0 else f"{name}-2"
             at = pos + side * sd * 0.4
-            s.seats[sname] = Seat(sname, at, f, 0.32, at + fwd * 0.55)
-        s.marks.setdefault(name, Mark(name, pos + fwd * 0.7, facing=f))
+            s.seats[sname] = Seat(sname, at, f, h + 0.02, at + fwd * 0.55 * k)
+        s.marks.setdefault(name, Mark(name, pos + fwd * 0.7 * k, facing=f))
         s.block(pos, 1.6, 0.5)
         return root
 

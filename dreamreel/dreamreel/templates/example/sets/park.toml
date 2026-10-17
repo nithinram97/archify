@@ -1,4 +1,5 @@
 kind = "outdoor"
+scale = "people"       # life-size furniture for people (toy: for toy figures)
 ground = "grass"
 trees = 7
 
