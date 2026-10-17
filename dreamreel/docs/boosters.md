@@ -46,9 +46,10 @@ Blender or the rest of dreamreel, and installs each model the first time it's as
 | `mesh.triposg` | A 3D model's shape from a picture (`generate --from-picture`); dreamreel paints it from the picture | VAST TripoSG (MIT); background cut with BiRefNet (MIT) | Built; not yet run on a real GPU |
 | `rig.unirig` | Rigging any model (`generate --rig`, `dreamreel rig`) | VAST UniRig (MIT) | Built; not yet run on a real GPU. On cards older than Ampere (Colab's T4) it uses PyTorch attention and full precision instead of FlashAttention and bfloat16 |
 | `face.lam_a2e` | Mouths read from the voice by AI (`lipsync = "ai"`) | LAM Audio2Expression (Apache-2.0): 52 ARKit face shapes, 30 a second | Built; not yet run on a real GPU. Chosen over NVIDIA Audio2Face, which has no Python way to run it |
+| `restyle.wan` | Repainting a final render in a described style (`restyle = "..."`, experimental) | Wan 2.1 T2V 1.3B through diffusers (Apache-2.0) | Built; not yet run on a real GPU. Several minutes per few seconds of film on a T4 |
 | `motion.hy_motion` | Acting from a sentence (`do = "act"`) | Tencent HY-Motion 1.0 Lite (Tencent community licence: **not for the EU, UK or South Korea**; outputs may not train other AI models) | Built; not yet run on a real GPU. On a 16 GB card (Colab's T4) its 8B text encoder runs in 4 bits |
 
-More skills (restyling) are being added; see the roadmap. TRELLIS.2 (textured models from a
+TRELLIS.2 (textured models from a
 picture) needs a 24 GB card and gated, non-commercial helper models, so it isn't offered on the free
 booster. "Not yet
 run on a real GPU" means dreamreel's side is tested against a stand-in booster, and the model code

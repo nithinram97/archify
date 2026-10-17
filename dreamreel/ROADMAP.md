@@ -26,6 +26,8 @@ Next, roughly in order:
 
 ## Looks
 - Styles that change over a scene (fading into a memory); hatching and watercolour styles.
+- (Experimental: AI restyling of final renders with Wan 2.1 on a booster.) Next: steadier frames
+  (overlapping windows, guiding with depth and outlines), and the larger Wan models on bigger cards.
 
 ## Acting
 - Open doors, sit on and climb things.

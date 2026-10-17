@@ -444,6 +444,83 @@ class LAMFace(Skill):
         return {"face": out}
 
 
+# ---------------------------------------------------------------------- restyling a scene: Wan 2.1
+WAN_RUN = r"""
+import gc, json, os, sys
+job = json.load(open(sys.argv[1]))
+import imageio.v3 as iio
+import numpy as np
+import torch
+from PIL import Image
+from diffusers import AutoencoderKLWan, WanVideoToVideoPipeline
+from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
+from transformers import AutoTokenizer, UMT5EncoderModel
+mid = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+dt = torch.float16                     # T4s have no bfloat16
+# 1. the words, encoded once, then the 11 GB text encoder is freed (a free notebook has ~12 GB of RAM)
+tok = AutoTokenizer.from_pretrained(mid, subfolder="tokenizer")
+te = UMT5EncoderModel.from_pretrained(mid, subfolder="text_encoder", torch_dtype=dt, low_cpu_mem_usage=True,
+                                      device_map="cuda")
+enc = WanVideoToVideoPipeline.from_pretrained(mid, text_encoder=te, tokenizer=tok, transformer=None, vae=None,
+                                              torch_dtype=dt)
+pe, npe = enc.encode_prompt(prompt=job["prompt"], negative_prompt="blurry, low quality, distorted, flicker",
+                            do_classifier_free_guidance=True, device="cuda")
+del enc, te; gc.collect(); torch.cuda.empty_cache()
+# 2. the film, a few seconds at a time (Wan takes 4k+1 frames)
+vae = AutoencoderKLWan.from_pretrained(mid, subfolder="vae", torch_dtype=torch.float32)
+pipe = WanVideoToVideoPipeline.from_pretrained(mid, vae=vae, text_encoder=None, tokenizer=None, torch_dtype=dt)
+pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config, flow_shift=3.0)
+pipe.to("cuda")
+frames = list(iio.imiter(job["video"]))
+meta = iio.immeta(job["video"])
+fps = float(meta.get("fps", 24))
+H0, W0 = frames[0].shape[:2]
+W, H = (832, 480) if W0 >= H0 else (480, 832)
+size = int(job.get("chunk", 33))
+out = []
+for i in range(0, len(frames), size):
+    part = [Image.fromarray(f).resize((W, H)) for f in frames[i:i + size]]
+    n = len(part)
+    while (len(part) - 1) % 4:
+        part.append(part[-1])
+    got = pipe(video=part, prompt_embeds=pe, negative_prompt_embeds=npe, height=H, width=W,
+               strength=float(job["strength"]), guidance_scale=5.0, num_inference_steps=int(job.get("steps", 30)),
+               generator=torch.Generator("cuda").manual_seed(int(job.get("seed", 7))), output_type="pil").frames[0]
+    out += [np.asarray(f.resize((W0, H0))) for f in got[:n]]
+    print(f"restyled {min(len(frames), i + size)} of {len(frames)} frames", flush=True)
+dest = os.path.join(job["out_dir"], "restyled.mp4")
+iio.imwrite(dest, np.stack(out), fps=fps, codec="libx264")
+json.dump({"video": dest}, open(os.path.join(job["out_dir"], "_answer.json"), "w"))
+"""
+
+
+class WanRestyle(Skill):
+    name = "restyle.wan"
+    about = "Wan 2.1 (1.3B): repaints a rendered scene in a style you describe, keeping its motion (experimental)"
+    license = "Apache-2.0"
+
+    def installed(self):
+        return os.path.exists(os.path.join(WORK, "venvs", "wan", ".ready"))
+
+    def install(self, log):
+        py = venv("wan", "3.11", log)
+        venv_pip(py, log, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu124")
+        venv_pip(py, log, "diffusers>=0.41", "transformers", "accelerate", "ftfy", "sentencepiece",
+                 "imageio[ffmpeg]", "pillow", "numpy")
+        open(os.path.join(WORK, "venvs", "wan", ".ready"), "w").close()
+
+    def run(self, inputs, files, out_dir, log, progress):
+        if "video" not in files:
+            raise ValueError("send the rendered scene (an MP4)")
+        prompt = str(inputs.get("prompt", "")).strip()
+        if not prompt:
+            raise ValueError("describe the style, e.g. 'a watercolour painting, soft paper texture'")
+        job = {"video": files["video"], "prompt": prompt, "strength": max(0.1, min(0.9, float(inputs.get("strength", 0.5)))),
+               "seed": int(inputs.get("seed", 7)), "steps": int(inputs.get("steps", 30)), "out_dir": out_dir}
+        log(f"restyling: {prompt[:80]} (strength {job['strength']}); expect several minutes per few seconds of film")
+        return run_script(os.path.join(WORK, "venvs", "wan", "bin", "python"), WAN_RUN, job, log)
+
+
 class Echo(Skill):
     """For tests: echoes its inputs, copies its file, and can fail on request."""
     name = "test.echo"
@@ -547,8 +624,24 @@ class FakeFace(Skill):
         return {"face": out}
 
 
-SKILLS = [IndicParler(), IndicF5(), HYMotion(), TripoSG(), UniRig(), LAMFace(),
-          Echo(), Tone(), FakeMotion(), FakeModel(), FakeFace()]
+class FakeRestyle(Skill):
+    """For tests: the 'restyled' scene is the scene, unchanged."""
+    name = "test.restyle"
+    about = "a test restyle"
+    needs_gpu = False
+    test_only = True
+
+    def installed(self):
+        return True
+
+    def run(self, inputs, files, out_dir, log, progress):
+        dest = os.path.join(out_dir, "restyled.mp4")
+        shutil.copyfile(files["video"], dest)
+        return {"video": dest, "prompt": inputs.get("prompt")}
+
+
+SKILLS = [IndicParler(), IndicF5(), HYMotion(), TripoSG(), UniRig(), LAMFace(), WanRestyle(),
+          Echo(), Tone(), FakeMotion(), FakeModel(), FakeFace(), FakeRestyle()]
 
 
 def register(skill):

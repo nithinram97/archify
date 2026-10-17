@@ -1074,7 +1074,27 @@ function sceneHeader(file, spec, chk) {
         })),
       h("label", { class: "field" }, h("span", {}, "Look"),
         select(choicesOf("style"), spec.style || "", (v) => change("style", v || undefined), { label: "Scene look", blank: "(the film's look)" })),
-      transitionFields(spec, change)) : null);
+      transitionFields(spec, change),
+      restyleField(spec, change)) : null);
+}
+
+// repainting the final render in a described style, by AI on a booster (restyle.py; experimental)
+const RESTYLES = ["a watercolour painting, soft paper texture", "an oil painting, thick brush strokes",
+  "hand-drawn anime, clean line art", "a claymation stop-motion film", "a pencil sketch, cross-hatching",
+  "a Madhubani folk painting, bold outlines and patterns"];
+function restyleField(spec, change) {
+  const inp = h("input", { type: "text", value: spec.restyle || "", placeholder: "e.g. " + RESTYLES[0],
+    onchange: (e) => change("restyle", e.target.value.trim() || undefined) });
+  return h("details", { class: "field", style: "grid-column: 1 / -1", open: spec.restyle ? true : null },
+    h("summary", {}, "Repaint the final render with AI ", h("span", { class: "muted small" }, "(experimental, needs a booster)")),
+    h("div", { class: "stack", style: "margin-top:8px" },
+      inp,
+      h("div", { class: "chips" }, RESTYLES.map((r) => h("button", { class: "chip", type: "button", onclick: () => change("restyle", r) }, r))),
+      spec.restyle ? h("label", { class: "field" }, h("span", {}, `How much (${spec.restyle_strength ?? 0.5})`),
+        h("input", { type: "range", min: 0.1, max: 0.9, step: 0.05, value: spec.restyle_strength ?? 0.5,
+          onchange: (e) => change("restyle_strength", +e.target.value === 0.5 ? undefined : +e.target.value) })) : null,
+      h("p", { class: "muted small" }, "Wan 2.1 repaints the scene in this style, keeping its motion. Only the final render; expect some flicker, ",
+        "and several minutes of booster time for every few seconds.")));
 }
 
 // how the scene comes in after the one before it (a transition plugin, plus the options it uses)

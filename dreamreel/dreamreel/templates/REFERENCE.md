@@ -219,6 +219,8 @@ cast = ["mia", "tom"]
 time_of_day = "golden_hour"  # dawn, morning, day, golden_hour, sunset, dusk, night
 weather = "rain"             # clear, cloudy, overcast, fog, rain, snow, storm, windy
 weather_strength = 1.0       # 0.3 a little ... 2 a lot
+restyle = "a watercolour painting"   # experimental, needs a booster: AI repaints the final render
+restyle_strength = 0.5               # 0.1 barely ... 0.9 freely (film.toml [restyle] sets it for all)
 
 [[beats]]
 who = "mia"

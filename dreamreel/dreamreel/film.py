@@ -7,7 +7,7 @@ import runpy
 
 import bpy
 
-from . import __version__, _compat, keys, project, scene as scene_mod
+from . import __version__, _compat, keys, project, restyle, scene as scene_mod
 
 
 def build(proj, path):
@@ -125,6 +125,9 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
             meta = json.load(f)
         if meta.get("hash") == digest:
             print(f"[dreamreel] {name}: unchanged, keeping {os.path.relpath(out, proj.root)}")
+            meta = restyle.apply(proj, meta, path, quality)      # (the style may have changed)
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=1)
             return meta
     s = build(proj, path)
     _apply_quality(s, quality, percent)
@@ -138,6 +141,7 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     meta["size"] = [int(r.resolution_x * r.resolution_percentage / 100), int(r.resolution_y * r.resolution_percentage / 100)]
     meta["hash"] = digest
     meta["video"] = out
+    meta = restyle.apply(proj, meta, path, quality)
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=1)
     print(f"[dreamreel] {name}: rendered {os.path.relpath(out, proj.root)}")
