@@ -450,7 +450,18 @@ class Room(Set):
         shapes.box("skirting", W, 0.03, 0.1, trim, at=(0, D / 2 - 0.015, 0), bevel=0.005)
         for s in (-1, 1):
             shapes.box("skirting", 0.03, D, 0.1, trim, at=(s * (W / 2 - 0.015), 0, 0), bevel=0.005)
-        self.walls = [back, left, right]
+        # the fourth wall: seen from inside the room (a reverse angle), invisible from the front, where
+        # the camera usually is; it never shadows the room
+        fourth = look.matte(spec.get("walls", "cream")).copy()
+        fourth.use_backface_culling = True
+        if hasattr(fourth, "use_backface_culling_shadow"):
+            fourth.use_backface_culling_shadow = True
+        front = shapes.plane("wall.front", W + 0.2, Hh, fourth, at=(0, -D / 2 - 0.02, Hh / 2),
+                             rot=(math.radians(-90), 0, 0))
+        front.visible_shadow = False
+        front["dr_fourth_wall"] = front["dr_final_only"] = True     # (previz draws both sides)
+        front["dr_fx"] = True             # cameras see through it from outside; nothing collides with it
+        self.walls = [back, left, right, front]
         if spec.get("wallpaper"):
             for i in range(int(W / 0.4)):
                 shapes.box("stripe", 0.14, 0.005, Hh - 0.1, look.matte(spec["wallpaper"]),

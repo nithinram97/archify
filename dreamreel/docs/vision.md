@@ -24,12 +24,12 @@ noticing the difference in craft. Concretely, department by department:
 |---|---|---|
 | Story and editing | Clear staging, cutting on action, rhythm, J/L cuts | Strong: automatic director, edit list |
 | Camera | Real lenses, framing, moves, the 180° rule, depth of field | Good; lens/sensor presets to come |
-| Characters | Appealing designs, clean silhouettes, film-quality topology | Quaternius models (game quality); AI modeller started |
+| Characters | Appealing designs, clean silhouettes, film-quality topology | Quaternius models (game quality); AI modeller with any AI; models from a picture and AI rigging on a booster |
 | Faces | Expressive brows, eyes and mouths; lip sync to the language spoken | Expressions on every face; lip sync from the sounds of speech (Rhubarb) |
-| Body acting | Weight, timing, anticipation, contact with the world | Clips, procedural acting and posed gestures; needs AI motion |
+| Body acting | Weight, timing, anticipation, contact with the world | Clips, procedural acting, posed gestures, motion capture on every body; acting from a sentence (HY-Motion, booster) |
 | Sets and props | Rich, lived-in, culturally right places | Quaternius furniture, nature, city; Indian world kit to come |
 | Lighting | Motivated light, mood per beat, colour script | Basic: time of day and weather |
-| Look and render | Physically based shading, grading, motion blur, depth of field | EEVEE looks; a film-quality render path to come |
+| Look and render | Physically based shading, grading, motion blur, depth of field | EEVEE looks; AI restyling (experimental); a film-quality render path to come |
 | Effects | Cloth, hair, water, fire, smoke | Rigid-body physics only |
 | Sound | Voices in every Indian language, music, effects, mix | 14 languages: ready-made, described and copied voices; Fish Audio; shaped subtitles |
 
@@ -53,13 +53,20 @@ original (see the benchmark notes). A department is done when it scores as well 
 
 ## The road there
 
-1. **Faces and lip sync**: expressive faces on every character, lip sync from the sounds of the line,
-   in any language.
-2. **Indian voices**: free, offline voices in Indian languages, with lip sync.
+Done so far: expressive faces and lip sync from the sounds of speech (and by AI from the voice);
+voices in 14 languages with shaped subtitles in every Indian script; boosters that run graphics-card
+AI free on Colab; acting from a sentence; models from a picture and rigging any model; AI restyling
+(experimental); dreamreel as an MCP server for any AI assistant. Next:
+
+1. **Faces and lip sync**: done for the mouth; next, brows and eyes driven by the voice too.
+2. **Indian voices**: done (Piper, Indic Parler-TTS, IndicF5, Fish Audio); next, the first real runs
+   on a booster and a library of ready voices per language.
 3. **The Indian world kit**: people, clothes, homes, streets, vehicles and things from India (CC0).
 4. **Film-quality look**: a physically based render path with motion blur, depth of field, render
-   layers and colour management; lighting that follows the mood of each beat.
-5. **Performance**: AI motion from text and from a phone video of the film maker acting it out.
+   layers and colour management; lighting that follows the mood of each beat; rooms with a fourth wall
+   for reverse angles; final renders a laptop can finish overnight.
+5. **Performance**: AI motion from text (done, on a booster); next, from a phone video of the film
+   maker acting it out (waiting for a model with an open licence).
 6. **Effects**: cloth, hair, water, smoke and fire.
 7. **Studio exchange**: USD/FBX/EDL export, hand edits that dreamreel keeps.
 8. **Made for where films are seen**: vertical video, bilingual subtitles, presets for YouTube,

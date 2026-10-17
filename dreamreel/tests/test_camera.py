@@ -10,6 +10,7 @@ sys.path.insert(0, ROOT)
 
 import dreamreel as dr  # noqa: E402
 from dreamreel import keys  # noqa: E402
+from mathutils import Vector  # noqa: E402
 
 ROOM = {"kind": "room", "props": [{"type": "door", "place": "back-left"},
                                   {"type": "table", "place": "center", "items": ["cookie-jar"]}]}
@@ -82,6 +83,24 @@ def main():
     shot = s.cut.final[0]
     head = tom.head_point(0.5)
     assert shot.state.pos.z < head.z, ("worm's eye stays below the face", shot.state.pos, head)
+
+    # the fourth wall: there for reverse angles, invisible and see-through from the front, no shadow
+    s, mia, tom = scene()
+    front = next(o for o in s.bscene.objects if o.get("dr_fourth_wall"))
+    assert front.active_material.use_backface_culling and not front.visible_shadow and front.get("dr_final_only")
+    head = mia.head_point(0.0)
+    outside = head + Vector((0, -6.0, 0.3))      # a wide shot's camera, beyond the front wall
+    assert s.cut.clear_view(head, outside), "the fourth wall doesn't block shots from the front"
+    # a close-up of someone facing the back wall is from the front of their face, not their back
+    s, mia, tom = scene()
+    mia.place("table-left", facing="back")
+    s.cut.shot("close_up", of="mia", at=0.0)
+    s.wait(1)
+    s.finish()
+    shot = s.cut.final[0]
+    face_dir = mia.forward(0.5)
+    to_cam = shot.state.pos - mia.head_point(0.5)
+    assert face_dir.x * to_cam.x + face_dir.y * to_cam.y > 0, ("a close-up sees the face", face_dir, to_cam)
     print("OK")
 
 
