@@ -115,24 +115,42 @@ def build(c):
         c.irises += dark
         c.scleras.append(white)
         c.glints += [g for g in kids if ".glint" in g.name]
+    mouth_parts(c, 0.042 * H, 0.012 * H, front=0.016 * H)
+    c.blushes = [o for o in c.neck.children if o.name.startswith(f"{n}.blush")]
+
+
+def mouth_parts(c, mrx, mrz, front, extra=(), teeth_z=0.42):
+    """Mouth shapes on c.mouth_mesh (and `extra` meshes like lips), upper and lower teeth, braces."""
+    H, n = getattr(c, "face_H", c.H), c.name
     m = c.mouth_mesh
-    mrx, mrz = 0.042 * H, 0.012 * H
-    mouth_keys(m, mrx, mrz, H)
+    for o in [m] + list(extra):
+        mouth_keys(o, mrx, mrz, H)
     c.teeth = {}
     tooth = look.plastic("#fbf8f0", 0.35, 0.3)
     for where, z in (("upper", 1), ("lower", -1)):
         t = shapes.ellipsoid(f"{n}.teeth.{where}", mrx * 0.82, 0.006 * H, mrz * 0.5, tooth, c.mouth,
-                             at=(0, -0.016 * H, z * mrz * 0.42), segments=24)
+                             at=(0, -front, z * mrz * teeth_z), segments=24)
         mouth_keys(t, mrx * 0.82, mrz * 0.5, H)
         t.scale = (1, 1, 0.0)
         c.teeth[where] = t
     if c.get("braces"):
-        b = shapes.box(f"{n}.braces", mrx * 1.4, 0.004 * H, mrz * 0.18, look.metal("#c9ced3")
-                       if hasattr(look, "metal") else "#c9ced3", c.teeth["upper"], at=(0, -0.004 * H, -mrz * 0.12),
-                       bevel=0)
-        b.scale = (1, 1, 1)
-    c.mouth_parts = [m] + list(c.teeth.values())
-    c.blushes = [o for o in c.neck.children if o.name.startswith(f"{n}.blush")]
+        shapes.box(f"{n}.braces", mrx * 1.4, 0.004 * H, mrz * 0.18, look.metal("#c9ced3"), c.teeth["upper"],
+                   at=(0, -0.004 * H, -mrz * 0.12), bevel=0)
+    c.mouth_parts = [m] + list(extra) + list(c.teeth.values())
+
+
+def lid_angles(v, side):
+    """Rotations (about the eye's x axis) of an upper and a lower lid of skin that slide over an
+    eyeball, and the tilt of the lid line, from the face controls. Lid edges are given as heights on
+    the eyeball (-1 bottom ... 1 top); a lid edge at height h is a rotation of -asin(h)."""
+    up = 0.62 + max(0.0, v["eyes"] - 1) * 0.9 - max(0.0, 1 - v["eyes"]) * 1.3   # resting: a little over the iris
+    up = min(0.98, up)
+    up += (-0.05 - up) * min(1.0, v["lids"])                                       # lids 1: half closed
+    low = -0.78 + 0.62 * min(1.0, v["squint"])
+    low = max(low, -0.98)
+    up = max(up, low + 0.05)
+    tilt = math.radians(26) * v["lid_slant"] * side
+    return -math.asin(max(-1, min(1, up))), -math.asin(max(-1, min(1, low))), tilt
 
 
 def values(mood, amount=1.0):
@@ -164,11 +182,19 @@ def apply(c, v, t, t1):
         loc = value_at(brow, "location", t)
         key(brow, "location", t1, (bx - side * 0.014 * H * v["brow_squeeze"], loc[1],
                                    base + v["brow_lift"] * H - 0.006 * H * v["brow_squeeze"]))
+    k = getattr(c, "eye_scale", 1.0)          # how much "eyes" grows the eyeball (people: a little)
     for e in c.eyes:
+        size = 1 + (v["eyes"] - 1) * k
         hold(e, "scale", t)
-        key(e, "scale", t1, (v["eyes"], 1, v["eyes"]))
-        e["open"] = v["eyes"]
+        key(e, "scale", t1, (size, 1, size))
+        e["open"] = size
     slant = v["lid_slant"]
+    for side, (up, low) in getattr(c, "lid_pivots", {}).items():
+        a_up, a_low, tilt = lid_angles(v, side)
+        for o, rot in ((up, (a_up, tilt, 0)), (low, (a_low, -0.4 * tilt, 0))):
+            hold(o, "rotation_euler", t)
+            key(o, "rotation_euler", t1, rot)
+        up["open"] = a_up
     lids = {"upper": v["lids"], "lower": v["squint"], "angry": max(0.0, -slant), "sad": max(0.0, slant)}
     for o in getattr(c, "irises", []) + getattr(c, "scleras", []):
         kb = o.data.shape_keys.key_blocks
@@ -200,7 +226,7 @@ def apply(c, v, t, t1):
             if name in kb:
                 hold(kb[name], "value", t)
                 key(kb[name], "value", t1, val)
-    mopen = v["mouth_open"]
+    mopen = max(v["mouth_open"], v["teeth"] * getattr(c, "teeth_open", 0.0))   # people part their lips to show teeth
     hold(c.mouth, "scale", t)
     key(c.mouth, "scale", t1, (1 - 0.3 * mopen, 1, 1 + 2.2 * mopen))
     c.mouth["rest"] = mopen

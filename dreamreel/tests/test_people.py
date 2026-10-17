@@ -59,7 +59,8 @@ def main():
         assert 0.8 * h < c.head_point(0.0).z < h, (c.name, "face height", c.head_point(0.0))
     # the face: white eyes with irises, lashes, freckles, braces, teeth, sculpted nose
     names = [o.name for o in bpy.data.objects]
-    for part in ("Maya.iris", "Maya.lash", "Maya.freckle", "Maya.braces", "Maya.nose", "Maya.ear", "Maya.skirt"):
+    for part in ("Maya.iris", "Maya.lash", "Maya.lashline", "Maya.lid", "Maya.lip", "Maya.freckle", "Maya.braces",
+                 "Maya.ear", "Maya.skirt", "Maya.brow"):
         assert any(n.startswith(part) for n in names), part
     assert not any(n.startswith("Sam.freckle") for n in names)
     # clothes by region: shorts leave the shins bare, long sleeves cover the forearms
@@ -88,6 +89,13 @@ def main():
     held = min((at(s, cup, t_held) - at(s, maya.hands[k], t_held)).length for k in (1, -1))
     assert held < 0.1, ("cup in hand", held)
     assert (maya.position(t_walk) - start).length > 0.5
+    # skin lids slide over the eyeballs: open at rest, they close in a blink and narrow when sleepy
+    up = maya.lid_pivots[1][0]
+    angles = []
+    for k in range(int(s.length * 24)):
+        handling.evaluate(s, k / 24)
+        angles.append(up.rotation_euler.x)
+    assert min(angles) < -0.4 and max(angles) > 0.1, ("lids open and blink", min(angles), max(angles))
     handling.evaluate(s, t_crazed)
     assert maya.teeth["upper"].scale.z > 0.1 and maya.gazes[0].scale.x < 0.8, "crazed grin, tiny pupils"
     try:

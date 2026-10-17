@@ -131,7 +131,9 @@ See [docs/acting.md](docs/acting.md).
 Besides the toy figures and creatures there are stylized humans, in the look of animated feature
 films: children, teens and adults with smooth bodies whose elbows and knees bend, sculpted heads,
 eyes with coloured irises, lashes, freckles and braces, and the full range of expressions, from a
-shy smile to a crazed grin (`type = "person"`).
+shy smile to a crazed grin (`type = "person"`). Heads are sculpted in code the way a sculptor
+works clay (big forms, then sockets, brow, cheekbones, cheeks, muzzle, chin, nose), following the
+principles in [docs/modeling.md](docs/modeling.md).
 
 ## Your own characters
 

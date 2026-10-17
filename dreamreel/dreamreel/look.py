@@ -89,6 +89,18 @@ def skin(color, rough=0.5):
     return mat
 
 
+def hair(color):
+    """Hair: soft sheen, no plastic shine (big overhead lights would turn dark hair grey)."""
+    k = ("hair", rgb(color))
+    if k in _cache and _cache[k].name in bpy.data.materials:
+        return _cache[k]
+    mat = plastic(color, rough=0.55, coat=0.0).copy()
+    mat.name = f"hair {color}"
+    _set(mat.node_tree.nodes.get("Principled BSDF"), "Specular IOR Level", 0.12)
+    _cache[k] = mat
+    return mat
+
+
 def matte(color, rough=0.8):
     """Painted walls, floors and fabric."""
     return plastic(color, rough=rough, coat=0.0)

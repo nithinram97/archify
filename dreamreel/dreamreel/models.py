@@ -505,10 +505,11 @@ class ModelCharacter(Character):
             reach = (J(f"{s}_elbow") - sh).length + (J(f"{s}_wrist") - J(f"{s}_elbow")).length
             piv = shapes.empty(f"{n}.arm.{s.upper()}", self.body, (sh.x, sh.y, sh.z - hip_z))
             # hanging arms clear the body: out to the side by as much as the torso is wider than the shoulders
-            out = max(0.0, _torso_half(pts, cx, sh.z - reach, sh.z - 0.3 * reach, H) + 0.045 * H - abs(sh.x - cx))
+            out = max(0.0, _torso_half(pts, cx, sh.z - reach, sh.z - 0.3 * reach, H) + 0.03 * H - abs(sh.x - cx))
             out = min(out, 0.5 * reach)
+            # relaxed: the hand hangs a little forward, so the elbow is softly bent, not locked
             tgt = shapes.empty(f"{n}.hand.target.{s}", piv,
-                               (side * out, 0, -math.sqrt(max(0.0, (reach * 0.97) ** 2 - out ** 2))))
+                               (side * out, -0.07 * reach, -math.sqrt(max(0.0, (reach * 0.94) ** 2 - out ** 2))))
             pole = shapes.empty(f"{n}.elbow.pole.{s}", piv, (side * 0.05 * H, 0.6 * reach, -reach * 0.5))
             self._ik(pb[roles[f"{s}_elbow"]], pb[roles[f"{s}_arm"]], tgt, pole)
             hand = shapes.empty(f"{n}.hand.{s}")

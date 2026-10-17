@@ -1153,7 +1153,15 @@ class Character(Plugin):
         from . import face
         face.drops(self, length)
         t = self.rng.uniform(0.6, 2.0)
-        while t < length - 0.3:
+        lids = getattr(self, "lid_pivots", None)
+        while t < length - 0.3 and lids:          # skin lids blink over the eyeballs
+            for up, _ in lids.values():
+                a = value_at(up, "rotation_euler", t)
+                key(up, "rotation_euler", t, tuple(a))
+                key(up, "rotation_euler", t + 0.07, (math.radians(12), a[1], a[2]))
+                key(up, "rotation_euler", t + 0.16, tuple(a))
+            t += self.rng.uniform(2.2, 4.8)
+        while t < length - 0.3 and not lids:
             for e in self.eyes:
                 o = value_at(e, "scale", t)[0]
                 if o < 0.2:
