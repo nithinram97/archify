@@ -155,7 +155,7 @@ Never add clips yourself from the internet without the film maker's say: licence
 
 People are `type = "person"` and animals `type = "animal"`: Quaternius's models with their own
 animation. Check `dreamreel assets` first; if the packs aren't installed, ask the film maker before
-downloading them.
+downloading them. Sets with people in them want `scale = "people"` (life-size furniture).
 
 ## Your own models
 

@@ -33,6 +33,15 @@ FLOORS = {"wood": "wood", "tiles": "cream", "carpet": "beige", "concrete": "#9a9
 
 
 
+# every kind of set has these
+COMMON = [
+    Param("scale", "choice", default="toy", choices=("toy", "people"),
+          label="Furniture for (toy: small characters; people: life-size)"),
+    Param("furniture", "choice", default="models", choices=("models", "simple"),
+          label="Furniture look (models: Quaternius's, when downloaded)"),
+]
+
+
 class Mark:
     def __init__(self, name, at, facing=None):
         self.name = name
@@ -75,6 +84,8 @@ class Set(Plugin):
         self.spec = dict(self.defaults(), **spec)
         self.kind = self.__class__.name
         self.width, self.depth = self.size
+        self.people = self.spec.get("scale", "toy") == "people"
+        self.use_models = self.spec.get("furniture", "models") == "models"
         self.marks = {}
         self.seats = {}
         self.obstacles = []  # (cx, cy, half_w, half_d) footprints characters walk round
@@ -95,6 +106,26 @@ class Set(Plugin):
         for z in ZONES:     # every set has the nine places as marks
             if z != "centre":
                 self.marks.setdefault(z, Mark(z, self.zone(z)))
+
+    def sized(self, toy, people):
+        """A size for this set's scale: furniture for toys (about 1 m tall) or for life-size people."""
+        return people if self.people else toy
+
+    def model(self, name, label, size, at=(0, 0, 0), facing=0.0, parent=None, pack="interior"):
+        """A Quaternius model fitted to size (see quaternius.place); None when the set uses simple
+        furniture or the pack isn't downloaded, so the prop builds its own."""
+        if not self.use_models:
+            return None
+        from . import quaternius
+        return quaternius.place(pack, name, label, size, at, facing, parent)
+
+    def seat_model(self, name, label, size, seat_at, height, depth=True, **kw):
+        """A model whose seat (or mattress, or top) at seat_at (x, y from its middle) is `height` high
+        (its depth grows or shrinks with its height, unless depth=False)."""
+        from . import quaternius
+        obj = self.model(name, label, size, **kw)
+        quaternius.rest_on(obj, seat_at, height, depth)
+        return obj
 
     def build_environment(self):
         """Make the floor, walls, sky... (override in subclasses)."""
@@ -381,7 +412,7 @@ def furnish(kind, own):
 class Room(Set):
     """A room with no front wall (the camera side), like a sitcom set."""
     description = "Indoors: floor, three walls, furniture (or furnished for you)"
-    params = [
+    params = COMMON + [
         Param("furnish", "choice", default=None, choices=tuple(FURNISH), label="Furnish as"),
         Param("size", "choice", default="medium", choices=tuple(SIZES)),
         Param("walls", "color", default="cream"),
@@ -464,7 +495,7 @@ class Outdoor(Set):
     description = "Outdoors: any landscape, from a meadow to the moon"
     outdoor = True
     size = (6.5 * 1.4, 4.4 * 1.6)
-    params = [
+    params = COMMON + [
         Param("biome", "biome", default="meadow", label="Landscape"),
         Param("terrain", "choice", default=None, choices=("flat", "rolling", "hills", "mountains", "dunes", "craters"),
               label="Land"),

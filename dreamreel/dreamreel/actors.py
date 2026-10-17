@@ -180,15 +180,15 @@ class ClipActor(Character):
         pass
 
     # ------------------------------------------------------------------ clips on the timeline
-    def play(self, clip, t, rate=1.0, until=None, hold_end=False):
+    def play(self, clip, t, rate=1.0, until=None, hold_end=False, blend=0.2):
         """Play one of its clips from t (once, or looped until `until`); returns when it ends."""
-        act = self.clip_names.get(clip)
+        act = clip if isinstance(clip, bpy.types.Action) else self.clip_names.get(clip)
         if act is None:
             raise ValueError(f"{self.name} has no {clip!r} animation (it has: {', '.join(sorted(self.clip_names))})")
         f0, f1 = act.frame_range
         dur = (f1 - f0) / keys.CLOCK.fps / rate
         end = until if until is not None else t + dur
-        self.segments.append((t, end, act, rate, hold_end or clip == "die"))
+        self.segments.append((t, end, act, rate, hold_end or clip == "die", blend))
         return end
 
     def do(self, gesture, target=None, at=None, wait=True, how=None):
@@ -217,24 +217,25 @@ class ClipActor(Character):
         """Lay the clips out on the timeline (blended NLA strips), idling in between."""
         super().prepare(length)
         fps = keys.CLOCK.fps
-        segs = sorted(self.segments, key=lambda s: s[0])
+        segs = sorted(((t0, min(t1, max(length, t0 + 1 / fps)), *rest) for t0, t1, *rest in self.segments),
+                      key=lambda s: s[0])
         for i in range(len(segs) - 1):              # when clips overlap, the later one takes over
-            t0, t1, act, rate, hold_end = segs[i]
+            t0, t1, act, rate, hold_end, bl = segs[i]
             if t1 > segs[i + 1][0]:
-                segs[i] = (t0, max(t0 + 1 / fps, segs[i + 1][0]), act, rate, False)
+                segs[i] = (t0, max(t0 + 1 / fps, segs[i + 1][0]), act, rate, False, bl)
         idle = self.clip_names.get("idle")
         filled, t, dead = [], 0.0, False
         for s in segs:
             if s[0] > t + 0.05 and idle is not None and not dead:
-                filled.append((t, s[0], idle, 1.0, False))
+                filled.append((t, s[0], idle, 1.0, False, 0.2))
             filled.append(s)
             t = max(t, s[1])
             dead = dead or s[4]
         if t < length and idle is not None and not dead:
-            filled.append((t, length, idle, 1.0, False))
+            filled.append((t, length, idle, 1.0, False, 0.2))
         ad = self.rig.animation_data
-        blend = 0.2 * fps
-        for i, (t0, t1, act, rate, hold_end) in enumerate(filled):
+        for i, (t0, t1, act, rate, hold_end, blend) in enumerate(filled):
+            blend *= fps
             f0, f1 = act.frame_range
             track = ad.nla_tracks.new()                 # one track each: later ones blend in over earlier
             strip = track.strips.new(f"{_base(act.name)}.{i}", int(keys.CLOCK.frame(t0)), act)
@@ -246,6 +247,100 @@ class ClipActor(Character):
             last = hold_end or i == len(filled) - 1
             strip.extrapolation = "HOLD_FORWARD" if last else "NOTHING"
             strip.use_auto_blend = False
+
+    # ------------------------------------------------------------------ sitting
+    def _sit_clip(self, height):
+        """A seated pose for a seat `height` high, made on the rig (the packs have no sitting clip):
+        the idle pose, the body lowered onto the seat, thighs forward, shins down to the floor."""
+        name = f"{self.name}.sit.{height:.2f}"
+        if name in bpy.data.actions:
+            return bpy.data.actions[name]
+        arm = self.rig
+        bones = arm.data.bones
+        legs = {sd: (f"UpperLeg.{sd}", f"LowerLeg.{sd}", f"Foot.{sd}") for sd in "LR"}
+        if "Body" not in bones or not all(b in bones for chain in legs.values() for b in chain):
+            return None
+        ad = arm.animation_data
+        ad.action = self.clip_names.get("idle")
+        scene = bpy.context.scene
+        scene.frame_set(int(ad.action.frame_range[0]) if ad.action else 1)
+        bpy.context.view_layer.update()
+        # actor space (the root's): metres, z up, facing -y
+        to_arm = (self.root.matrix_world.inverted() @ arm.matrix_world).inverted()
+        from_arm = to_arm.inverted()
+        pb = arm.pose.bones
+
+        def head(b):
+            return from_arm @ pb[b].head
+
+        def tail(b):
+            return from_arm @ pb[b].tail
+
+        def aim(b, new_head, direction):
+            rest = pb[b].matrix.copy()
+            cur = (tail(b) - head(b)).normalized()
+            q = cur.rotation_difference(direction.normalized())
+            rot = (to_arm.to_quaternion() @ q @ from_arm.to_quaternion()).to_matrix().to_4x4()
+            m = rot @ Matrix.Translation(-rest.translation) @ rest
+            m.translation = to_arm @ new_head
+            pb[b].matrix = m
+            bpy.context.view_layer.update()
+
+        hip = head(legs["L"][0])
+        drop = Vector((0, 0.04 * self.H, height + 0.03 * self.H - hip.z))
+        body = pb["Body"].matrix.copy()
+        body.translation = to_arm @ (head("Body") + drop)
+        pb["Body"].matrix = body
+        bpy.context.view_layer.update()
+        floor = min(head(chain[2]).z for chain in legs.values())
+        for sd, (up, low, foot) in legs.items():
+            thigh = (tail(up) - head(up)).length
+            shin = (tail(low) - head(low)).length
+            aim(up, head(up), Vector((0, -1, -0.08)))
+            knee = tail(up)
+            fall = knee.z - floor
+            reach = math.sqrt(max(0.0, shin * shin - fall * fall)) if shin > fall else 0.0
+            ankle = Vector((knee.x, knee.y - reach * 0.35, max(floor, knee.z - shin)))
+            aim(low, knee, ankle - knee)
+            fm = pb[foot].matrix.copy()
+            fm.translation = to_arm @ tail(low)
+            pb[foot].matrix = fm
+            bpy.context.view_layer.update()
+        act = bpy.data.actions.new(name)
+        act.use_fake_user = True
+        ad.action = act
+        for b in pb:
+            for f in (1, 25):
+                b.keyframe_insert("location", frame=f)
+                b.keyframe_insert("rotation_quaternion", frame=f)
+        ad.action = None
+        for b in pb:
+            b.matrix_basis = Matrix()
+        return act
+
+    def sit(self, on, at=None, wait=True, already=False):
+        """Walk to a seat, turn round and sit down (a seated pose made for the seat's height)."""
+        super().sit(on, at=at, wait=wait, already=already)
+        seat = self.sitting
+        act = self._sit_clip(seat.height)
+        if act is not None:
+            t = (0.0 if at is None else at) if already else self.busy - 0.45
+            self.play(act, t, until=math.inf, blend=0.0 if already else 0.4)
+            self._seated = len(self.segments) - 1
+        return self
+
+    def stand(self, at=None, wait=True):
+        if not self.sitting:
+            return self
+        i = getattr(self, "_seated", None)
+        super().stand(at=at, wait=wait)
+        if i is not None:
+            t0, _, act, rate, hold_end, blend = self.segments[i]
+            t = self.busy - 0.45
+            self.segments[i] = (t0, t, act, rate, hold_end, blend)
+            self.play("idle", t, until=t + 0.5, blend=0.35)
+            self._seated = None
+        return self
 
     # ------------------------------------------------------------------ handling things
     def _hand(self, hand=None, holding=None):

@@ -78,6 +78,7 @@ People and animals come from Quaternius's free (CC0) packs, rigged and animated:
 run with their own animation while dreamreel moves them round the set, idle when still, turn their
 heads to look and nod, carry things, and play their gestures: people `wave`, `interact`, `punch`,
 `kick`, `roll`, `die`, `flinch`; animals `eat`, `attack`, `jump`, `die`, `flinch`, `look_down`.
+People sit on chairs, sofas and beds (in a set with `scale = "people"`, so the furniture fits them).
 Get the packs once with `dreamreel assets --download`.
 
 ### `type = "model"`: your own 3D model
@@ -116,6 +117,12 @@ The acting area always stays flat and clear; scenery is laid out round it by the
 `cars`, `lamps`, `trees`, `seed`. The pavement in front of the buildings is the acting area, the
 road runs towards the camera, the other side of the street is there for reverse shots. Marks:
 `door`, `shop`, `crossing`, `kerb`, `lamp`, `across`, and `car`, `car-2`... for parked cars.
+
+Every kind of set takes `scale`: `toy` (the default: furniture for toy figures about 1 m tall) or
+`people` (life-size furniture for `person` characters: 0.76 m tables, 0.46 m chair seats). The
+furniture is Quaternius's models (`dreamreel assets --download --pack interior`) fitted to the same
+sizes; `furniture = "simple"` uses dreamreel's own shapes instead, as it does when the pack isn't
+downloaded.
 
 A set file can also give its scenes a default `time_of_day` and `weather`.
 

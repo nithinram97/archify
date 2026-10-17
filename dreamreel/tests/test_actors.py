@@ -10,6 +10,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+import bpy  # noqa: E402
+
 import dreamreel as dr  # noqa: E402
 from dreamreel import handling, quaternius  # noqa: E402
 
@@ -27,7 +29,8 @@ def clips_at(c, t):
 
 
 def people():
-    s = dr.Scene({"kind": "room", "props": [{"type": "table", "place": "back", "items": ["cup"]}]})
+    s = dr.Scene({"kind": "room", "scale": "people",
+                  "props": [{"type": "table", "place": "back", "chairs": 2, "items": ["cup"]}]})
     mia, ben = s.cast(mia=dict(type="person", body="woman", outfit="casual"),
                       ben=dict(type="person", body="man", outfit="suit", height=1.85))
     assert {"walk", "run", "wave", "idle"} <= set(mia.clip_names), sorted(mia.clip_names)
@@ -41,11 +44,25 @@ def people():
     t_walk = (t_go + s.clock) / 2
     mia.pick_up("cup")
     t_held = s.clock
+    ben.sit("chair-2")
+    t_sat = s.clock + 0.3
     t_still = s.clock
     ben.look_at("door" if "door" in s.set.marks else "back")
     t_look = s.clock + 0.5
     s.wait(1)
+    ben.stand()
+    t_up = s.clock + 0.5
+    s.wait(1)
     s.finish()
+    seat = s.set.seats["chair-2"]
+    assert abs(seat.height - 0.46) < 0.01, seat.height
+    hips = ben.rig.pose.bones["UpperLeg.L"]
+    handling.evaluate(s, t_sat)
+    sat = (ben.rig.matrix_world @ hips.head).z
+    assert seat.height < sat < seat.height + 0.12, ("he sits on the chair", sat, seat.height)
+    handling.evaluate(s, t_up)
+    up = (ben.rig.matrix_world @ hips.head).z
+    assert up > sat + 0.25, ("and stands up again", sat, up)
     handling.evaluate(s, 0.0)
     for c, h in ((mia, 1.68), (ben, 1.85)):
         hp = c.head_point(0.0).z
@@ -66,6 +83,27 @@ def people():
     q1 = (ben.rig.matrix_world @ head.matrix).to_quaternion()
     assert q0.rotation_difference(q1).angle > 0.6 * abs(turn), ("the head bone follows", q0, q1, turn)
     print("  people: ok")
+
+
+def furniture():
+    """Quaternius's furniture where it's downloaded, dreamreel's own otherwise; same sizes either way."""
+    props = [{"type": "table", "chairs": 2}, {"type": "sofa"}, {"type": "bed", "place": "back-right"},
+             {"type": "counter", "place": "right", "items": ["cup"]}, {"type": "door"}, {"type": "window"}]
+    for look in ("models", "simple"):
+        for scale, table, seat in (("toy", 0.48, 0.3), ("people", 0.76, 0.46)):
+            s = dr.Scene({"kind": "room", "size": "large", "scale": scale, "furniture": look, "props": props})
+            used = {o.data.name.split(".")[0] for o in s.bscene.objects if o.type == "MESH" and o.data}
+            assert ("interior" in used) == (look == "models"), (look, sorted(used)[:8])
+            assert abs(s.set.surfaces["table"][2] - table) < 1e-6
+            assert abs(s.set.seats["chair"].height - seat) < 1e-6
+            dg = bpy.context.evaluated_depsgraph_get()
+            for name in ("chair", "sofa", "bed"):
+                st = s.set.seats[name]
+                hit, loc, *_ = s.bscene.ray_cast(dg, (st.at.x, st.at.y, 3.0), (0, 0, -1))
+                assert hit and abs(loc.z - st.height) < 0.06, (look, scale, name, "seat height", loc.z, st.height)
+            cup = s.set.things["cup"].root.matrix_world.translation
+            assert abs(cup.z - s.set.surfaces["counter"][2]) < 1e-3, (look, scale, cup.z)
+    print("  furniture: ok")
 
 
 def animals():
@@ -103,6 +141,9 @@ def main():
         print("actors: skipped (no Quaternius people: `dreamreel assets --download --pack women --pack men`)")
     else:
         people()
+    if "interior" not in have:
+        print("actors: Quaternius furniture not downloaded (`dreamreel assets --download --pack interior`)")
+    furniture()
     if "animals" not in have:
         print("actors: skipped (no Quaternius animals: `dreamreel assets --download --pack animals`)")
     else:

@@ -18,6 +18,8 @@ Table and counter `items` are classes too (`dr.Item`).
 import math
 import random
 
+import bpy
+
 from mathutils import Vector
 
 from . import look, plugins, shapes
@@ -121,13 +123,15 @@ class Table(Prop):
     params = Prop.params + [Param("width", "number", default=1.4, min=0.6, max=3, step=0.1), Param("depth", "number", default=0.8, min=0.5, max=2, step=0.1), Param("color", "color", default="wood"), Param("chairs", "choice", default=0, choices=(0, 1, 2)), Param("chair_color", "color", label="Chair colour"), Param("items", "items", label="On top")]
 
     def build(self, s, name, p):
-        w, d, h = p.get("width", 1.4), p.get("depth", 0.8), 0.48
+        w, d, h = p.get("width", 1.4), p.get("depth", 0.8), s.sized(0.48, 0.76)
         pos = s.spot_for(p, w, d, "center")
         c = p.get("color", "wood")
-        top = shapes.box(name, w, d, 0.05, c, at=(pos.x, pos.y, h - 0.05), bevel=0.02)
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                shapes.box(name + ".leg", 0.06, 0.06, h - 0.05, c, at=(pos.x + sx * (w / 2 - 0.08), pos.y + sy * (d / 2 - 0.08), 0), bevel=0.01)
+        top = s.model("Table_RoundLarge", name, (w, d, h), (pos.x, pos.y, 0))
+        if top is None:
+            top = shapes.box(name, w, d, 0.05, c, at=(pos.x, pos.y, h - 0.05), bevel=0.02)
+            for sx in (-1, 1):
+                for sy in (-1, 1):
+                    shapes.box(name + ".leg", 0.06, 0.06, h - 0.05, c, at=(pos.x + sx * (w / 2 - 0.08), pos.y + sy * (d / 2 - 0.08), 0), bevel=0.01)
         s.block(pos, w, d)
         s.add_surface(name, pos, h, (w, d))
         s.marks[name] = Mark(name, (pos.x, pos.y - d / 2 - 0.35), facing=math.pi)
@@ -136,7 +140,7 @@ class Table(Prop):
                                                  facing=math.pi / 2 * (1 if side < 0 else -1))
         for i in range(p.get("chairs", 0)):
             side = (-1, 1)[i % 2]
-            s.add_prop({"type": "chair", "at": (pos.x + side * (w / 2 + 0.3), pos.y), "face": (-side, 0), "tucked": True,
+            s.add_prop({"type": "chair", "at": (pos.x + side * (w / 2 + s.sized(0.3, 0.35)), pos.y), "face": (-side, 0), "tucked": True,
                            "color": p.get("chair_color", c)})
         for item in p.get("items", []):
             s.place_item(item, pos, h, w, on=name, depth=d)
@@ -153,14 +157,15 @@ class Chair(Prop):
         pos = Vector(p["at"]) if "at" in p else s.spot_for(p, 0.45, 0.45, "center")
         f = s.seat_facing(p, pos)
         c = p.get("color", "wood")
-        seat_h = 0.3
+        seat_h = s.sized(0.3, 0.46)
         root = shapes.empty(name, at=(pos.x, pos.y, 0))
         root.rotation_euler.z = f
-        shapes.box(name + ".seat", 0.42, 0.4, 0.04, c, root, at=(0, 0, seat_h - 0.04))
-        shapes.box(name + ".back", 0.42, 0.04, 0.45, c, root, at=(0, 0.2, seat_h - 0.02))
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                shapes.box(name + ".leg", 0.04, 0.04, seat_h - 0.04, c, root, at=(sx * 0.17, sy * 0.16, 0), bevel=0.008)
+        if s.seat_model("Chair_2", name + ".model", (0.42, 0.4, seat_h / 0.47), (0, 0), seat_h, parent=root) is None:
+            shapes.box(name + ".seat", 0.42, 0.4, 0.04, c, root, at=(0, 0, seat_h - 0.04))
+            shapes.box(name + ".back", 0.42, 0.04, 0.45, c, root, at=(0, 0.2, seat_h - 0.02))
+            for sx in (-1, 1):
+                for sy in (-1, 1):
+                    shapes.box(name + ".leg", 0.04, 0.04, seat_h - 0.04, c, root, at=(sx * 0.17, sy * 0.16, 0), bevel=0.008)
         fwd = Vector((math.sin(f), -math.cos(f)))
         front = pos + fwd * 0.6
         if p.get("tucked"):  # pushed under a table: get in from the side nearest the camera
@@ -183,19 +188,22 @@ class Sofa(Prop):
         pos = s.spot_for(p, w, 0.8, "back")
         f = s.seat_facing(p, pos)
         c = p.get("color", "teal")
+        seat_h = s.sized(0.32, 0.45)
         root = shapes.empty(name, at=(pos.x, pos.y, 0))
         root.rotation_euler.z = f
-        shapes.box(name, w, 0.8, 0.28, c, root, bevel=0.06)
-        shapes.box(name, w, 0.22, 0.7, c, root, at=(0, 0.3, 0), bevel=0.08)
-        for sd in (-1, 1):
-            shapes.box(name, 0.2, 0.8, 0.45, c, root, at=(sd * (w / 2 - 0.1), 0, 0), bevel=0.08)
-            shapes.box(name + ".cushion", w / 2 - 0.22, 0.6, 0.08, c, root, at=(sd * (w / 4 - 0.05), -0.05, 0.28), bevel=0.04)
+        if s.seat_model("Couch_Medium1", name + ".model", (w, 0.8, seat_h * 2), (w * 0.22, 0), seat_h,
+                        parent=root) is None:
+            shapes.box(name, w, 0.8, seat_h - 0.04, c, root, bevel=0.06)
+            shapes.box(name, w, 0.22, 0.7, c, root, at=(0, 0.3, 0), bevel=0.08)
+            for sd in (-1, 1):
+                shapes.box(name, 0.2, 0.8, 0.45, c, root, at=(sd * (w / 2 - 0.1), 0, 0), bevel=0.08)
+                shapes.box(name + ".cushion", w / 2 - 0.22, 0.6, 0.08, c, root, at=(sd * (w / 4 - 0.05), -0.05, seat_h - 0.08), bevel=0.04)
         fwd = Vector((math.sin(f), -math.cos(f)))
         side = Vector((math.cos(f), math.sin(f)))
         for i, sd in enumerate((-1, 1)):
             sname = name if i == 0 else f"{name}-2"
             at = pos + side * sd * w * 0.22
-            s.seats[sname] = Seat(sname, at, f, 0.32, at + fwd * 0.65)
+            s.seats[sname] = Seat(sname, at, f, seat_h, at + fwd * 0.65)
         s.marks.setdefault(name, Mark(name, pos + fwd * 0.75, facing=f))
         s.block(pos, w, 0.8)
         return root
@@ -212,9 +220,10 @@ class Door(Prop):
         c = p.get("color", "#8a5a3c")
         if not s.outdoor:
             pos.y = s.depth / 2
-        shapes.box(name + ".frame", 1.0, 0.1, 1.75, look.matte("white", 0.5), at=(pos.x, pos.y - 0.02, 0), bevel=0.01)
-        shapes.box(name, 0.86, 0.1, 1.68, c, at=(pos.x, pos.y - 0.05, 0), bevel=0.015)
-        shapes.sphere(name + ".knob", 0.035, "#e2b53e", at=(pos.x + 0.32, pos.y - 0.12, 0.85))
+        if s.model("Door_1", name, (None, None, s.sized(1.75, 2.1)), (pos.x, pos.y - 0.06, 0)) is None:
+            shapes.box(name + ".frame", 1.0, 0.1, 1.75, look.matte("white", 0.5), at=(pos.x, pos.y - 0.02, 0), bevel=0.01)
+            shapes.box(name, 0.86, 0.1, 1.68, c, at=(pos.x, pos.y - 0.05, 0), bevel=0.015)
+            shapes.sphere(name + ".knob", 0.035, "#e2b53e", at=(pos.x + 0.32, pos.y - 0.12, 0.85))
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.6), facing=0.0)
         return None
 
@@ -237,6 +246,9 @@ class Window(Prop):
             s.glows.append((sky, "sky", 1.2))
             s.windows.append((pos.x, pos.y, 1.25))
         shapes.box(name + ".view", 1.2, 0.05, 0.9, sky, at=(pos.x, pos.y - 0.02, 0.8), bevel=0)
+        if s.model("Window_Large1", name, (1.3, 0.1, 1.0), (pos.x, pos.y - 0.06, 0.75)) is not None:
+            s.marks[name] = Mark(name, (pos.x, pos.y - 0.7), facing=math.pi)
+            return None
         frame = look.matte("white", 0.5)
         for dz in (0.8, 1.25, 1.7):
             shapes.box(name + ".frame", 1.3, 0.08, 0.06, frame, at=(pos.x, pos.y - 0.04, dz - 0.03), bevel=0.01)
@@ -256,14 +268,22 @@ class Counter(Prop):
         w = p.get("width", 2.2)
         pos = s.spot_for(p, w, 0.6, "back-right")
         c = p.get("color", "white")
-        shapes.box(name, w, 0.6, 0.55, c, at=(pos.x, pos.y, 0), bevel=0.02)
-        shapes.box(name + ".top", w + 0.05, 0.65, 0.05, p.get("top", "charcoal"), at=(pos.x, pos.y, 0.55), bevel=0.01)
-        for i in range(int(w / 0.55)):
-            shapes.sphere(name + ".knob", 0.02, "#e2b53e", at=(pos.x - w / 2 + 0.28 + i * 0.55, pos.y - 0.31, 0.42))
+        h = s.sized(0.6, 0.9)
+        n = max(1, round(w / (h * 0.62)))      # kitchen units side by side
+        units = [s.model(("Kitchen_3Drawers", "Kitchen_Cabinet1", "Kitchen_2Drawers")[i % 3], f"{name}.unit",
+                         (w / n, 0.6, h), (pos.x - w / 2 + (i + 0.5) * w / n, pos.y, 0)) for i in range(n)]
+        if None in units:
+            for u in units:
+                if u is not None:
+                    bpy.data.objects.remove(u)
+            shapes.box(name, w, 0.6, h - 0.05, c, at=(pos.x, pos.y, 0), bevel=0.02)
+            shapes.box(name + ".top", w + 0.05, 0.65, 0.05, p.get("top", "charcoal"), at=(pos.x, pos.y, h - 0.05), bevel=0.01)
+            for i in range(int(w / 0.55)):
+                shapes.sphere(name + ".knob", 0.02, "#e2b53e", at=(pos.x - w / 2 + 0.28 + i * 0.55, pos.y - 0.31, h * 0.7))
         for item in p.get("items", []):
-            s.place_item(item, pos, 0.6, w, on=name, depth=0.6)
+            s.place_item(item, pos, h, w, on=name, depth=0.6)
         s.block(pos, w, 0.6)
-        s.add_surface(name, pos, 0.6, (w, 0.6))
+        s.add_surface(name, pos, h, (w, 0.6))
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.7), facing=math.pi)
         return None
 
@@ -277,10 +297,11 @@ class Fridge(Prop):
     def build(self, s, name, p):
         pos = s.spot_for(p, 0.7, 0.65, "back-right")
         c = p.get("color", "#d8eef0")
-        shapes.box(name, 0.7, 0.65, 1.55, c, at=(pos.x, pos.y, 0), bevel=0.06)
-        shapes.box(name + ".line", 0.7, 0.01, 0.015, "#9fb7ba", at=(pos.x, pos.y - 0.33, 1.0), bevel=0)
-        for z in (0.6, 1.2):
-            shapes.box(name + ".handle", 0.03, 0.04, 0.22, "#9fb7ba", at=(pos.x + 0.25, pos.y - 0.35, z), bevel=0.01)
+        if s.model("Kitchen_Fridge", name, (0.7, 0.65, s.sized(1.55, 1.8)), (pos.x, pos.y, 0)) is None:
+            shapes.box(name, 0.7, 0.65, 1.55, c, at=(pos.x, pos.y, 0), bevel=0.06)
+            shapes.box(name + ".line", 0.7, 0.01, 0.015, "#9fb7ba", at=(pos.x, pos.y - 0.33, 1.0), bevel=0)
+            for z in (0.6, 1.2):
+                shapes.box(name + ".handle", 0.03, 0.04, 0.22, "#9fb7ba", at=(pos.x + 0.25, pos.y - 0.35, z), bevel=0.01)
         s.block(pos, 0.7, 0.65)
         s.marks[name] = Mark(name, (pos.x, pos.y - 0.75), facing=math.pi)
         return None
@@ -327,6 +348,9 @@ class Plant(Prop):
 
     def build(self, s, name, p):
         pos = s.spot_for(p, 0.4, 0.4, "back-right")
+        if s.model("Houseplant_1", name, (None, None, s.sized(0.75, 1.0)), (pos.x, pos.y, 0)) is not None:
+            s.block(pos, 0.4, 0.4)
+            return None
         shapes.cylinder(name + ".pot", 0.16, 0.28, p.get("color", "brick"), at=(pos.x, pos.y, 0), r2=0.2)
         rng = random.Random(name)
         for i in range(7):
@@ -346,10 +370,13 @@ class Lamp(Prop):
 
     def build(self, s, name, p):
         pos = s.spot_for(p, 0.4, 0.4, "back-left")
-        shapes.cylinder(name, 0.15, 0.03, "charcoal", at=(pos.x, pos.y, 0))
-        shapes.cylinder(name, 0.02, 1.35, "charcoal", at=(pos.x, pos.y, 0.03), bevel=0)
-        shapes.cylinder(name + ".shade", 0.24, 0.3, look.plastic("cream", 0.7, 0.0, emission=0.6), at=(pos.x, pos.y, 1.3), r2=0.14)
-        s.lights.append(((pos.x, pos.y, 1.35), "#ffd9a0", 60))
+        h = s.sized(1.6, 1.7)
+        if s.model("Light_Floor1", name, (None, None, h), (pos.x, pos.y, 0)) is None:
+            h = 1.6
+            shapes.cylinder(name, 0.15, 0.03, "charcoal", at=(pos.x, pos.y, 0))
+            shapes.cylinder(name, 0.02, 1.35, "charcoal", at=(pos.x, pos.y, 0.03), bevel=0)
+            shapes.cylinder(name + ".shade", 0.24, 0.3, look.plastic("cream", 0.7, 0.0, emission=0.6), at=(pos.x, pos.y, 1.3), r2=0.14)
+        s.lights.append(((pos.x, pos.y, h - 0.25), "#ffd9a0", 60))
         s.block(pos, 0.3, 0.3)
         return None
 
@@ -362,6 +389,9 @@ class Rug(Prop):
 
     def build(self, s, name, p):
         pos = s.spot_for(p, 2, 1.4, "center")
+        w = p.get("width", 1.3)
+        if s.model("Carpet_Round", name, (2 * w, 1.2 * w, 0.02), (pos.x, pos.y, 0.008)) is not None:
+            return None
         shapes.cylinder(name, p.get("width", 1.3), 0.012, look.matte(p.get("color", "#d9775b"), 0.9),
                         at=(pos.x, pos.y, 0.0), bevel=0.004, segments=48).scale.y = 0.6
         return None
@@ -470,16 +500,21 @@ class Bed(Prop):
         w, d = p.get("width", 1.4), 2.0
         pos = _wall_y(s, dict(p, place=p.get("place", "back")), d)
         fr = p.get("frame", "wood")
-        shapes.box(name, w + 0.1, d + 0.1, 0.25, fr, at=(pos.x, pos.y, 0), bevel=0.03)
-        shapes.box(name + ".head", w + 0.1, 0.08, 0.85, fr, at=(pos.x, pos.y + d / 2 + 0.02, 0), bevel=0.03)
-        shapes.box(name + ".mattress", w, d - 0.05, 0.18, look.matte("#f4f1ea", 0.7), at=(pos.x, pos.y, 0.25), bevel=0.06)
-        shapes.box(name + ".pillow", w * 0.7, 0.35, 0.12, look.matte("white", 0.7), at=(pos.x, pos.y + d / 2 - 0.3, 0.42),
-                   bevel=0.05)
-        shapes.box(name + ".blanket", w + 0.04, d * 0.62, 0.05, look.matte(p.get("color", "#7aa6d9"), 0.85),
-                   at=(pos.x, pos.y - d * 0.19, 0.41), bevel=0.02)
+        top = s.sized(0.42, 0.5)
+        if s.seat_model("Bed_Single", name, (w + 0.1, d + 0.1, 1.0), (0, -d / 2 + 0.25), top,
+                        depth=False, at=(pos.x, pos.y, 0)) is None:
+            base = top - 0.17
+            shapes.box(name, w + 0.1, d + 0.1, base, fr, at=(pos.x, pos.y, 0), bevel=0.03)
+            shapes.box(name + ".head", w + 0.1, 0.08, base + 0.6, fr, at=(pos.x, pos.y + d / 2 + 0.02, 0), bevel=0.03)
+            shapes.box(name + ".mattress", w, d - 0.05, 0.18, look.matte("#f4f1ea", 0.7), at=(pos.x, pos.y, base),
+                       bevel=0.06)
+            shapes.box(name + ".pillow", w * 0.7, 0.35, 0.12, look.matte("white", 0.7),
+                       at=(pos.x, pos.y + d / 2 - 0.3, top), bevel=0.05)
+            shapes.box(name + ".blanket", w + 0.04, d * 0.62, 0.05, look.matte(p.get("color", "#7aa6d9"), 0.85),
+                       at=(pos.x, pos.y - d * 0.19, top - 0.01), bevel=0.02)
         s.block(pos, w + 0.1, d + 0.1)
         edge = Vector((pos.x, pos.y - d / 2 + 0.25))
-        s.add_seat(name, edge, 0.0, 0.42, (edge.x, edge.y - 0.6))
+        s.add_seat(name, edge, 0.0, top, (edge.x, edge.y - 0.6))
         return None
 
 
@@ -492,7 +527,7 @@ class Desk(Prop):
                             Param("items", "items", label="On top")]
 
     def build(self, s, name, p):
-        w, d, h = 1.2, 0.6, 0.5
+        w, d, h = 1.2, 0.6, s.sized(0.5, 0.76)
         pos = s.spot_for(p, w, d, "left")
         c = p.get("color", "wood")
         shapes.box(name, w, d, 0.04, c, at=(pos.x, pos.y, h - 0.04), bevel=0.01)

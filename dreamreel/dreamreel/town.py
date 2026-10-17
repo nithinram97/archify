@@ -26,7 +26,7 @@ from mathutils import Vector
 
 from . import look, shapes
 from .plugins import Param
-from .sets import Set
+from .sets import COMMON, Set
 
 
 class Parts:
@@ -73,7 +73,7 @@ class Street(Set):
                      "trim": "#f3e6cc", "roof": "#5a3825"},
     }
     AWNINGS = ["#e4572e", "#2a9d8f", "#3d7dd8", "#f1c453", "#7b5ea7"]
-    params = [
+    params = COMMON + [
         Param("style", "choice", default="town", choices=("town", "city", "old_town")),
         Param("shops", "number", default=0.5, min=0, max=1, step=0.1, label="Shops"),
         Param("cars", "number", default=4, min=0, max=12, step=1),
