@@ -128,6 +128,9 @@ def street():
     assert len(built) > 8, len(built)
     front = [o for o in built if o.location.y > 0]
     assert front and min(o.dimensions.z for o in front) > 15, ("life-size buildings", [o.dimensions.z for o in front])
+    cars = [o for o in s.bscene.objects if o.type == "MESH" and o.data.name.startswith("cars.")]
+    if "cars" in quaternius.installed():
+        assert len(cars) == 4 and all(3.0 < o.dimensions.y < 4.5 for o in cars), [o.dimensions for o in cars]
     door = s.set.marks["door"].at
     assert any(abs(o.location.x - door.x) < 0.1 for o in front), "the door mark is at a building"
     _, small = kit({"style": "old_town"})

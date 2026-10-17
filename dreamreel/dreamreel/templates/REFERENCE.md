@@ -122,7 +122,8 @@ Every kind of set takes `scale`: `toy` (the default: furniture for toy figures a
 `people` (life-size furniture for `person` characters: 0.76 m tables, 0.46 m chair seats). The
 furniture is Quaternius's models (`dreamreel assets --download --pack interior`) fitted to the same
 sizes, and outdoors the trees, pines, bushes, rocks, flowers, grass and mushrooms are too (`--pack
-nature`), and city and old town streets are its brick buildings (`--pack city`);
+nature`), city and old town streets are its brick buildings (`--pack city`), and cars are its
+cars (`--pack cars`; a car prop's `model`: car, small, suv, sports, taxi, police);
 `furniture = "simple"` uses dreamreel's own shapes instead, as it does when the packs
 aren't downloaded.
 

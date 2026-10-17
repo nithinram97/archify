@@ -135,7 +135,7 @@ moves them through the set and plays their own walks, runs, idles and gestures i
 into each other; their heads turn to look, their hands carry things, and they sit down on chairs,
 sofas and beds. Rooms are furnished from Quaternius's interior pack too (tables, chairs, sofas,
 beds, kitchens, doors, windows, lamps, plants) and outdoor sets from its nature pack (trees, pines,
-bushes, rocks, flowers, grass) and city streets from its downtown kit, sized for toys or, with `scale = "people"`, for life-size people. `dreamreel assets --download` fetches the packs (they aren't bundled).
+bushes, rocks, flowers, grass) and city streets from its downtown kit and cars, sized for toys or, with `scale = "people"`, for life-size people. `dreamreel assets --download` fetches the packs (they aren't bundled).
 
 ## Your own characters
 

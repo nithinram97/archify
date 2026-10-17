@@ -660,11 +660,17 @@ class Blackboard(Prop):
         return None
 
 
+CARS = {"car": "NormalCar1", "small": "NormalCar2", "suv": "SUV", "sports": "SportsCar", "taxi": "Taxi",
+        "police": "Cop"}
+CAR_LENGTH = {"small": 0.8, "sports": 0.95, "police": 0.9}
+
+
 class Car(Prop):
     name = "car"
-    description = "A small toy car"
+    description = "A car (Quaternius's: car, small, suv, sports, taxi, police)"
     default_place = "front-left"
     params = Prop.params + [Param("color", "color", default="red"),
+                            Param("model", "choice", default="car", choices=tuple(CARS)),
                             Param("facing", "choice", default="left", choices=("left", "right", "camera", "back"))]
 
     def build(self, s, name, p):
@@ -673,6 +679,23 @@ class Car(Prop):
         else:
             pos = s.spot_for(p, 1.9, 0.9, "front-left")
         f = {"left": -math.pi / 2, "right": math.pi / 2, "camera": 0.0, "back": math.pi}[p.get("facing", "left")]
+        kind = p.get("model", "car")
+        length = s.sized(2.0, 4.2) * CAR_LENGTH.get(kind, 1.0)
+        car = s.model(CARS.get(kind, CARS["car"]), name, (None, length, None), (pos.x, pos.y, 0), f, pack="cars")
+        if car is not None:
+            if kind not in ("taxi", "police"):      # repaint the body (the biggest surface)
+                area = {}
+                for poly in car.data.polygons:
+                    area[poly.material_index] = area.get(poly.material_index, 0.0) + poly.area
+                slot = car.material_slots[max(area, key=area.get)]
+                slot.link = "OBJECT"
+                slot.material = look.plastic(p.get("color", "red"), 0.3, 0.6)
+            wide = car.dimensions.x
+            along = abs(math.sin(f)) > 0.5
+            s.block(pos, length if along else wide, wide if along else length)
+            s.marks.setdefault(name, Mark(name, (pos.x, pos.y - wide / 2 - 0.45 if along else pos.y - length / 2 - 0.45),
+                                          facing=math.pi))
+            return car
         root = shapes.empty(name, at=(pos.x, pos.y, 0))
         root.rotation_euler.z = f + math.pi / 2       # the car is built pointing along +x
         c = look.plastic(p.get("color", "red"), 0.3, 0.6)

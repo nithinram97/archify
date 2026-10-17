@@ -33,7 +33,7 @@ Next, roughly in order:
 - Eye direction (eyes follow before the head turns).
 
 ## Characters
-- Quaternius everywhere: vehicles, street props and a modular-kit builder for varied buildings (people, animals, furniture, nature and city buildings are done); the base characters with the Universal Animation Library (talking, dancing).
+- Quaternius everywhere: buses and trains, street props and a modular-kit builder for varied buildings (people, animals, furniture, nature, city buildings and cars are done); the base characters with the Universal Animation Library (talking, dancing).
 - A character designer: describe a person in a sentence and get a cast file with a turnaround image.
 - CC0 asset packs as props and sets (Kenney, Quaternius, Poly Haven); fingers on imported models.
 

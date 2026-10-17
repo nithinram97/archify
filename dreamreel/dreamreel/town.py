@@ -126,10 +126,13 @@ class Street(Set):
         xs = [x for x in range(-30, 31, 4) if abs(x) > 9]       # none parked in front of the camera
         rng.shuffle(xs)
         colors = ["red", "blue", "yellow", "teal", "white", "charcoal", "orange", "mint"]
+        models = ["car", "car", "small", "suv", "sports"] + (["taxi"] if spec.get("style") == "city" else [])
+        off = self.sized(0.75, 1.1)
         for i, x in enumerate(sorted(xs[:n])):
             far = i % 2 == 1
             self.add_prop({"type": "car", "name": f"car{i + 1}" if i else "car", "color": rng.choice(colors),
-                           "at": (x + rng.uniform(-0.6, 0.6), (far_kerb + 0.75) if far else (kerb - 0.75)),
+                           "model": rng.choice(models),
+                           "at": (x + rng.uniform(-0.6, 0.6), (far_kerb + off) if far else (kerb - off)),
                            "facing": "right" if far else "left"})
         # marks
         door = min(self.doors, key=lambda d: abs(d[0])) if self.doors else (0.0, False)
@@ -164,6 +167,7 @@ class Street(Set):
                              0.0 if side > 0 else math.pi, pack="city")
             obj.scale = (k * rng.choice((1, -1)), k, k)
             obj["dr_building"] = True
+            self._light_rooms(m)
             if side > 0:
                 self.doors.append((cx, False))
                 if abs(cx) < 30:
@@ -171,6 +175,23 @@ class Street(Set):
             x += w + rng.uniform(0, 0.3) * k
             i += 1
         return True
+
+    def _light_rooms(self, mesh):
+        """The kit's rooms behind the windows glow at night (some of them; see Set.apply_light)."""
+        done = {g[0] for g in self.glows}
+        for mat in mesh.materials:
+            if not mat or "FakeInterior" not in mat.name or mat in done:
+                continue
+            nodes = mat.node_tree.nodes
+            bsdf = nodes.get("Principled BSDF")
+            tex = next((n for n in nodes if n.type == "TEX_IMAGE" and n.outputs["Color"].links
+                        and any(lk.to_node.type in ("MIX", "BSDF_PRINCIPLED") for lk in n.outputs["Color"].links)), None)
+            if bsdf is None or tex is None:
+                continue
+            mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Emission Color"])
+            bsdf.inputs["Emission Strength"].default_value = 0.0
+            self.glows.append((mat, "lit", 0.8))
+            done.add(mat)
 
     def _row(self, rng, style, y0, side, L):
         """A row of buildings with their fronts at y0, facing towards the street (side +1: the far

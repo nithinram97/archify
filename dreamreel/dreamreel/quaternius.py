@@ -31,6 +31,7 @@ PACKS = {
                 "about": "alpaca, bull, cow, deer, donkey, fox, horse, husky, shiba inu, stag, wolf"},
     "interior": {"drive": "1SNK9PwPi8xqqxmpU5xEZeiQjB26C1oX6",
                  "about": "furniture: tables, chairs, sofas, beds, shelves, kitchens, doors, windows, lamps, plants"},
+    "cars": {"drive": "1fKlbDry77iY8KlEoxzUxIAZQL_XhzWlA", "about": "cars: car, small, suv, sports, taxi, police"},
     "nature": {"itch": "https://quaternius.itch.io/stylized-nature-megakit",
                "about": "trees, bushes, rocks, flowers, grass"},
     "city": {"itch": "https://quaternius.itch.io/downtown-city-megakit", "vertex_colors": False,
