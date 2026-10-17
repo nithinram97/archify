@@ -63,6 +63,7 @@ def main():
                  "Maya.ear", "Maya.skirt", "Maya.brow"):
         assert any(n.startswith(part) for n in names), part
     assert not any(n.startswith("Sam.freckle") for n in names)
+    assert sum(n.startswith("Maya.hair") for n in names) > 20, "hair in locks, not a shell"
     # clothes by region: shorts leave the shins bare, long sleeves cover the forearms
     body = sam.meshes[0]
     mats = [m.name for m in body.data.materials]

@@ -485,8 +485,13 @@ class Person(ModelCharacter):
                               at=self.face_point(x, z, 0.0004), segments=8)
 
     def build_hair(self):
+        from . import hairdo
         hair = look.hair(self.color("hair_color", "brown"))    # not the toys' glossy plastic
-        plugins.get("hair", self.get("hair", "short"))().build(self, hair)
+        style = self.get("hair", "short")
+        if hairdo.supported(style):        # sculpted in locks that follow the head (hairdo.py)
+            hairdo.build(self, style, hair)
+        else:
+            plugins.get("hair", style)().build(self, hair)
 
     def build_extras(self):
         for e in self.get("extras", []) or []:
