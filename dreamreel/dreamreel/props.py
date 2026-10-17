@@ -660,6 +660,35 @@ class Blackboard(Prop):
         return None
 
 
+class ModelProp(Prop):
+    name = "model"
+    description = "Your own 3D model as a prop (glTF, FBX, OBJ in models/; `dreamreel generate --prop` makes one)"
+    default_place = "center"
+    params = Prop.params + [Param("file", "model", required=True, label="Model file (in models/)"),
+                            Param("height", "number", default=1.0, min=0.02, max=30, step=0.05, label="Height (m)"),
+                            Param("facing", "choice", default="camera", choices=("camera", "left", "right", "back")),
+                            Param("solid", "bool", default=True, label="Characters walk round it")]
+
+    def build(self, s, name, p):
+        import os
+        from . import quaternius
+        from .models import find
+        if not p.get("file"):
+            raise ValueError(f"prop {name}: a model prop needs file = \"models/...\"")
+        path = find(p["file"])
+        if not os.path.exists(path):
+            raise ValueError(f"prop {name}: no model file {p['file']!r}")
+        pos = Vector(p["at"][:2]) if "at" in p else s.spot_for(p, 0.6, 0.6, "center")
+        f = {"left": -math.pi / 2, "right": math.pi / 2, "camera": 0.0, "back": math.pi}[p.get("facing", "camera")]
+        obj = quaternius.place_mesh(quaternius.load(path, f"model.{name}"), name, (None, None, float(p.get("height", 1.0))),
+                                    (pos.x, pos.y, 0), f)
+        w, d = obj.dimensions.x, obj.dimensions.y
+        if p.get("solid", True):
+            s.block(pos, w if abs(math.sin(f)) < 0.5 else d, d if abs(math.sin(f)) < 0.5 else w)
+        s.marks.setdefault(name, Mark(name, (pos.x, pos.y - max(w, d) / 2 - 0.45), facing=math.pi))
+        return obj
+
+
 CARS = {"car": "NormalCar1", "small": "NormalCar2", "suv": "SUV", "sports": "SportsCar", "taxi": "Taxi",
         "police": "Cop"}
 CAR_LENGTH = {"small": 0.8, "sports": 0.95, "police": 0.9}

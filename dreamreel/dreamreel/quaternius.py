@@ -66,20 +66,27 @@ _LIBRARY = {}     # (pack, name) -> mesh: each model is imported once and shared
 def mesh(pack, name):
     """A pack's model as one mesh, its origin in the middle of its base and its front facing -Y
     (the camera); None if the pack isn't installed."""
+    path = files(pack).get(name)
+    if path is None:
+        return None
+    return load(path, f"{pack}.{name}", PACKS.get(pack, {}).get("vertex_colors", True))
+
+
+def load(path, label, vertex_colors=True):
+    """Any model file as one mesh (imported once), origin in the middle of its base."""
     import bpy
     from mathutils import Matrix, Vector
     from .models import import_file
-    got = _LIBRARY.get((pack, name))
+    got = _LIBRARY.get(path)
     try:
         if got is not None and got.name:
             return got
     except ReferenceError:          # a new Blender scene was started
         pass
-    path = files(pack).get(name)
-    if path is None:
-        return None
+    from .models import lighten
     objs = import_file(path)
     meshes = [o for o in objs if o.type == "MESH"]
+    lighten(meshes)
     cols = meshes[0].data.color_attributes if meshes else None
     render_color = cols[cols.render_color_index].name if cols and cols.render_color_index >= 0 else None
     bpy.context.view_layer.update()
@@ -106,14 +113,14 @@ def mesh(pack, name):
         bm.from_mesh(tmp)
         bpy.data.meshes.remove(tmp)
         bpy.data.meshes.remove(m)
-    out = bpy.data.meshes.new(f"{pack}.{name}")
+    out = bpy.data.meshes.new(label)
     bm.to_mesh(out)
     bm.free()
     names = [c.name for c in out.color_attributes]
     if render_color in names:       # materials read "the" vertex colour: keep the file's choice
         out.color_attributes.active_color_index = names.index(render_color)
         out.color_attributes.render_color_index = names.index(render_color)
-    if not PACKS.get(pack, {}).get("vertex_colors", True):     # masks for game engines, not colours
+    if not vertex_colors:           # masks for game engines, not colours
         for mat in mats:
             for node in list(mat.node_tree.nodes if mat and mat.node_tree else ()):
                 if node.type == "VERTEX_COLOR":
@@ -133,7 +140,7 @@ def mesh(pack, name):
     hi = Vector(tuple(max(v.co[i] for v in out.vertices) for i in range(3)))
     out.transform(Matrix.Translation(-Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))))
     out.use_fake_user = True
-    _LIBRARY[(pack, name)] = out
+    _LIBRARY[path] = out
     return out
 
 
@@ -141,9 +148,13 @@ def place(pack, name, label, size, at=(0, 0, 0), facing=0.0, parent=None):
     """A copy of a pack's model, fitted to size (width, depth, height; None for an axis that follows
     the others), standing at `at` facing `facing` (radians; 0 faces the camera). None if the pack isn't
     installed (the caller builds its own)."""
+    return place_mesh(mesh(pack, name), label, size, at, facing, parent)
+
+
+def place_mesh(m, label, size, at=(0, 0, 0), facing=0.0, parent=None):
+    """A copy of a loaded mesh (see place); None for no mesh."""
     import bpy
     from . import shapes
-    m = mesh(pack, name)
     if m is None:
         return None
     dims = [max(1e-6, max(v.co[i] for v in m.vertices) - min(v.co[i] for v in m.vertices)) for i in range(3)]

@@ -11,6 +11,7 @@
     dreamreel studio                 the same, in a friendly app in your browser
     dreamreel plugins                every feature you can use (built-in and from extensions/)
     dreamreel extend prop cake       start a new feature as a class in extensions/
+    dreamreel generate frog --prompt "a chubby cartoon frog"   make a model with AI (Tripo, your key)
 """
 import argparse
 import math
@@ -283,6 +284,34 @@ def cmd_assets(a):
         print(f"  {name:12s} {mark:14s} {spec['about']}")
     if not have:
         print("Download them with: dreamreel assets --download   (or --pack NAME)")
+
+
+def cmd_generate(a):
+    """Make a model with Tripo (AI, online, your own API key) and add it to the film."""
+    from . import tripo
+    p = _project()
+    if not (a.prompt or a.image):
+        raise SystemExit("say what to make: --prompt \"a chubby cartoon frog\" or --image picture.png")
+    path = os.path.join(p.root, "models", f"{a.name}.glb")
+    if os.path.exists(path) and not a.force:
+        raise SystemExit(f"models/{a.name}.glb already exists (--force to make it again)")
+    try:
+        tripo.generate(path, prompt=a.prompt, image=a.image, character=not a.prop, faces=a.faces)
+    except tripo.TripoError as e:
+        raise SystemExit(str(e))
+    print(f"saved models/{a.name}.glb (made by Tripo: check its terms before sharing it)")
+    if a.prop:
+        print(f"put it in a set: [[props]] type = \"model\", file = \"models/{a.name}.glb\", height = 1.0")
+        return
+    cast = os.path.join(p.root, "cast", f"{a.name}.toml")
+    if os.path.exists(cast) and not a.force:
+        print(f"cast/{a.name}.toml exists; set its file = \"models/{a.name}.glb\" to use the new model")
+        return
+    os.makedirs(os.path.dirname(cast), exist_ok=True)
+    with open(cast, "w") as f:
+        f.write(f'name = "{a.name.capitalize()}"\ntype = "model"\nfile = "models/{a.name}.glb"\nheight = {a.height}\n')
+    print(f"cast/{a.name}.toml is ready: rigged when cast, it walks, gestures and handles things."
+          " Check it with `dreamreel cast` (set turn = 180 if it faces away).")
 
 
 def cmd_motions(a):
@@ -686,6 +715,15 @@ def main(argv=None):
     asp.add_argument("--download", action="store_true", help="fetch the packs (CC0) into the cache")
     asp.add_argument("--pack", help="just this pack (see the list)")
     asp.set_defaults(fn=cmd_assets)
+    ge = sub.add_parser("generate", help="make a character or prop with AI (Tripo, online, needs TRIPO_API_KEY)")
+    ge.add_argument("name", help="what to call it (models/NAME.glb, cast/NAME.toml)")
+    ge.add_argument("--prompt", help="describe it")
+    ge.add_argument("--image", help="or a picture of it")
+    ge.add_argument("--prop", action="store_true", help="a prop, not a character")
+    ge.add_argument("--height", type=float, default=1.0, help="character height in metres")
+    ge.add_argument("--faces", type=int, default=20000, help="most faces the model may have")
+    ge.add_argument("--force", action="store_true", help="replace an existing model")
+    ge.set_defaults(fn=cmd_generate)
     ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
     ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))
     ex.add_argument("name")

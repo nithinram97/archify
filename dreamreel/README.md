@@ -143,7 +143,12 @@ Bring a 3D model (glTF/GLB, FBX or OBJ) into a film's `models/` folder and cast 
 `type = "model"`. Rigged models (Mixamo, Ready Player Me, VRoid...) keep their skeleton, whatever its
 bones are called; unrigged models in a T or A pose get one automatically, found from the shape of the
 body. Either way the model walks, gestures, performs motion capture, carries things and, if it has
-facial shape keys, smiles, frowns and blinks with the story's moods.
+facial shape keys, smiles, frowns and blinks with the story's moods. Heavy models (AI-made or
+scanned, up to millions of faces) are lightened as they load so they render quickly.
+
+No model yet? `dreamreel generate frog --prompt "a chubby cartoon frog"` makes one with AI through
+[Tripo](https://www.tripo3d.ai) (a paid service: your own API key in `TRIPO_API_KEY`) and casts it;
+`--image` works from a picture, and `--prop` makes a thing for a set (`type = "model"` props).
 
 ## A real camera
 

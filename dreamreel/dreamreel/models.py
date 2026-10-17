@@ -74,6 +74,44 @@ def import_file(path, keep_actions=False):
     return new
 
 
+def find(f):
+    """A model file named in a cast or set file: as given, or in the film's folder or models/."""
+    if os.path.isabs(f) or os.path.exists(f):
+        return f
+    from . import project
+    p = project.current()
+    if p is not None:
+        for cand in (os.path.join(p.root, f), os.path.join(p.root, "models", f)):
+            if os.path.exists(cand):
+                return cand
+    return f
+
+
+FACES = 50000      # more than this and a model is lightened when it's loaded
+
+
+def lighten(meshes, faces=FACES):
+    """Cut very heavy meshes (AI-made and scanned models can have a million faces) down to about
+    `faces` in all, keeping their shape, UVs and skin weights; a light model renders and rigs far
+    faster. Meshes with shape keys (faces that move) are left as they are."""
+    total = sum(len(m.data.polygons) for m in meshes if m.type == "MESH")
+    if total <= faces:
+        return 0
+    ratio = faces / total
+    for m in meshes:
+        if m.type != "MESH" or m.data.shape_keys or len(m.data.polygons) < 500:
+            continue
+        if m.data.users > 1:
+            m.data = m.data.copy()
+        mod = m.modifiers.new("lighten", "DECIMATE")
+        mod.ratio = ratio
+        mod.use_collapse_triangulate = False
+        with bpy.context.temp_override(object=m, active_object=m, selected_objects=[m]):
+            bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=0)
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+    return total - sum(len(m.data.polygons) for m in meshes if m.type == "MESH")
+
+
 def keep_character(objs):
     """The skeleton and the meshes that make up the character; everything else imported goes."""
     arm = next((o for o in objs if o.type == "ARMATURE"), None)
@@ -399,6 +437,8 @@ class ModelCharacter(Character):
         Param("file", "model", required=True, label="Model file (in models/)"),
         Param("height", "number", default=1.0, min=0.3, max=3.0, step=0.05, label="Height (m)"),
         Param("turn", "number", default=0, min=-180, max=180, step=90, label="Turn (degrees)"),
+        Param("faces", "number", default=FACES, min=2000, max=1000000, step=1000,
+              label="Most faces (heavier models are lightened)"),
         Param("voice", "voice"),
     ]
     default_capabilities = ("walk", "arms", "swing_legs", "face")
@@ -409,16 +449,7 @@ class ModelCharacter(Character):
             raise ValueError(f"{self.name}: a model character needs file = \"models/...\"")
 
     def _path(self):
-        f = self.spec["file"]
-        if os.path.isabs(f) or os.path.exists(f):
-            return f
-        from . import project
-        p = project.current()
-        if p is not None:
-            for cand in (os.path.join(p.root, f), os.path.join(p.root, "models", f)):
-                if os.path.exists(cand):
-                    return cand
-        return f
+        return find(self.spec["file"])
 
     def proportions(self):
         self.H = float(self.spec.get("height") or 1.0)
@@ -429,6 +460,7 @@ class ModelCharacter(Character):
         arm, meshes = keep_character(objs)
         if not meshes:
             raise ValueError(f"{self.name}: no mesh in {self.spec['file']}")
+        lighten(meshes, int(self.spec.get("faces") or FACES))
         # stand it up: feet on the ground, centred, facing the front, at the height asked for
         holder = shapes.empty(f"{n}.model")
         bpy.context.view_layer.update()

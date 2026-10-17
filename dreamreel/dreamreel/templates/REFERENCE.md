@@ -88,6 +88,7 @@ type = "model"
 file = "models/hero.glb"     # glTF/GLB, FBX or OBJ, in the film's models/ folder
 height = 1.0                 # metres; toy figures are about 1 m
 turn = 0                     # degrees, if it doesn't face the front after import
+faces = 50000                # heavier models (AI-made, scanned) are lightened to about this
 ```
 
 A rigged model (Mixamo, Ready Player Me, VRoid, Quaternius...) keeps its skeleton; an unrigged
@@ -95,6 +96,12 @@ one standing in a T or A pose is rigged automatically. Either way it walks, gest
 motion capture and handles things like a toy figure. If the model has facial shape keys (blink,
 smile, jawOpen; ARKit and VRM names work), moods, blinks and talking drive them; without them its
 face doesn't change. Check the licence of any model you use.
+
+`dreamreel generate NAME --prompt "..."` (or `--image picture.png`) makes a model with AI, using
+Tripo (tripo3d.ai, a paid online service: the film maker's own key in `TRIPO_API_KEY`), saves it as
+`models/NAME.glb` and writes `cast/NAME.toml`; add `--prop` for a thing instead of a character.
+Your own models go in sets too: `[[props]] type = "model"`, `file = "models/lamp.glb"`, `height`,
+`facing`, `place`.
 
 **Colours**: hex (`"#e4572e"`) or a name: red orange yellow green teal blue navy purple pink cream
 beige wood darkwood charcoal denim mint sky brick leaf grass white black grey brown chestnut blonde
@@ -390,4 +397,6 @@ so trying a different one is quick.
 | `dreamreel previz [scene]` / `render [scene]` | fast film / final film (`--percent`, `--force`) |
 | `dreamreel plugins [kind] [-v]` | every feature and its settings |
 | `dreamreel extend KIND NAME` | start a new feature as a class in `extensions/` |
+| `dreamreel generate NAME --prompt/--image` | make a character (or `--prop`) with AI (Tripo, own key) |
+| `dreamreel assets [--download] [--pack P]` | Quaternius's free 3D packs: people, animals, furniture... |
 | `dreamreel voices` | how to set up voices |
