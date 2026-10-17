@@ -1094,7 +1094,7 @@ function filmView() {
   const save = async () => {
     await api("PUT", "/api/film", { title: film.title, fps: film.fps, resolution: film.resolution, music: film.music || null,
       style: film.style && film.style !== "toy" ? film.style : null,
-      voices: film.voices === false ? false : null }).catch(fail);
+      voices: film.voices === false ? false : null, lipsync: film.lipsync === "loudness" ? "loudness" : null }).catch(fail);
     await refresh();
     toast("Saved");
   };
@@ -1112,7 +1112,10 @@ function filmView() {
         h("label", { class: "field" }, "Music", select(S.state.music, music.file || "", (v) => (film.music = v ? { file: v, volume: music.volume || 0.35 } : null), { blank: S.state.music.length ? "(no music)" : "(put music files in audio/music)" })),
         h("label", { class: "field" }, "Music volume", h("input", { type: "range", min: 0.05, max: 1, step: 0.05, value: music.volume || 0.35,
           oninput: (e) => { if (film.music) film.music.volume = +e.target.value; } })),
-        h("label", { class: "field row" }, h("input", { type: "checkbox", checked: film.voices !== false, onchange: (e) => (film.voices = e.target.checked) }), "Characters speak out loud")),
+        h("label", { class: "field row" }, h("input", { type: "checkbox", checked: film.voices !== false, onchange: (e) => (film.voices = e.target.checked) }), "Characters speak out loud"),
+        h("label", { class: "field", title: "From the sounds: lips close for M, B and P, round for \"oo\", open wide for \"aa\". Uses Rhubarb Lip Sync (free, downloaded once, about 90 MB)." },
+          "Lip sync", select([["sounds", "From the sounds of the voice (best)"], ["loudness", "From how loud it is (quick, no download)"]],
+            film.lipsync || "sounds", (v) => (film.lipsync = v)))),
       h("div", {}, h("button", { class: "btn primary", onclick: save }, "Save"))),
     h("div", { class: "card", style: "margin-top:14px" },
       h("h3", {}, "Make the film"),

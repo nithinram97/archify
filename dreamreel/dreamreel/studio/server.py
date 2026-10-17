@@ -460,7 +460,7 @@ class Handler(BaseHTTPRequestHandler):
             if "scenes" in b and film.get("edit"):
                 return self._error("This film's scene order comes from the [[edit]] list in film.toml "
                                    "(cross-cutting, split screens). Change the order there, or ask your AI agent.", 409)
-            for k in ("title", "fps", "resolution", "scenes", "music", "voices", "style"):
+            for k in ("title", "fps", "resolution", "scenes", "music", "voices", "lipsync", "style"):
                 if k in b:
                     if b[k] in (None, "", []) and k in film:
                         del film[k]

@@ -84,7 +84,8 @@ class Scene:
         # how far acting is pushed (anticipation, overshoot, amplitude): film.toml, else the style's
         self.exaggeration = float(self.film.get("exaggeration") or self.style.exaggeration)
         self.voices = Voices(self.project.root if self.project else None,
-                             engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True))
+                             engine=self.film.get("voice_engine", "auto"), enabled=self.film.get("voices", True),
+                             lipsync=self.film.get("lipsync", "sounds"))
         if isinstance(set, dict):
             self.set = Set.create(set, name="set")
         elif set:

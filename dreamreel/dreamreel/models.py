@@ -742,6 +742,7 @@ class ModelCharacter(Character):
         self.eyes = [shapes.empty(f"{n}.eye", self.neck) for _ in (1, -1)]
         self.brows = {s: shapes.empty(f"{n}.brow", self.neck) for s in (1, -1)}
         self.mouth = shapes.empty(f"{n}.mouthpivot", self.neck)
+        self.mouth["round"] = self.mouth["wide"] = 0.0     # lip sync keys these (Character._mouth_key)
         m = shapes.plane(f"{n}.mouthkeys", 0.001, 0.001, None, self.neck)
         m.hide_render = True
         m.hide_viewport = True
@@ -788,6 +789,15 @@ class ModelCharacter(Character):
                 var.targets[0].id = src
                 var.targets[0].data_path = f"{path}[{index}]" if index is not None else path
                 d.expression = expr
+                lips = {"pucker": "round", "stretch": "wide"}.get(role)
+                if lips:                            # the sounds of speech shape the lips too
+                    var = d.variables.new()
+                    var.name = "s"
+                    var.type = "SINGLE_PROP"
+                    var.targets[0].id_type = "OBJECT"
+                    var.targets[0].id = self.mouth
+                    var.targets[0].data_path = f'["{lips}"]'
+                    d.expression = f"max({expr}, s)"
 
     # the toy's build steps don't apply
     def build_rig(self):

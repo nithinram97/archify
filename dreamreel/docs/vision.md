@@ -25,7 +25,7 @@ noticing the difference in craft. Concretely, department by department:
 | Story and editing | Clear staging, cutting on action, rhythm, J/L cuts | Strong: automatic director, edit list |
 | Camera | Real lenses, framing, moves, the 180° rule, depth of field | Good; lens/sensor presets to come |
 | Characters | Appealing designs, clean silhouettes, film-quality topology | Quaternius models (game quality); AI modeller started |
-| Faces | Expressive brows, eyes and mouths; lip sync to the language spoken | Weak: the current gap |
+| Faces | Expressive brows, eyes and mouths; lip sync to the language spoken | Expressions on every face; lip sync from the sounds of speech (Rhubarb) |
 | Body acting | Weight, timing, anticipation, contact with the world | Clips, procedural acting and posed gestures; needs AI motion |
 | Sets and props | Rich, lived-in, culturally right places | Quaternius furniture, nature, city; Indian world kit to come |
 | Lighting | Motivated light, mood per beat, colour script | Basic: time of day and weather |

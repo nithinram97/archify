@@ -32,7 +32,7 @@ Next, roughly in order:
 - Physics for bodies (a character tripping and falling as a ragdoll), cloth and things that break.
 - Walk cycles that follow curves and stairs; crowds walking in the background.
 - More gestures (hug, high-five, dance, fall over, sneak) and gesture layering while talking.
-- Better lip sync from phonemes (Rhubarb Lip Sync) instead of loudness.
+- (Done: lip sync from the sounds of speech, with Rhubarb Lip Sync.) Next: Audio2Face faces driven by the voice.
 - Eye direction (eyes follow before the head turns).
 
 ## Characters

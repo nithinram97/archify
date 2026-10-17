@@ -640,7 +640,7 @@ class Character(Plugin):
         t0 = t + 0.15
         if speech is not None:
             dur = speech.duration
-            self._lipsync_envelope(t0, speech)
+            self._lipsync_audio(t0, speech)
         else:
             dur = self._lipsync_text(t0, line)
         listener = self.scene.character(to) if isinstance(to, str) else to
@@ -650,10 +650,15 @@ class Character(Plugin):
                           mood=mood or self.mood)
         return self._end(t0 + dur + 0.3, wait)
 
-    def _mouth_key(self, t, open_amt, round_amt=0.0):
+    def _mouth_key(self, t, open_amt, round_amt=0.0, wide_amt=0.0):
+        """open: the jaw; round: lips pushed forward ("oo"); wide: lips stretched ("ee"). Faces with
+        their own shape keys read these (see models.ModelCharacter._face)."""
         rest = self.mouth.get("rest", 0.0)
         o = max(open_amt, rest)
-        key(self.mouth, "scale", t, (1 - 0.3 * o - 0.35 * round_amt, 1, 1 + 2.2 * o))
+        key(self.mouth, "scale", t, (1 - 0.3 * o - 0.35 * round_amt + 0.3 * wide_amt, 1, 1 + 2.2 * o))
+        for prop, v in (("round", round_amt), ("wide", wide_amt)):
+            self.mouth[prop] = float(v)
+            self.mouth.keyframe_insert(f'["{prop}"]', frame=keys.CLOCK.frame(t))
 
     def _lipsync_text(self, t0, line):
         """No audio: animate the mouth from the words (one open/close per syllable)."""
@@ -684,6 +689,21 @@ class Character(Plugin):
             t += 0.04
         self._mouth_key(t + 0.05, 0.0)
         return t - t0
+
+    def _lipsync_audio(self, t0, speech):
+        """Mouth shapes from the sounds of the line (lipsync.py), or from its loudness."""
+        cues = speech.shapes() if self.scene.voices.lipsync == "sounds" else None
+        if not cues:
+            return self._lipsync_envelope(t0, speech)
+        hold(self.mouth, "scale", t0 - 0.05)
+        last = None
+        for start, (o, r, w) in cues:
+            t = t0 + start
+            if last is not None and t - last < 0.035:     # too quick to see: keep the frames clean
+                continue
+            self._mouth_key(t, o, r, w)
+            last = t
+        self._mouth_key(t0 + speech.duration + 0.05, 0.0)
 
     def _lipsync_envelope(self, t0, speech):
         hold(self.mouth, "scale", t0 - 0.05)

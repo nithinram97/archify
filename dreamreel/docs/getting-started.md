@@ -50,6 +50,11 @@ With `dreamreel[voices]` installed, each line is spoken by the character's `voic
 name; listen to them at https://rhasspy.github.io/piper-samples/). Voices download on first use and
 are cached. Without voices, mouths still move from the words and lines show as subtitles.
 
+Mouths follow the sounds of each line: lips press together for M, B and P, round for "oo", open
+wide for "aa". dreamreel listens with Rhubarb Lip Sync (free, MIT, downloaded once, about 90 MB; it
+runs on any computer). To skip the download, set `lipsync = "loudness"` in `film.toml` and the mouth
+opens with how loud the voice is.
+
 ## Music
 
 Put a file in `audio/music/` and add to `film.toml`:

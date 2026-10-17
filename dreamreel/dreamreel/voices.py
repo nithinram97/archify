@@ -93,10 +93,11 @@ def pick_engine(name="auto"):
 
 
 class Speech:
-    """A rendered line: a wav file, its length, and its loudness over time (for the mouth)."""
+    """A rendered line: a wav file, its length, its loudness over time and the mouth shapes of its
+    sounds (for the mouth)."""
 
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, path, text=None, english=True):
+        self.path, self.text, self.english = path, text, english
         with wave.open(path, "rb") as w:
             self.rate = w.getframerate()
             ch = w.getnchannels()
@@ -109,6 +110,11 @@ class Speech:
             samples = samples[::ch]
         self.samples = samples
         self.duration = len(samples) / self.rate
+
+    def shapes(self, download=True):
+        """[(start, (open, round, wide))] from the sounds of the line, or None (see lipsync.py)."""
+        from . import lipsync
+        return lipsync.cues(self.path, self.text, self.english, download)
 
     def envelope(self, step):
         """Loudness (0-1) every `step` seconds."""
@@ -123,9 +129,10 @@ class Speech:
 
 
 class Voices:
-    def __init__(self, project_dir=None, engine="auto", enabled=True):
+    def __init__(self, project_dir=None, engine="auto", enabled=True, lipsync="sounds"):
         self.dir = os.path.join(project_dir, "audio", "voices") if project_dir else None
         self.engine = pick_engine(engine) if enabled else None
+        self.lipsync = lipsync
         self.warned = False
 
     def speak(self, character, line):
@@ -150,4 +157,5 @@ class Voices:
             finally:
                 if os.path.exists(tmp):
                     os.remove(tmp)
-        return Speech(path)
+        english = voice.lower().startswith("en")
+        return Speech(path, line, english)
