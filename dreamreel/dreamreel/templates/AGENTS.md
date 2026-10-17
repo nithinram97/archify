@@ -153,9 +153,9 @@ Never add clips yourself from the internet without the film maker's say: licence
 
 ## People
 
-People are `type = "human"`: realistic humans from MakeHuman's assets (any age, sex, build, ethnicity, with
-hair, clothes and skin textures). Use it for live-action looking films; check `dreamreel makehuman`
-first: if the assets aren't set up, ask the film maker before downloading them (about 280 MB).
+People are `type = "person"` and animals `type = "animal"`: Quaternius's models with their own
+animation. Check `dreamreel assets` first; if the packs aren't installed, ask the film maker before
+downloading them.
 
 ## Your own models
 

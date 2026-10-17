@@ -111,11 +111,10 @@ readable as one silhouette.
 
 ## How dreamreel applies this
 
-- People are MakeHuman humans (`type = "human"`): MakeHuman's CC0 base mesh and morph targets were
-  built by people who studied human anatomy for years, so dreamreel doesn't sculpt humans at all;
-  it shapes MakeHuman's body by age, sex, build and ethnicity and fits its eyes, hair and clothes.
-- Creature bodies are grown as one smooth surface over a skeleton, rather than separate tubes.
-- Props and buildings follow the primary, secondary, tertiary passes, with bevels on every edge.
+dreamreel's models come from Quaternius's free (CC0) packs, made by an artist who applies these
+principles: people and animals (rigged and animated), and, step by step, furniture, nature,
+buildings and vehicles. The principles above are the checklist for anything dreamreel still makes
+in code, and for judging new packs.
 
 ## Sources
 
@@ -127,4 +126,4 @@ readable as one silhouette.
 - [Quadruped anatomy for animators (School of Motion)](https://schoolofmotion.com/blog/how-to-rig-quadrupeds-animation); [Animal leg anatomy cheat sheet](https://line-of-action.com/nl/article/animal-leg-anatomy-cheat-sheet)
 - [Hard surface modeling in Blender: primary forms, structure, detail (GarageFarm)](https://garagefarm.net/blog/hard-surface-modeling-in-blender)
 - [Creating modules for stylised environments (80.lv)](https://80.lv/articles/creating-modules-for-stylised-environments/)
-- [MakeHuman: the asset license is CC0](https://static.makehumancommunity.org/makehuman/faq/are_makehuman_files_free.html)
+- [Quaternius: free CC0 3D packs](https://quaternius.com)

@@ -45,8 +45,9 @@ def files(root):
 
 
 # ---------------------------------------------------------------------- importing
-def import_file(path):
-    """Import a model file into the scene; returns the new objects."""
+def import_file(path, keep_actions=False):
+    """Import a model file into the scene; returns the new objects. Its animations are dropped (they
+    would fight dreamreel's), unless keep_actions (animals play their own clips, see animals.py)."""
     import addon_utils
     ext = os.path.splitext(path)[1].lower()
     if ext not in FORMATS:
@@ -67,8 +68,9 @@ def import_file(path):
     for o in new:      # the model's own animations would fight dreamreel's
         if o.animation_data:
             o.animation_data.action = None
-    for a in set(bpy.data.actions) - acts:
-        bpy.data.actions.remove(a)
+    if not keep_actions:
+        for a in set(bpy.data.actions) - acts:
+            bpy.data.actions.remove(a)
     return new
 
 

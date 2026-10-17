@@ -55,30 +55,30 @@ What each body can do:
 
 All bodies: say, feel (moods), look_at, turn_to, nod, shake_head, jump, bow, roar, sniff, spin.
 
-### `type = "human"`: a realistic human (MakeHuman)
+### `type = "person"`: a person (Quaternius)
 
 ```toml
-type = "human"
-gender = 0.0               # 0 female ... 1 male (anything between)
-age = 30                   # years, 1 to 90
-muscle = 0.5               # 0 ... 1
-weight = 0.5               # 0 thin ... 1 heavy
-height = 0.5               # 0 short ... 1 tall for their age and sex, or metres (1.68)
-proportions = 0.5          # 0 uncommon ... 1 idealised
-ethnicity = { african = 0.2, asian = 0.3, caucasian = 0.5 }    # or one name
-shape = { "nose-scale-horiz" = -0.3, "chin-prominent" = 0.4 }   # MakeHuman modifiers, -1 ... 1
-skin = "young_caucasian_female"   # a MakeHuman skin (photo textured), or a colour
-eye_color = "blue"         # an eye material
-hair = "bob01"             # afro01, bob01, bob02, braid01, long01, ponytail01, short01 ... short04
-eyebrows = "eyebrow001"
-hair_color = "#3b2416"
-clothes = ["female_casualsuit01", "shoes02"]   # `dreamreel makehuman` lists them
+type = "person"
+body = "woman"         # woman or man
+outfit = "casual"      # women: adventurer, casual, formal, medieval, punk, scifi, soldier, suit, witch,
+                       # worker; men: adventurer, beach, casual, hoodie, farmer, king, punk, spacesuit,
+                       # suit, swat, worker
+height = 1.68          # metres
 ```
 
-Built from MakeHuman's free (CC0) base mesh, morph targets, skeleton, eyes, hair and clothes; moods
-drive its facial expression units. Needs the assets once: `dreamreel makehuman --download` (the
-system assets: hair, clothes, skins) and `dreamreel makehuman --use PATH` for a MakeHuman checkout
-(the base mesh and targets).
+### `type = "animal"`: an animal (Quaternius)
+
+```toml
+type = "animal"
+species = "husky"      # alpaca, bull, cow, deer, donkey, fox, horse, horse_white, husky, shiba_inu, stag, wolf
+size = 1.0
+```
+
+People and animals come from Quaternius's free (CC0) packs, rigged and animated: they walk and
+run with their own animation while dreamreel moves them round the set, idle when still, turn their
+heads to look and nod, carry things, and play their gestures: people `wave`, `interact`, `punch`,
+`kick`, `roll`, `die`, `flinch`; animals `eat`, `attack`, `jump`, `die`, `flinch`, `look_down`.
+Get the packs once with `dreamreel assets --download`.
 
 ### `type = "model"`: your own 3D model
 

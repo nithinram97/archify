@@ -126,14 +126,14 @@ roll and tumble with real physics. Add motion-capture clips (BVH or FBX) to a fi
 perform them: dances, cartwheels, fights, retargeted to their body; walks use library walk cycles.
 See [docs/acting.md](docs/acting.md).
 
-## People
+## People and animals
 
-Besides the toy figures and creatures, `type = "human"` builds people from [MakeHuman](https://static.makehumancommunity.org/)'s
-free (CC0) assets: a real anatomy shaped by age, sex, muscle, weight, height and ethnicity,
-photo-textured skins, eyes, eyebrows, hair and fitted clothes, MakeHuman's own skeleton (fingers
-included), and its facial expression units driven by the story's moods. dreamreel reads the
-assets itself (`dreamreel makehuman --download`, or `--use` a MakeHuman checkout); they aren't
-bundled.
+People and animals come from [Quaternius](https://quaternius.com)'s free (CC0) packs: women and
+men in a dozen outfits each (casual, formal, suit, worker, farmer, punk, witch, spacesuit...) and
+animals (dogs, wolf, fox, horse, deer, cow, bull, donkey, alpaca), rigged and animated. dreamreel
+moves them through the set and plays their own walks, runs, idles and gestures in time, blended
+into each other; their heads turn to look, and their hands carry things. `dreamreel assets
+--download` fetches the packs (they aren't bundled).
 
 ## Your own characters
 
