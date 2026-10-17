@@ -271,6 +271,26 @@ def cmd_info(a):
     print("@@JSON " + json.dumps(info))
 
 
+def cmd_makehuman(a):
+    """Set up MakeHuman's free (CC0) assets for type = "human" characters, or list what's there."""
+    from . import makehuman as mh
+    if a.use:
+        if not os.path.isdir(a.use):
+            raise SystemExit(f"{a.use} isn't a folder")
+        mh.use(a.use)
+    if a.download:
+        mh.download()
+    print("MakeHuman assets:", ", ".join(mh.roots()) or "none yet (dreamreel makehuman --download)")
+    if mh.available():
+        for kind in ("hair", "eyebrows", "clothes", "skins"):
+            names = mh.asset_names(kind) if kind != "skins" else sorted(
+                {d for r in mh.roots() if os.path.isdir(os.path.join(r, "skins"))
+                 for d in os.listdir(os.path.join(r, "skins")) if os.path.isdir(os.path.join(r, "skins", d))})
+            print(f"  {kind}: {', '.join(names) or '-'}")
+    elif mh.roots():
+        print("  The base mesh and targets are missing: add a MakeHuman checkout with --use PATH")
+
+
 def cmd_motions(a):
     """List the film's motion library, or import a clip into it."""
     import shutil
@@ -668,6 +688,10 @@ def main(argv=None):
     mo.add_argument("--name")
     mo.add_argument("--tags", help="comma separated, e.g. walk or dance")
     mo.set_defaults(fn=cmd_motions)
+    mh = sub.add_parser("makehuman", help="MakeHuman's free assets for realistic humans (type = \"human\")")
+    mh.add_argument("--download", action="store_true", help="fetch the CC0 system assets (about 280 MB)")
+    mh.add_argument("--use", metavar="PATH", help="a MakeHuman checkout or data folder you already have")
+    mh.set_defaults(fn=cmd_makehuman)
     ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
     ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))
     ex.add_argument("name")

@@ -118,6 +118,10 @@ readable as one silhouette.
 - Faces put eyes in sockets with lids that move, and lips that close.
 - Props and buildings get bevels everywhere and are built in primary, secondary, tertiary passes.
 
+For realistic humans dreamreel doesn't sculpt at all: it uses MakeHuman's base mesh and morph
+targets (CC0), built by people who studied this anatomy for years, and shapes them by age, sex,
+build and ethnicity (`type = "human"`).
+
 ## Sources
 
 - [Loomis method](https://finearttutorials.com/guide/loomis-method/); [CG Cookie: intro to sculpting the human head](https://cgcookie.com/lessons/intro-to-sculpting-the-human-head)
@@ -128,3 +132,4 @@ readable as one silhouette.
 - [Quadruped anatomy for animators (School of Motion)](https://schoolofmotion.com/blog/how-to-rig-quadrupeds-animation); [Animal leg anatomy cheat sheet](https://line-of-action.com/nl/article/animal-leg-anatomy-cheat-sheet)
 - [Hard surface modeling in Blender: primary forms, structure, detail (GarageFarm)](https://garagefarm.net/blog/hard-surface-modeling-in-blender)
 - [Creating modules for stylised environments (80.lv)](https://80.lv/articles/creating-modules-for-stylised-environments/)
+- [MakeHuman: the asset license is CC0](https://static.makehumancommunity.org/makehuman/faq/are_makehuman_files_free.html)

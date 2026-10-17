@@ -80,6 +80,31 @@ braces = true
 A smooth body with elbows and knees that bend, a sculpted head and the full face: every mood,
 gesture, walk, motion-capture clip and handling verb works as for toy figures.
 
+### `type = "human"`: a realistic human (MakeHuman)
+
+```toml
+type = "human"
+gender = 0.0               # 0 female ... 1 male (anything between)
+age = 30                   # years, 1 to 90
+muscle = 0.5               # 0 ... 1
+weight = 0.5               # 0 thin ... 1 heavy
+height = 0.5               # 0 short ... 1 tall for their age and sex, or metres (1.68)
+proportions = 0.5          # 0 uncommon ... 1 idealised
+ethnicity = { african = 0.2, asian = 0.3, caucasian = 0.5 }    # or one name
+shape = { "nose-scale-horiz" = -0.3, "chin-prominent" = 0.4 }   # MakeHuman modifiers, -1 ... 1
+skin = "young_caucasian_female"   # a MakeHuman skin (photo textured), or a colour
+eye_color = "blue"         # an eye material
+hair = "bob01"             # afro01, bob01, bob02, braid01, long01, ponytail01, short01 ... short04
+eyebrows = "eyebrow001"
+hair_color = "#3b2416"
+clothes = ["female_casualsuit01", "shoes02"]   # `dreamreel makehuman` lists them
+```
+
+Built from MakeHuman's free (CC0) base mesh, morph targets, skeleton, eyes, hair and clothes; moods
+drive its facial expression units. Needs the assets once: `dreamreel makehuman --download` (the
+system assets: hair, clothes, skins) and `dreamreel makehuman --use PATH` for a MakeHuman checkout
+(the base mesh and targets).
+
 ### `type = "model"`: your own 3D model
 
 ```toml

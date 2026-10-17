@@ -156,6 +156,10 @@ Never add clips yourself from the internet without the film maker's say: licence
 `type = "person"` is a stylized human (child, teen, adult); use it when the story wants people
 rather than toys. Toy figures, creatures and people can share a scene.
 
+`type = "human"` makes realistic humans from MakeHuman's assets (any age, sex, build, ethnicity, with
+hair, clothes and skin textures). Use it for live-action looking films; check `dreamreel makehuman`
+first: if the assets aren't set up, ask the film maker before downloading them (about 280 MB).
+
 ## Your own models
 
 A character can be a 3D model from `models/` (`type = "model"`, `file = "models/hero.glb"`): rigged
