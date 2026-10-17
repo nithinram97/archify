@@ -151,6 +151,11 @@ If `motions/` has clips (`dreamreel motions`), use `perform` for movement proced
 do: dances, acrobatics, fights, falls. Walks use the library's walk and run clips automatically.
 Never add clips yourself from the internet without the film maker's say: licences differ.
 
+## People
+
+`type = "person"` is a stylized human (child, teen, adult); use it when the story wants people
+rather than toys. Toy figures, creatures and people can share a scene.
+
 ## Your own models
 
 A character can be a 3D model from `models/` (`type = "model"`, `file = "models/hero.glb"`): rigged

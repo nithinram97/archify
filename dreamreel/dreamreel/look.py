@@ -73,6 +73,22 @@ def plastic(color, rough=0.38, coat=0.35, emission=0.0):
     return mat
 
 
+def skin(color, rough=0.5):
+    """Skin: soft, a little light under the surface (subsurface scattering)."""
+    k = ("skin", rgb(color), rough)
+    if k in _cache and _cache[k].name in bpy.data.materials:
+        return _cache[k]
+    mat = plastic(color, rough=rough, coat=0.0).copy()
+    mat.name = f"skin {color}"
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    _set(bsdf, "Subsurface Weight", 0.25)
+    _set(bsdf, "Subsurface Radius", (1.0, 0.35, 0.2))
+    _set(bsdf, "Subsurface Scale", 0.02)
+    _set(bsdf, "Specular IOR Level", 0.35)
+    _cache[k] = mat
+    return mat
+
+
 def matte(color, rough=0.8):
     """Painted walls, floors and fabric."""
     return plastic(color, rough=rough, coat=0.0)

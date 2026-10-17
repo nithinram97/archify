@@ -126,6 +126,13 @@ roll and tumble with real physics. Add motion-capture clips (BVH or FBX) to a fi
 perform them: dances, cartwheels, fights, retargeted to their body; walks use library walk cycles.
 See [docs/acting.md](docs/acting.md).
 
+## People
+
+Besides the toy figures and creatures there are stylized humans, in the look of animated feature
+films: children, teens and adults with smooth bodies whose elbows and knees bend, sculpted heads,
+eyes with coloured irises, lashes, freckles and braces, and the full range of expressions, from a
+shy smile to a crazed grin (`type = "person"`).
+
 ## Your own characters
 
 Bring a 3D model (glTF/GLB, FBX or OBJ) into a film's `models/` folder and cast it with

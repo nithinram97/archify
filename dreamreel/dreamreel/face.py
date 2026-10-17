@@ -50,6 +50,7 @@ def lid_keys(obj, rx, rz, side, pad=0.0):
 
     def clamp(name, fn):
         sk = obj.shape_key_add(name=name, from_mix=False)
+        sk.value = 0.0                      # new keys start fully on; the face starts neutral
         for v in sk.data:
             v.co.z = fn(v.co.x, v.co.z)
     clamp("upper", lambda x, z: min(z, pad))
@@ -68,6 +69,7 @@ def mouth_keys(obj, rx, rz, H):
         if name in have:
             return
         sk = obj.shape_key_add(name=name, from_mix=False)
+        sk.value = 0.0
         for v in sk.data:
             v.co = fn(v.co.copy())
     for name, sign in (("smile", 1), ("frown", -1)):
@@ -86,7 +88,7 @@ def mouth_keys(obj, rx, rz, H):
 def build(c):
     """Add the richer parts to a toy face built by Character.build_face: eye whites, lids, teeth,
     braces. Sets c.irises, c.scleras, c.glints, c.teeth, c.blushes, c.mouth_parts."""
-    H, n = c.H, c.name
+    H, n = getattr(c, "face_H", c.H), c.name
     es = {"small": 0.8, "normal": 1.0, "big": 1.3}.get(c.get("eyes"), 1.0)
     rx, rz = 0.03 * H * es, 0.043 * H * es
     c.irises, c.scleras, c.glints = [], [], []
@@ -150,7 +152,7 @@ def values(mood, amount=1.0):
 
 def apply(c, v, t, t1):
     """Key the face to the control values `v` by t1 (holding what it was at t)."""
-    H = c.H
+    H = getattr(c, "face_H", c.H)
     for side, brow in c.brows.items():
         hold(brow, "rotation_euler", t)
         hold(brow, "location", t)
@@ -233,7 +235,7 @@ def drops(c, length):
             spans.append((t + 0.3, end, v["tears"], v["sweat"]))
     if not spans:
         return
-    H, n = c.H, c.name
+    H, n = getattr(c, "face_H", c.H), c.name
     water = look.glass("#bfe6ff") if hasattr(look, "glass") else "#bfe6ff"
     for t0, t1, tears, sweat in spans:
         if tears > 0.05:

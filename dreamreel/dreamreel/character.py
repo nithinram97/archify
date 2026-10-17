@@ -238,12 +238,13 @@ class Character(Plugin):
     def build_face(self):
         """Eyes, brows, mouth (with smile/frown shapes), nose and cheeks. Sets self.eyes, self.brows,
         self.mouth (pivot) and self.mouth_mesh; moods and talking animate these."""
-        H, n = self.H, self.name
+        H, n = getattr(self, "face_H", self.H), self.name     # face_H: the scale the features are built at
+        L = dict(FACE_LAYOUT, **getattr(self, "face_layout", {}))
         es = {"small": 0.8, "normal": 1.0, "big": 1.3}.get(self.get("eyes"), 1.0)
         self.eyes, self.gazes = [], []
         beads = self.get("eye_style", self.default_eye_style) == "beads"
         for side in (1, -1):
-            piv = shapes.empty(f"{n}.eye", self.neck, self.face_point(side * 0.075 * H, 0.02 * H, 0.004))
+            piv = shapes.empty(f"{n}.eye", self.neck, self.face_point(side * L["eye_x"] * H, L["eye_z"] * H, 0.004))
             if beads:       # one glossy bead (animals, and the classic toy look)
                 eye = shapes.ellipsoid(f"{n}.eye", 0.03 * H * es, 0.02 * H, 0.043 * H * es,
                                        look.plastic(self.eye_color(), 0.12, 0.9), piv)
@@ -264,10 +265,10 @@ class Character(Plugin):
         self.brows = {}
         brow_color = self.color("hair_color") if self.get("hair", "short") != "none" else "charcoal"
         for side in (1, -1):
-            piv = shapes.empty(f"{n}.brow", self.neck, self.face_point(side * 0.075 * H, 0.085 * H, 0.004))
+            piv = shapes.empty(f"{n}.brow", self.neck, self.face_point(side * L["eye_x"] * H, L["brow_z"] * H, 0.004))
             shapes.capsule(f"{n}.brow", 0.012 * H, 0.04 * H, brow_color, piv, rot=(0, _deg(90), 0))
             self.brows[side] = piv
-        self.mouth = shapes.empty(f"{n}.mouthpivot", self.neck, self.face_point(0, -0.068 * H, 0.004))
+        self.mouth = shapes.empty(f"{n}.mouthpivot", self.neck, self.face_point(0, L["mouth_z"] * H, 0.004))
         m = shapes.ellipsoid(f"{n}.mouth", 0.042 * H, 0.02 * H, 0.012 * H, look.plastic("#5b1e2c", 0.5, 0.2), self.mouth)
         m.shape_key_add(name="Basis")
         for name, sign in (("smile", 1), ("frown", -1)):
@@ -277,11 +278,11 @@ class Character(Plugin):
                 v.co.z += sign * 0.022 * H * t - sign * 0.004 * H
         self.mouth_mesh = m
         if self.get("nose", True):
-            shapes.sphere(f"{n}.nose", 0.024 * H, self.color("skin"), self.neck, at=self.face_point(0, -0.015 * H, 0.016))
+            shapes.sphere(f"{n}.nose", 0.024 * H, self.color("skin"), self.neck, at=self.face_point(0, L["nose_z"] * H, 0.016))
         if self.get("blush", True):
             for side in (1, -1):
                 shapes.ellipsoid(f"{n}.blush", 0.034 * H, 0.008 * H, 0.02 * H, look.plastic("#f19aa6", 0.6, 0.1),
-                                 self.neck, at=self.face_point(side * 0.115 * H, -0.035 * H, 0.002),
+                                 self.neck, at=self.face_point(side * L["blush_x"] * H, L["blush_z"] * H, 0.002),
                                  rot=(0, 0, _deg(side * 40)))
         from . import face
         face.build(self)
@@ -1166,6 +1167,11 @@ class Character(Plugin):
             key(self.body, "scale", t, (1, 1, 1))
             key(self.body, "scale", t + 0.9, (1.012, 1.012, 1.02))
             t += 1.9
+
+
+# where the features go, as fractions of the face scale (x across, z up from the head centre)
+FACE_LAYOUT = {"eye_x": 0.075, "eye_z": 0.02, "brow_z": 0.085, "mouth_z": -0.068, "nose_z": -0.015,
+               "blush_x": 0.115, "blush_z": -0.035}
 
 
 class ToyFigure(Character):

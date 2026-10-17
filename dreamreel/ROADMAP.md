@@ -33,7 +33,7 @@ Next, roughly in order:
 - Eye direction (eyes follow before the head turns).
 
 ## Characters
-- More hair and outfits; robots and monsters as body plans.
+- More hair (strands, curls that move) and outfits (coats, uniforms) for people; fingers; robots and monsters as body plans.
 - A character designer: describe a person in a sentence and get a cast file with a turnaround image.
 - CC0 asset packs as props and sets (Kenney, Quaternius, Poly Haven); fingers on imported models.
 

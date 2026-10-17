@@ -161,6 +161,22 @@ class Bun(Hair):
         c.dangle(bun, c.hc + Vector((0, c.hr * 0.2, c.hr * 0.75)), stiffness=2.2, gain=0.5)
 
 
+class SpaceBuns(Hair):
+    name = "space_buns"
+    label = "Space buns"
+    hairline, hairline_z = 0.62, 0.02
+
+    def build(self, c, color):
+        cap = self.cap(c, color)
+        hr, hc = c.hr, c.hc
+        for side in (1, -1):
+            at = hc + Vector((side * hr * 0.58, hr * 0.12, hr * 0.8))
+            S.sphere(f"{c.name}.hair", hr * 0.36, color, c.neck, at=at)
+            S.capsule(f"{c.name}.hair", hr * 0.06, hr * 0.12, color, c.neck, at=at + Vector((side * hr * 0.03, -hr * 0.05, hr * 0.32)),
+                      rot=(_deg(-20), _deg(side * 25), 0))
+        return cap
+
+
 class Spiky(Hair):
     hairline, hairline_z = 0.55, 0.05
 

@@ -14,7 +14,7 @@ Every character has `name`, `voice` (a Piper voice such as `en_US-amy-medium`) a
 | `height` | 1.0 is an adult (0.7-1.3) |
 | `body` | bean, round, tall, kid |
 | `skin` | skin1 (lightest) ... skin6 (deepest), or a colour |
-| `hair` | none, short, bob, long, ponytail, bun, spiky, curly, mohawk |
+| `hair` | none, short, bob, long, ponytail, bun, space_buns, spiky, curly, mohawk |
 | `hair_color`, `top`, `bottom`, `shoes` | colours |
 | `outfit` | shirt, dress |
 | `eyes` | small, normal, big |
@@ -54,6 +54,31 @@ What each body can do:
 | frog | hopping (big jumps, feet and all) | arm gestures (wave, cheer, point...), croak, tongue, swim |
 
 All bodies: say, feel (moods), look_at, turn_to, nod, shake_head, jump, bow, roar, sniff, spin.
+
+### `type = "person"`: a stylized human (animated-film style)
+
+```toml
+type = "person"
+age = "child"              # child, teen, adult (height 1.0, 1.3, 1.55 m unless you set height)
+build = "average"          # slim, average, sturdy
+skin = "#e8b896"
+hair = "space_buns"        # any hair style
+hair_color = "#3b2416"
+eye_color = "#5a3a22"
+eyes = "big"               # small, normal, big
+brows = "thick"            # thin, normal, thick
+nose = "button"            # button, round, pointy
+top = "#e8c547"
+bottom = "navy"
+shoes = "charcoal"
+outfit = "skirt"           # trousers, shorts, skirt, dress
+sleeves = "long"           # long, short, none
+freckles = true
+braces = true
+```
+
+A smooth body with elbows and knees that bend, a sculpted head and the full face: every mood,
+gesture, walk, motion-capture clip and handling verb works as for toy figures.
 
 ### `type = "model"`: your own 3D model
 
