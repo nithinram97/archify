@@ -152,6 +152,18 @@ def main():
         assert os.path.exists(os.path.join(film, r["path"]))
         _, st = call(base, "GET", "/api/state")
         assert st["samples"] == [r["path"]]
+        # a picture to make a model from goes to models/refs; the AI-maker job checks what it's given
+        req = urllib.request.Request(base + "/api/upload?to=refs&name=Robot%20Drawing.png", method="POST",
+                                     data=b"\x89PNG\r\n\x1a\n" + b"\0" * 40, headers={"X-Dreamreel": "1"})
+        with urllib.request.urlopen(req) as resp:
+            ref = json.loads(resp.read())["path"]
+        assert ref == os.path.join("models", "refs", "robot-drawing.png"), ref
+        _, st = call(base, "GET", "/api/state")
+        assert st["refs"] == [ref] and "ai" in st["info"]["catalog"]
+        assert call(base, "POST", "/api/jobs", {"kind": "generate", "name": "Bad Name!"})[0] == 400
+        assert call(base, "POST", "/api/jobs", {"kind": "generate", "name": "bot", "image": "../../etc/x.png"})[0] == 400
+        assert call(base, "POST", "/api/jobs", {"kind": "generate", "name": "bot", "provider": "x; rm"})[0] == 400
+
         # a voice saved as a table round-trips, and the audition job takes it
         voice = {"language": "ta", "describe": "A warm, gentle grandmother", "speed": 0.9}
         assert call(base, "PUT", "/api/cast/zara", {"spec": {"name": "Zara", "voice": voice}})[0] == 200

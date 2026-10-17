@@ -626,8 +626,95 @@ function castView() {
           h("div", { class: "fig" }, characterPicture(k, spec)), h("div", { class: "nm" }, spec.name || k),
           (spec.type && spec.type !== "toy") ? h("div", { class: "small muted" }, (plugOf("character", spec.type) || {}).label || spec.type) : null);
       }),
-      h("div", { class: "cast-card add", tabindex: 0, role: "button", onclick: newCharacter }, h("div", { style: "font-size:28px" }, "+"), "New character")),
+      h("div", { class: "cast-card add", tabindex: 0, role: "button", onclick: newCharacter }, h("div", { style: "font-size:28px" }, "+"), "New character"),
+      h("div", { class: "cast-card add", tabindex: 0, role: "button", onclick: () => { S.maker = !S.maker; render(); } },
+        h("div", { style: "font-size:28px" }, "✨"), "Make one with AI")),
+    S.maker ? makerCard() : null,
     S.castSel ? castEditor(S.castSel) : null);
+}
+
+// make a character (or a thing) with AI: described, for any AI model; or from a picture, on a booster
+const PROVIDERS = [["", "Automatic (whatever is set up)"], ["anthropic", "Claude"], ["openai", "OpenAI"], ["gemini", "Gemini"],
+  ["openrouter", "OpenRouter (any model)"], ["ollama", "Ollama: free, on this computer"], ["lmstudio", "LM Studio: free, on this computer"]];
+function makerCard() {
+  const m = S.makerDraft || (S.makerDraft = { how: "describe", what: "character", height: 1.0 });
+  const box = h("div", { class: "card", style: "margin-top:16px" });
+  const draw = () => {
+    const ai = catalog().ai;
+    const name = h("input", { type: "text", value: m.name || "", placeholder: "e.g. robot", oninput: (e) => (m.name = e.target.value) });
+    const refs = S.state.refs || [];
+    const pictureRow = h("div", { class: "row" },
+      refs.length ? select(refs.map((f) => [f, f.split("/").pop()]), m.image || "", (v) => { m.image = v; draw(); }, { blank: "(choose a picture)", label: "Picture" }) : null,
+      imageUpload((path) => { m.image = path; draw(); }));
+    let body;
+    if (m.how === "describe") {
+      const ta = h("textarea", { rows: 3, placeholder: "e.g. a chubby green robot with big round eyes and a little antenna",
+        oninput: (e) => (m.prompt = e.target.value) });
+      ta.value = m.prompt || "";
+      body = [h("label", { class: "field" }, h("span", {}, "Describe it"), ta),
+        h("div", { class: "field" }, h("span", {}, "A picture to follow (optional, for AI models that can see)"), pictureRow),
+        h("div", { class: "fields" },
+          h("label", { class: "field" }, h("span", {}, "AI model"), select(PROVIDERS, m.provider || "", (v) => { m.provider = v; draw(); }, { label: "AI model" })),
+          h("label", { class: "field" }, h("span", {}, "Model name"), h("input", { type: "text", value: m.model || "",
+            placeholder: m.provider === "ollama" ? "e.g. qwen2.5vl" : "(its default)", oninput: (e) => (m.model = e.target.value) }))),
+        !m.provider && !ai ? h("div", { class: "banner warn small block" }, "No AI model is set up yet. Add a key in the Toolbox (Claude, OpenAI, Gemini...) ",
+          "or choose Ollama or LM Studio to use a free model on this computer.") : null,
+        h("p", { class: "muted small" }, "The AI writes a recipe of shapes, looks at pictures of what it made from four sides, and corrects it. ",
+          "Works on any computer; with Ollama it's free.")];
+    } else {
+      const b = (S.boost || {});
+      body = [h("div", { class: "field" }, h("span", {}, "A picture of it (one character or thing, a plain background is best)"), pictureRow),
+        m.image ? h("img", { src: fileUrl(m.image, Date.now() / 1000), alt: "", style: "max-width:220px;max-height:220px;border-radius:8px" }) : null,
+        m.what === "character" ? h("label", { class: "field row" }, h("input", { type: "checkbox", checked: !!m.rig, onchange: (e) => (m.rig = e.target.checked) }),
+          "Rig it with AI (UniRig: also creatures with tails, wings, many legs)") : null,
+        b.connected && b.ok ? h("span", { class: "ok-tag" }, "✓ booster connected")
+          : h("div", { class: "banner warn small block" }, "Making a model from a picture runs on a booster (a free Google Colab notebook). ",
+              h("button", { class: "btn sm", onclick: () => go("toolbox") }, "Set up a booster")),
+        h("p", { class: "muted small" }, "TripoSG makes the shape from the picture; dreamreel paints it from the picture.")];
+    }
+    const make = () => {
+      const key = slug(m.name || "").replace(/-/g, "_");
+      if (!key) { toast("Give it a name"); return; }
+      if (m.how === "describe" && !(m.prompt || "").trim() && !m.image) { toast("Describe it, or choose a picture"); return; }
+      if (m.how === "picture" && !m.image) { toast("Choose a picture"); return; }
+      job({ kind: "generate", name: key, prompt: m.how === "describe" ? m.prompt : null, image: m.image || null,
+        from_picture: m.how === "picture", rig: m.how === "picture" && m.what === "character" && !!m.rig, prop: m.what === "thing",
+        height: m.what === "character" ? m.height : null, provider: m.how === "describe" ? m.provider || null : null,
+        model: m.how === "describe" ? m.model || null : null, force: !!m.force },
+        async (j) => { if (j.status !== "done") return; S.maker = false; S.makerDraft = null; await refresh();
+          if (m.what === "character" && S.state.cast[key]) { S.castSel = key; render(); }
+          toast(m.what === "character" ? `${m.name} joined the cast` : `Made models/${key}.glb: add it to a set as a "Your own model" prop`); });
+    };
+    fill(box,
+      h("div", { class: "card-head" }, h("h2", {}, "✨ Make one with AI"), h("button", { class: "btn ghost sm", onclick: () => { S.maker = false; render(); } }, "Close")),
+      h("div", { class: "fields" }, h("label", { class: "field" }, h("span", {}, "Name"), name),
+        h("div", { class: "field col" }, h("span", {}, "What"), seg([["character", "A character"], ["thing", "A thing (prop)"]], m.what, (v) => { m.what = v; draw(); })),
+        m.what === "character" ? h("label", { class: "field" }, h("span", {}, "Height (m)"), h("input", { type: "number", min: 0.3, max: 3, step: 0.05, value: m.height,
+          oninput: (e) => (m.height = +e.target.value) })) : null),
+      h("div", { class: "field col" }, h("span", {}, "How"), seg([["describe", "Describe it (any AI model)"], ["picture", "From a picture (booster)"]], m.how, (v) => { m.how = v; draw(); })),
+      body,
+      h("label", { class: "field row" }, h("input", { type: "checkbox", checked: !!m.force, onchange: (e) => (m.force = e.target.checked) }), "Replace one with the same name"),
+      h("div", {}, h("button", { class: "btn primary", onclick: make }, "✨ Make it")));
+  };
+  if (S.boost === undefined) api("GET", "/api/boost").then((b) => { S.boost = b; draw(); }).catch(() => {});
+  draw();
+  return box;
+}
+
+function imageUpload(onSaved) {
+  const inp = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: true });
+  inp.onchange = async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    try {
+      const r = await fetch(`/api/upload?to=refs&name=${encodeURIComponent(f.name)}`, { method: "POST", headers: { "X-Dreamreel": "1" }, body: f });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || r.statusText);
+      await refresh();
+      onSaved(data.path);
+    } catch (e) { fail(e); }
+  };
+  return h("span", {}, inp, h("button", { class: "btn sm", type: "button", onclick: () => inp.click() }, "⬆ Add a picture"));
 }
 
 // a picture straight from the asset packs, for people and animals (no rendering needed)

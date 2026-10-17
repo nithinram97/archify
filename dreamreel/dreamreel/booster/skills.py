@@ -258,6 +258,154 @@ class HYMotion(Skill):
         return run_script(os.path.join(WORK, "venvs", "hymotion", "bin", "python"), HY_RUN, job, log, cwd=self.repo())
 
 
+# ---------------------------------------------------------------------- 3D models from a picture: TripoSG
+TRIPOSG_RUN = r"""
+import json, os, sys
+job = json.load(open(sys.argv[1]))
+os.chdir(job["repo"]); sys.path.insert(0, job["repo"]); sys.path.insert(0, os.path.join(job["repo"], "scripts"))
+import numpy as np, torch, trimesh
+from PIL import Image
+from torchvision import transforms
+from transformers import AutoModelForImageSegmentation
+from triposg.pipelines.pipeline_triposg import TripoSGPipeline
+from image_process import prepare_image
+# the background is cut away with BiRefNet (MIT); a picture with real transparency skips TripoSG's own
+# (non-commercial) remover
+img = Image.open(job["image"]).convert("RGBA")
+if np.asarray(img)[:, :, 3].min() == 255:
+    seg = AutoModelForImageSegmentation.from_pretrained("ZhengPeng7/BiRefNet", trust_remote_code=True).to("cuda").eval().half()
+    tf = transforms.Compose([transforms.Resize((1024, 1024)), transforms.ToTensor(),
+                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+    with torch.no_grad():
+        pred = seg(tf(img.convert("RGB")).unsqueeze(0).to("cuda").half())[-1].sigmoid().float().cpu()
+    img.putalpha(transforms.ToPILImage()(pred[0].squeeze()).resize(img.size))
+    del seg; torch.cuda.empty_cache()
+cut = os.path.join(job["out_dir"], "cutout.png")
+img.save(cut)
+box = img.getchannel("A").point(lambda a: 255 if a > 127 else 0).getbbox()
+img.crop(box or (0, 0) + img.size).save(os.path.join(job["out_dir"], "paint.png"))   # the subject only
+pipe = TripoSGPipeline.from_pretrained(job["weights"]).to("cuda", torch.float16)
+picture = prepare_image(cut, bg_color=np.array([1.0, 1.0, 1.0]), rmbg_net=None)
+out = pipe(image=picture, generator=torch.Generator(device=pipe.device).manual_seed(int(job.get("seed", 42))),
+           num_inference_steps=int(job.get("steps", 50)), guidance_scale=7.0).samples[0]
+mesh = trimesh.Trimesh(out[0].astype(np.float32), np.ascontiguousarray(out[1]))
+faces = int(job.get("faces", 0))
+if faces and len(mesh.faces) > faces:
+    import pymeshlab
+    ms = pymeshlab.MeshSet(); ms.add_mesh(pymeshlab.Mesh(vertex_matrix=mesh.vertices, face_matrix=mesh.faces))
+    ms.meshing_merge_close_vertices(); ms.meshing_decimation_quadric_edge_collapse(targetfacenum=faces)
+    m = ms.current_mesh(); mesh = trimesh.Trimesh(m.vertex_matrix(), m.face_matrix())
+glb = os.path.join(job["out_dir"], "model.glb")
+mesh.export(glb)
+json.dump({"model": glb, "cutout": os.path.join(job["out_dir"], "paint.png")}, open(os.path.join(job["out_dir"], "_answer.json"), "w"))
+"""
+
+
+class TripoSG(Skill):
+    name = "mesh.triposg"
+    about = "TripoSG (VAST): a 3D model's shape from one picture (no colours: dreamreel paints it from the picture)"
+    license = "MIT (TripoSG); background removal with BiRefNet (MIT)"
+
+    def repo(self):
+        return os.path.join(REPOS, "TripoSG")
+
+    def installed(self):
+        return (os.path.exists(os.path.join(WORK, "venvs", "triposg", "bin", "python"))
+                and os.path.isdir(os.path.join(self.repo(), "pretrained_weights", "TripoSG")))
+
+    def install(self, log):
+        r = clone("https://github.com/VAST-AI-Research/TripoSG.git", "TripoSG", log)
+        py = venv("triposg", "3.11", log)
+        venv_pip(py, log, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cu124")
+        reqs = [ln.split("#")[0].strip() for ln in open(os.path.join(r, "requirements.txt")) if ln.split("#")[0].strip()]
+        reqs = ["numpy<2" if q.startswith("numpy") else q for q in reqs]     # its numpy pin has no wheel
+        venv_pip(py, log, *[q for q in reqs if q != "diso"], "timm", "kornia")
+        venv_pip(py, log, "diso", "--no-build-isolation")                    # compiles against the card's CUDA
+        hf_download("VAST-AI/TripoSG", log, local_dir=os.path.join(r, "pretrained_weights", "TripoSG"))
+
+    def run(self, inputs, files, out_dir, log, progress):
+        if "image" not in files:
+            raise ValueError("send a picture of what to make")
+        job = {"repo": self.repo(), "weights": os.path.join(self.repo(), "pretrained_weights", "TripoSG"),
+               "image": files["image"], "seed": int(inputs.get("seed", 42)), "faces": int(inputs.get("faces", 40000)),
+               "steps": int(inputs.get("steps", 50)), "out_dir": out_dir}
+        log("making the shape from the picture")
+        return run_script(os.path.join(WORK, "venvs", "triposg", "bin", "python"), TRIPOSG_RUN, job, log, cwd=self.repo())
+
+
+# ---------------------------------------------------------------------- rigging any model: UniRig
+class UniRig(Skill):
+    name = "rig.unirig"
+    about = "UniRig (VAST, SIGGRAPH 2025): a skeleton and skin weights for any model: people, animals, creatures"
+    license = "MIT"
+
+    def repo(self):
+        return os.path.join(REPOS, "UniRig")
+
+    def installed(self):
+        return (os.path.exists(os.path.join(WORK, "venvs", "unirig", "bin", "python"))
+                and os.path.exists(os.path.join(self.repo(), ".dreamreel-patched")))
+
+    def install(self, log):
+        r = clone("https://github.com/VAST-AI-Research/UniRig.git", "UniRig", log)
+        py = venv("unirig", "3.11", log)          # it needs Blender's bpy 4.2: Python 3.11 only
+        venv_pip(py, log, "torch==2.7.1", "torchvision==0.22.1", "--index-url", "https://download.pytorch.org/whl/cu126")
+        reqs = [ln.strip() for ln in open(os.path.join(r, "requirements.txt")) if ln.strip() and "flash_attn" not in ln]
+        venv_pip(py, log, *reqs)
+        venv_pip(py, log, "spconv-cu126")
+        venv_pip(py, log, "torch_scatter", "torch_cluster", "-f", "https://data.pyg.org/whl/torch-2.7.1+cu126.html")
+        # only imported, never run on older cards (its own non-flash paths are used, below)
+        venv_pip(py, log, "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/"
+                          "flash_attn-2.8.3+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl")
+        venv_pip(py, log, "numpy==1.26.4")
+        self.patch(r, log)
+
+    def patch(self, r, log):
+        """Cards older than Ampere (Colab's T4) have no FlashAttention 2 and no bfloat16: use PyTorch's
+        own attention and full precision."""
+        import glob
+        for path in glob.glob(os.path.join(r, "configs", "model", "*.yaml")):
+            text = open(path).read()
+            new = text.replace("flash_attention_2", "sdpa")
+            if os.path.basename(path) == "unirig_skin.yaml" and "enable_flash" not in new:
+                lines = new.splitlines()
+                for i, ln in enumerate(lines):
+                    if ln.strip() == "mesh_encoder:" and i + 1 < len(lines):
+                        indent = lines[i + 1][:len(lines[i + 1]) - len(lines[i + 1].lstrip())]
+                        lines.insert(i + 1, f"{indent}enable_flash: False")
+                        break
+                new = "\n".join(lines) + "\n"
+            if new != text:
+                open(path, "w").write(new)
+                log(f"patched {os.path.relpath(path, r)}")
+        for path in glob.glob(os.path.join(r, "configs", "task", "*.yaml")):
+            text = open(path).read()
+            if "bf16-mixed" in text:
+                open(path, "w").write(text.replace("bf16-mixed", "32"))
+                log(f"patched {os.path.relpath(path, r)}")
+        open(os.path.join(r, ".dreamreel-patched"), "w").close()
+
+    def run(self, inputs, files, out_dir, log, progress):
+        if "model" not in files:
+            raise ValueError("send the model to rig (.glb, .fbx or .obj)")
+        r = self.repo()
+        ext = os.path.splitext(files["model"])[1].lower() or ".glb"
+        src = os.path.join(out_dir, "in" + ext)
+        shutil.copyfile(files["model"], src)
+        env = {"PATH": os.path.join(WORK, "venvs", "unirig", "bin") + os.pathsep + os.environ.get("PATH", "")}
+        skel, skin, rigged = (os.path.join(out_dir, n) for n in ("skeleton.fbx", "skin.fbx", "rigged.glb"))
+        log("1/3 finding the skeleton")
+        sh(["bash", "launch/inference/generate_skeleton.sh", "--input", src, "--output", skel,
+            "--seed", str(int(inputs.get("seed", 42)))], log, cwd=r, env=env)
+        progress(0.4)
+        log("2/3 weighting the skin")
+        sh(["bash", "launch/inference/generate_skin.sh", "--input", skel, "--output", skin], log, cwd=r, env=env)
+        progress(0.8)
+        log("3/3 putting it on the model")
+        sh(["bash", "launch/inference/merge.sh", "--source", skin, "--target", src, "--output", rigged], log, cwd=r, env=env)
+        return {"model": rigged}
+
+
 class Echo(Skill):
     """For tests: echoes its inputs, copies its file, and can fail on request."""
     name = "test.echo"
@@ -314,7 +462,24 @@ class FakeMotion(Skill):
         return {"motion": dest}
 
 
-SKILLS = [IndicParler(), IndicF5(), HYMotion(), Echo(), Tone(), FakeMotion()]
+class FakeModel(Skill):
+    """For tests: a 'made' or 'rigged' model is the file the test hands in."""
+    name = "test.model"
+    about = "a test model"
+    needs_gpu = False
+    test_only = True
+
+    def installed(self):
+        return True
+
+    def run(self, inputs, files, out_dir, log, progress):
+        src = os.environ["DREAMREEL_TEST_MODEL"]
+        dest = os.path.join(out_dir, "model" + os.path.splitext(src)[1])
+        shutil.copyfile(src, dest)
+        return {"model": dest}
+
+
+SKILLS = [IndicParler(), IndicF5(), HYMotion(), TripoSG(), UniRig(), Echo(), Tone(), FakeMotion(), FakeModel()]
 
 
 def register(skill):

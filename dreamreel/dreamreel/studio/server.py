@@ -283,6 +283,12 @@ class Studio:
         return sorted(os.path.join("audio", "samples", f) for f in os.listdir(d)
                       if f.lower().endswith(AUDIO)) if os.path.isdir(d) else []
 
+    def refs(self):
+        """Pictures to make models from (models/refs)."""
+        d = os.path.join(self.root, "models", "refs")
+        return sorted(os.path.join("models", "refs", f) for f in os.listdir(d)
+                      if f.lower().endswith(PICTURES)) if os.path.isdir(d) else []
+
     def info(self):
         """Plugins, catalogue and set marks, from `dreamreel info` (cached until a set or extension changes)."""
         pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -310,7 +316,8 @@ class Studio:
         return {
             "project": {"root": self.root, "film": self.film()},
             "cast": self._tomls("cast"), "sets": self._tomls("sets"), "scenes": self.scenes(),
-            "renders": self.renders(), "music": self.music(), "samples": self.samples(), "info": self.info(),
+            "renders": self.renders(), "music": self.music(), "samples": self.samples(), "refs": self.refs(),
+            "info": self.info(),
             "keys": userkeys.status(),
         }
 
@@ -338,6 +345,9 @@ class Studio:
 
 
 AUDIO = (".wav", ".mp3", ".ogg", ".flac", ".m4a")
+PICTURES = (".png", ".jpg", ".jpeg", ".webp")
+UPLOADS = {"samples": (os.path.join("audio", "samples"), AUDIO, "a sound file"),
+           "refs": (os.path.join("models", "refs"), PICTURES, "a picture")}
 UPLOAD_LIMIT = 40 * 1024 * 1024
 
 
@@ -424,7 +434,7 @@ class Handler(BaseHTTPRequestHandler):
                 if st.root is None:
                     return self._error("no film open", 404)
                 rel = "/".join(parts[1:])
-                if not (rel.startswith("renders/") or rel.startswith("audio/")):
+                if not (rel.startswith("renders/") or rel.startswith("audio/") or rel.startswith("models/refs/")):
                     return self._error("not allowed", 403)
                 return self._file(st.path(rel))
             if parts[0] != "api":
@@ -509,19 +519,24 @@ class Handler(BaseHTTPRequestHandler):
         if st.root is None:
             return self._error("no film open", 409)
         if what == "upload" and method == "POST":
-            # a voice recording to copy: browsers must send this header, which other sites can't
+            # a voice recording to copy (audio/samples), or a picture to model from (models/refs):
+            # browsers must send this header, which other sites can't
             if self.headers.get("X-Dreamreel") != "1":
                 return self._error("bad request")
+            to = (query.get("to") or ["samples"])[0]
+            if to not in UPLOADS:
+                return self._error("bad request")
+            folder, kinds, what_ = UPLOADS[to]
             name = os.path.basename((query.get("name") or [""])[0]).lower()
             stem, ext = os.path.splitext(name)
             stem = re.sub(r"[^a-z0-9_-]+", "-", stem).strip("-")[:40]
-            if not stem or ext not in AUDIO:
-                return self._error(f"a sound file please ({', '.join(AUDIO)})")
+            if not stem or ext not in kinds:
+                return self._error(f"{what_} please ({', '.join(kinds)})")
             n = int(self.headers.get("Content-Length") or 0)
             if not 0 < n <= UPLOAD_LIMIT:
                 return self._error("that file is too big (40 MB at most)")
             data = self.rfile.read(n)
-            rel = os.path.join("audio", "samples", stem + ext)
+            rel = os.path.join(folder, stem + ext)
             full = st.path(rel)
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full + ".part", "wb") as f:
@@ -672,6 +687,30 @@ class Handler(BaseHTTPRequestHandler):
             label, quick = f"Download {pack or 'all the 3D packs'}", False
         elif kind == "thumbs":
             args, label, quick = ["assets", "--thumbs"], "Pictures of people and animals", False
+        elif kind == "generate":
+            name = str(b.get("name", ""))
+            if not NAME.match(name):
+                return self._error("Names use lower-case letters, numbers, - and _ (e.g. robot, old_tom)")
+            args = ["generate", name.replace("-", "_")]
+            if b.get("image"):
+                image = str(b["image"])
+                if not image.startswith("models/refs/") or ".." in image:
+                    return self._error("bad picture")
+                args += ["--image", image]
+            if b.get("prompt"):
+                args += ["--prompt", str(b["prompt"])[:2000]]
+            for k, flag in (("from_picture", "--from-picture"), ("rig", "--rig"), ("prop", "--prop"), ("force", "--force")):
+                if b.get(k):
+                    args.append(flag)
+            if b.get("height"):
+                args += ["--height", str(float(b["height"]))]
+            if b.get("provider"):
+                if not re.match(r"^[a-z]{2,20}$", str(b["provider"])):
+                    return self._error("bad provider")
+                args += ["--provider", str(b["provider"])]
+            if b.get("model"):
+                args += ["--model", str(b["model"])[:120]]
+            label, quick = f"Making {name} with AI", False
         elif kind == "voice":
             voice = b.get("voice") or {}
             spec = voice if isinstance(voice, dict) else {"name": str(voice)}

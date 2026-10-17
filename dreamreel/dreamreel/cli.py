@@ -240,6 +240,15 @@ def cmd_studio(a):
     server.serve(a.dir, a.port, open_browser=not a.no_browser)
 
 
+def _ai_ready():
+    """The AI model the modeller would use now ("provider:model"), or None."""
+    from . import ai
+    try:
+        return str(ai.configured())
+    except ai.AIError:
+        return None
+
+
 def cmd_info(a):
     """Everything a tool needs to offer valid choices: every plugin with its settings, the colours,
     and each set's marks and seats."""
@@ -253,6 +262,7 @@ def cmd_info(a):
             "places": [z for z in ZONES if z != "centre"], "colors": look.COLORS,
             "voices": list(voices.SUGGESTED), "voice_engine": voices.pick_engine() is not None,
             "voice_engines": voices.status(), "lipsync_ready": lipsync.installed() is not None,
+            "ai": _ai_ready(),
             "languages": {k: {"name": v[0], "native": v[1], "try": v[2], "piper": voices.PIPER_DEFAULT.get(k)}
                           for k, v in voices.LANGUAGES.items()},
         },
@@ -306,11 +316,24 @@ def cmd_generate(a):
     """Make a character or a thing with dreamreel's modelling agent (any AI model; see ai.py)."""
     import json
     import tempfile
-    from . import ai, modeler
+    from . import ai, modeler, picture3d
     p = _project()
     glb = os.path.join(p.root, "models", f"{a.name}.glb")
     kind = "prop" if a.prop else "character"
     try:
+        if a.from_picture:                # shape from a picture on a booster (picture3d.py)
+            if not a.image:
+                raise SystemExit("--from-picture needs --image picture.png")
+            if os.path.exists(glb) and not a.force:
+                raise SystemExit(f"models/{a.name}.glb already exists (--force to make it again)")
+            image = a.image if os.path.isabs(a.image) else os.path.join(os.getcwd(), a.image)
+            try:
+                glb = picture3d.make(p.root, a.name, image, rig=a.rig)
+            except picture3d.PictureError as e:
+                raise SystemExit(str(e))
+            print(f"saved models/{os.path.basename(glb)}")
+            _cast_model(p, a, glb, kind)
+            return
         if a.spec:                        # rebuild from a (hand-edited) recipe: no AI needed
             with open(os.path.join(p.root, a.spec) if not os.path.isabs(a.spec) else a.spec) as f:
                 recipe = modeler.check(json.load(f))
@@ -329,16 +352,27 @@ def cmd_generate(a):
     except (ai.AIError, modeler.RecipeError) as e:
         raise SystemExit(str(e))
     print(f"saved models/{a.name}.glb and its recipe models/{a.name}.json")
+    if a.rig and kind == "character":
+        try:
+            picture3d.rig_model(glb)
+        except picture3d.PictureError as e:
+            print(f"not rigged by AI ({e}); dreamreel rigs it when it's cast")
+    _cast_model(p, a, glb, kind)
+
+
+def _cast_model(p, a, glb, kind):
+    """A cast file for a new model character (or how to use a new prop)."""
+    rel = os.path.relpath(glb, p.root).replace(os.sep, "/")
     if kind == "prop":
-        print(f"put it in a set: [[props]] type = \"model\", file = \"models/{a.name}.glb\", height = ...")
+        print(f"put it in a set: [[props]] type = \"model\", file = \"{rel}\", height = ...")
         return
     cast = os.path.join(p.root, "cast", f"{a.name}.toml")
     if os.path.exists(cast) and not a.force:
-        print(f"cast/{a.name}.toml exists; set its file = \"models/{a.name}.glb\" to use the new model")
+        print(f"cast/{a.name}.toml exists; set its file = \"{rel}\" to use the new model")
         return
     os.makedirs(os.path.dirname(cast), exist_ok=True)
     with open(cast, "w") as f:
-        f.write(f'name = "{a.name.capitalize()}"\ntype = "model"\nfile = "models/{a.name}.glb"\nheight = {a.height}\n')
+        f.write(f'name = "{a.name.capitalize()}"\ntype = "model"\nfile = "{rel}"\nheight = {a.height}\n')
     print(f"cast/{a.name}.toml is ready: rigged when cast, it walks, gestures and handles things. "
           "Check it with `dreamreel cast`.")
 
@@ -694,6 +728,19 @@ def cmd_voices(a):
     print("Lines written in an Indian script are spoken in that language automatically.")
 
 
+def cmd_rig(a):
+    from . import picture3d
+    p = _project()
+    path = a.file if os.path.isabs(a.file) else os.path.join(p.root, a.file)
+    if not os.path.exists(path):
+        raise SystemExit(f"no model at {a.file}")
+    try:
+        out = picture3d.rig_model(path)
+    except picture3d.PictureError as e:
+        raise SystemExit(str(e))
+    print(f"rigged: {os.path.relpath(out, p.root)} (the original is kept as *.unrigged.*)")
+
+
 def cmd_boost(a):
     from . import boost, userkeys
     _project_optional()
@@ -875,7 +922,14 @@ def main(argv=None):
     ge.add_argument("--model", help="the provider's model name")
     ge.add_argument("--url", help="endpoint for a custom (OpenAI-compatible) provider")
     ge.add_argument("--force", action="store_true", help="replace an existing model")
+    ge.add_argument("--from-picture", action="store_true",
+                    help="make the shape from --image with TripoSG on a booster, painted from the picture")
+    ge.add_argument("--rig", action="store_true", help="rig it with UniRig on a booster (any creature)")
     ge.set_defaults(fn=cmd_generate)
+
+    rg = sub.add_parser("rig", help="rig a model with UniRig on a booster (people, animals, creatures)")
+    rg.add_argument("file", help="the model, e.g. models/dragon.glb")
+    rg.set_defaults(fn=cmd_rig)
     sub.add_parser("kit", help="the modelling kit that model recipes are written in").set_defaults(fn=cmd_kit)
     ex = sub.add_parser("extend", help="start a new class in extensions/ (a new prop, gesture, character...)")
     ex.add_argument("kind", choices=sorted(EXTEND_TEMPLATES))

@@ -181,6 +181,12 @@ model = "qwen2.5vl"            # any model the provider has
 The AI only writes recipes, never code, so nothing it says runs on your computer. Claude needs
 `pip install anthropic`; the others need nothing extra.
 
+With a [booster](docs/boosters.md) (a free Colab notebook), a model can also come straight from a
+picture: `dreamreel generate robot --image refs/robot.png --from-picture` makes its shape with
+TripoSG and paints it from the picture, and `--rig` (or `dreamreel rig models/x.glb`) rigs any
+model, creatures with tails and wings included, with UniRig. The studio's Cast page has all of this
+under **Make one with AI**.
+
 ## A real camera
 
 Shots combine framing (establishing to extreme close-up, two-shot, over-the-shoulder, point of view,

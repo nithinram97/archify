@@ -42,6 +42,8 @@ Next, roughly in order:
   (voxel, brick, clay); splitting models into parts; exporting to other formats. (The modelling
   agent with any AI, part-aware rigging and lightening heavy models are done.)
 - A character designer: describe a person in a sentence and get a cast file with a turnaround image.
+- (Done: models from a picture with TripoSG and rigging any model with UniRig, on a booster.) Next:
+  textures from the AI (not only a projected picture), and SkinTokens, UniRig's successor.
 - CC0 asset packs as props and sets (Kenney, Quaternius, Poly Haven); fingers on imported models.
 
 ## Places
