@@ -393,9 +393,10 @@ class Director:
         yaw = SIDES.get(side, SIDES["three_quarter"] if side == "auto" else 0.0) * sign
         a = math.radians(yaw)
         dh = Vector((base.x * math.cos(a) - base.y * math.sin(a), base.x * math.sin(a) + base.y * math.cos(a)))
-        if side == "auto" and toward is None and dh.y > 0.35 and self.scene.set is not None and not self.scene.set.outdoor:
-            dh.y = -abs(dh.y)   # in a room, stay on the open side
-            dh.normalize()
+        if side == "auto" and toward is None and dh.y > 0.35 and self.scene.set is not None and \
+                not self.scene.set.outdoor and size in ("full", "wide", "medium_wide"):
+            dh.y = -abs(dh.y)   # in a room, wide shots stay on the open side (close ones need little room
+            dh.normalize()      # in front of a face, and showing the back of a head is no close-up)
         el = math.radians(ANGLES.get(angle, 4.0))
         dist = self._dist_for_height(fh, lens)
         aim = Vector((head.x, head.y, aim_z)) if size in ("extreme_close_up", "close_up", "medium_close", "medium") \

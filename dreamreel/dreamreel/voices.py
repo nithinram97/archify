@@ -200,6 +200,8 @@ def piper_voice_file(voice):
                 os.replace(os.path.join(part, fn), os.path.join(VOICE_DIR, fn))
         finally:
             shutil.rmtree(part, ignore_errors=True)
+        if not (os.path.exists(model) and os.path.exists(model + ".json")):
+            raise RuntimeError(f"Piper couldn't download the voice {voice!r} (check its name and the internet)")
     return model
 
 
@@ -226,14 +228,18 @@ class Piper(VoiceEngine):
         cmd = [sys.executable, "-m", "piper", "-m", model, "-f", wav_path]
         if speed:
             cmd += ["--length-scale", str(round(1.0 / float(speed), 3))]
-        try:
-            subprocess.run(cmd + ["--", text], check=True, capture_output=True)
-        except subprocess.CalledProcessError as e:
-            if b"Protobuf" in (e.stderr or b""):        # a damaged download: fetch it again next time
-                for fn in (model, model + ".json"):
+        for attempt in (1, 2):
+            try:
+                subprocess.run(cmd + ["--", text], check=True, capture_output=True)
+                return
+            except subprocess.CalledProcessError as e:
+                err = e.stderr or b""
+                if attempt == 2 or not (b"Protobuf" in err or b"Unable to find voice" in err):
+                    raise
+                for fn in (model, model + ".json"):     # a damaged or missing download: fetch it again
                     if os.path.exists(fn):
                         os.remove(fn)
-            raise
+                piper_voice_file(voice)
 
 
 def _piper(text, voice, wav_path):  # kept for the CLI's voice audition
