@@ -82,7 +82,45 @@ def people():
     handling.evaluate(s, t_look)
     q1 = (ben.rig.matrix_world @ head.matrix).to_quaternion()
     assert q0.rotation_difference(q1).angle > 0.6 * abs(turn), ("the head bone follows", q0, q1, turn)
+    faces()
     print("  people: ok")
+
+
+def faces():
+    """Pack people get a working face: eyes and brows that move, and a mouth that smiles and talks."""
+    s = dr.Scene({"kind": "room", "scale": "people"})
+    a = s.cast(a=dict(type="person", body="man", outfit="suit"))
+    a.place("center", facing="camera")
+    roles = {"blink", "smile", "frown", "open", "brows_up", "brows_down", "wide_eyes", "squint"}
+    assert roles <= set(a.face_keys), sorted(a.face_keys)
+    a.feel("sad")
+    s.wait(0.6)
+    t_sad = s.clock - 0.1
+    a.feel("happy")
+    s.wait(0.6)
+    t_happy = s.clock - 0.1
+    a.feel("neutral")
+    t0 = s.clock
+    a.say("Hello, how are you?")
+    t1 = s.clock
+    s.finish()
+    smile, frown, opened = a.face_keys["smile"][0], a.face_keys["frown"][0], a.face_keys["open"][0]
+    handling.evaluate(s, t_sad)
+    assert frown.value > 0.3 and smile.value < 0.1, ("sad", frown.value, smile.value)
+    handling.evaluate(s, t_happy)
+    assert smile.value > 0.3, ("happy", smile.value)
+    most = 0.0
+    for k in range(20):
+        handling.evaluate(s, t0 + (t1 - t0) * k / 19)
+        most = max(most, opened.value)
+    assert most > 0.3, ("the mouth moves when talking", most)
+    mouth = next(m for m in a.meshes if m.name.endswith(".lips"))
+    head = a.head_point(0.0)
+    handling.evaluate(s, 0.2)
+    dg = bpy.context.evaluated_depsgraph_get()
+    pts = [mouth.matrix_world @ v.co for v in mouth.evaluated_get(dg).data.vertices]
+    c = sum(pts, pts[0] * 0) / len(pts)
+    assert c.y < head.y - 0.05 and head.z - 0.3 < c.z < head.z, ("the mouth is on the front of the face", c, head)
 
 
 def furniture():

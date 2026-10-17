@@ -640,9 +640,13 @@ class ClipActor(Character):
         return self.body_length
 
     def feel(self, mood, at=None, wait=False, how_much=1.0):
-        """Moods show in how they move: the head goes down when sad, up when proud or happy."""
+        """Moods show in how they move: the head goes down when sad, up when proud or happy (and on
+        their face, for actors with one)."""
         m = plugins.get("mood", mood)
         t = self._start(at)
+        if getattr(self, "face_keys", None):
+            from . import face
+            face.apply(self, face.values(m, float(how_much if how_much is not None else 1.0)), t, t + 0.25)
         self._moods = sorted(getattr(self, "_moods", []) + [(t, mood, float(how_much or 1.0))], key=lambda x: x[0])
         hold(self.neck, "rotation_euler", t)
         cur = value_at(self.neck, "rotation_euler", t)
@@ -654,7 +658,169 @@ class ClipActor(Character):
         pass
 
     def _alive(self, length):
-        pass
+        if getattr(self, "face_keys", None):           # blinks (and tears, sweat) for a face
+            Character._alive(self, length)
+
+
+# ---------------------------------------------------------------------- faces for pack characters
+def _islands_of(mesh, faces):
+    """Groups of the given faces that touch each other (at the same corner positions: pack models
+    split faces apart for flat shading, so an eye can be six faces that share no vertices)."""
+    vert_faces = {}
+    for f in faces:
+        for v in mesh.polygons[f].vertices:
+            vert_faces.setdefault(tuple(round(c, 5) for c in mesh.vertices[v].co), []).append(f)
+    seen, out = set(), []
+    for f in faces:
+        if f in seen:
+            continue
+        group, stack = [], [f]
+        while stack:
+            g = stack.pop()
+            if g in seen:
+                continue
+            seen.add(g)
+            group.append(g)
+            for v in mesh.polygons[g].vertices:
+                stack.extend(vert_faces[tuple(round(c, 5) for c in mesh.vertices[v].co)])
+        out.append(group)
+    return out
+
+
+def build_face(actor):
+    """A working face on a pack character whose face is only painted geometry: shape keys that
+    blink, widen and squint the eyes and raise and knit the brows, and a mouth (Quaternius's people
+    have none) that opens, smiles, frowns and rounds; then dreamreel's face controls drive them like
+    any model's facial shape keys (moods, blinks, talking). Returns False if no face was found."""
+    from mathutils.bvhtree import BVHTree
+    from . import look
+    from .models import ModelCharacter
+    arm = actor.rig
+    head_bone = next((h for h in actor.head_names if h in arm.data.bones), None)
+    if head_bone is None:
+        return False
+    best, best_n = None, 0
+    for m in actor.meshes:
+        g = m.vertex_groups.get(head_bone)
+        if g is None:
+            continue
+        n = sum(1 for v in m.data.vertices for vg in v.groups if vg.group == g.index and vg.weight > 0.5)
+        if n > best_n:
+            best, best_n = m, n
+    if best is None:
+        return False
+    head, me = best, best.data
+    bpy.context.view_layer.update()
+    mw = head.matrix_world
+    inv3 = mw.inverted().to_3x3()
+    g = head.vertex_groups[head_bone].index
+    on_head = {v.index for v in me.vertices for vg in v.groups if vg.group == g and vg.weight > 0.5}
+    pts = [mw @ me.vertices[i].co for i in on_head]
+    lo = Vector([min(p[i] for p in pts) for i in range(3)])
+    hi = Vector([max(p[i] for p in pts) for i in range(3)])
+    mid = (lo + hi) / 2
+    size = hi.z - lo.z
+    # the eyes and brows: small shapes, neither skin nor hair, on the front of the head
+    skin = {i for i, mat in enumerate(me.materials) if mat and "skin" in mat.name.lower()}
+    feature = [f.index for f in me.polygons if f.material_index not in skin and all(v in on_head for v in f.vertices)
+               and (mw @ f.center).y < mid.y]
+    blobs = []
+    for isl in _islands_of(me, feature):
+        vs = {v for f in isl for v in me.polygons[f].vertices}
+        c = sum((mw @ me.vertices[v].co for v in vs), Vector()) / len(vs)
+        width = max((mw @ me.vertices[v].co).x for v in vs) - min((mw @ me.vertices[v].co).x for v in vs)
+        if width < 0.35 * (hi.x - lo.x) and c.z > lo.z + 0.35 * size and len(vs) < 400:
+            blobs.append((c, vs))
+    left = sorted([b for b in blobs if b[0].x > mid.x + 0.01 * size], key=lambda b: b[0].z)
+    right = sorted([b for b in blobs if b[0].x < mid.x - 0.01 * size], key=lambda b: b[0].z)
+    if not left or not right:
+        return False
+    eyes = [left[0], right[0]]
+    brows = [left[1], right[1]] if len(left) > 1 and len(right) > 1 else []
+    if head.data.shape_keys is None:
+        head.shape_key_add(name="Basis")
+
+    def shape(name, moves):
+        kb = head.shape_key_add(name=name, from_mix=False)
+        kb.value = 0.0
+        kb.slider_max = 1.5
+        for (c, vs), fn in moves:
+            for v in vs:
+                w = mw @ me.vertices[v].co
+                kb.data[v].co = me.vertices[v].co + inv3 @ (fn(w, c) - w)
+    squash = lambda k: (lambda w, c: Vector((w.x, w.y, c.z + (w.z - c.z) * k)))  # noqa: E731
+    shape("blink", [(e, squash(0.08)) for e in eyes])
+    shape("eyewide", [(e, lambda w, c: Vector((c.x + (w.x - c.x) * 1.06, w.y - 0.006 * size,
+                                                 c.z + (w.z - c.z) * 1.18))) for e in eyes])
+    shape("eyesquint", [(e, lambda w, c: Vector((w.x, w.y, max(w.z, c.z - 0.2 * (w.z - c.z) - 0.004 * size)))) for e in eyes])
+    if brows:
+        up = 0.05 * size
+        shape("browsup", [(b, lambda w, c: w + Vector((0, 0, up))) for b in brows])
+
+        def knit(w, c):
+            inner = max(0.0, 1 - abs(w.x - mid.x) / max(1e-4, abs(c.x - mid.x) * 1.6))
+            return w + Vector((-(w.x - mid.x) * 0.06 * inner, 0, -0.025 * size - 0.03 * size * inner))
+        shape("browdown", [(b, knit) for b in brows])
+    # the mouth: below the nose, on the surface of the face
+    tree = BVHTree.FromPolygons([mw @ v.co for v in me.vertices], [tuple(p.vertices) for p in me.polygons])
+    eye_z = (eyes[0][0].z + eyes[1][0].z) / 2
+    eye_gap = abs(eyes[0][0].x - eyes[1][0].x)
+    front = [p for p in pts if abs(p.x - mid.x) < 0.04 * size and lo.z + 0.1 * size < p.z < eye_z]
+    nose = min(front, key=lambda p: p.y) if front else Vector((mid.x, lo.y, eye_z - 0.15 * size))
+    chin_z = lo.z + 0.12 * size
+    mz = nose.z - 0.42 * (nose.z - chin_z) if nose.z > chin_z else eye_z - 0.3 * size
+    w, h = 0.34 * eye_gap, 0.035 * size
+    import bmesh
+    bm = bmesh.new()
+    rows, cols = 4, 12
+    grid = []
+    for r in range(rows + 1):
+        row = []
+        for c in range(cols + 1):
+            u, v = c / cols * 2 - 1, r / rows * 2 - 1
+            x = mid.x + u * w
+            z = mz + v * h * math.sqrt(max(0.0, 1 - u * u)) * 0.5
+            hit, *_ = tree.ray_cast(Vector((x, lo.y - 1.0, z)), Vector((0, 1, 0)))
+            y = (hit.y if hit is not None else nose.y) - 0.004 * size
+            row.append(bm.verts.new((x, y, z)))
+        grid.append(row)
+    for r in range(rows):
+        for c in range(cols):
+            bm.faces.new((grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c]))
+    mesh = bpy.data.meshes.new(f"{actor.name}.lips")
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.materials.append(look.matte("#4a1e22", 0.6))
+    mouth = bpy.data.objects.new(f"{actor.name}.lips", mesh)
+    bpy.context.scene.collection.objects.link(mouth)
+    mouth.shape_key_add(name="Basis")
+
+    def mshape(name, fn):
+        kb = mouth.shape_key_add(name=name, from_mix=False)
+        kb.value = 0.0
+        kb.slider_max = 1.5
+        for i, v in enumerate(mesh.vertices):
+            u = (v.co.x - mid.x) / w
+            kb.data[i].co = fn(v.co.copy(), u)
+    def opened(co, u):          # an oval: the bottom lip drops most, the top lifts a little
+        arc = math.sqrt(max(0.0, 1 - u * u))
+        dz = (0.012 * size * arc) if co.z >= mz else (-0.045 * size * arc)
+        return Vector((mid.x + (co.x - mid.x) * 0.85, co.y, co.z + dz))
+    mshape("jawopen", opened)
+    mshape("mouthsmile", lambda co, u: Vector((mid.x + (co.x - mid.x) * 1.12, co.y, co.z + 0.022 * size * u * u)))
+    mshape("mouthfrown", lambda co, u: Vector((co.x, co.y, co.z - 0.02 * size * u * u + 0.004 * size)))
+    mshape("mouthpucker", lambda co, u: Vector((mid.x + (co.x - mid.x) * 0.45, co.y - 0.004 * size,
+                                                mz + (co.z - mz) * 3.0)))
+    mshape("mouthstretch", lambda co, u: Vector((mid.x + (co.x - mid.x) * 1.3, co.y, co.z)))
+    # skinned to the head bone like the face itself, so it moves exactly as the face does
+    mouth.vertex_groups.new(name=head_bone).add(list(range(len(mesh.vertices))), 1.0, "REPLACE")
+    mod = mouth.modifiers.new("rig", "ARMATURE")
+    mod.object = arm
+    mouth.parent = head.parent
+    mouth.matrix_parent_inverse = head.parent.matrix_world.inverted() if head.parent else Matrix()
+    actor.meshes.append(mouth)
+    ModelCharacter._face(actor, [head, mouth])
+    return bool(actor.face_keys)
 
 
 class Person(ClipActor):
@@ -696,6 +862,10 @@ class Person(ClipActor):
             raise ValueError(f"{self.name}: people need Quaternius's characters: `dreamreel assets --download`")
         if outfit not in have:
             raise ValueError(f"{self.name}: no {body} outfit {outfit!r}; there are: {', '.join(sorted(have))}")
+
+    def build(self):
+        super().build()
+        build_face(self)
 
     def proportions(self):
         body = self.get("body", "woman")
