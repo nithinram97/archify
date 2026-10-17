@@ -418,7 +418,10 @@ class Scene:
         sh = sc.display.shading
         sh.light = "STUDIO"
         sh.color_type = "TEXTURE"        # imported models show their textures; others their colours
-        sh.show_shadows = True
+        # shadows help read the staging, but drawing them costs ~40x more in heavy scenes (a forest of
+        # detailed trees) without a graphics card: keep the previz quick everywhere
+        polys = sum(len(o.data.polygons) for o in sc.objects if o.type == "MESH" and not o.hide_render)
+        sh.show_shadows = polys < 150000
         sh.show_cavity = False
         self.style.previz(sc)
         for o in bpy.data.objects:      # fog volumes and the like only show in the final render
