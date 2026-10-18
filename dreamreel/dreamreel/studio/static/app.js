@@ -244,15 +244,20 @@ function colorPicker(value, onPick, { skins = false } = {}) {
 }
 
 function select(options, value, onChange, { blank, label } = {}) {
+  // a spot written as coordinates in the scene file ([x, y]) is shown as itself and kept unless changed
+  const spot = Array.isArray(value) ? value : null;
+  const spotKey = spot ? "@" + JSON.stringify(spot) : null;
   const el = h("select", { "aria-label": label || "" },
+    spot ? h("option", { value: spotKey, selected: true }, "📐 at " + spot.map((n) => +(+n).toFixed(2)).join(", ")) : null,
     blank !== undefined ? h("option", { value: "" }, blank) : null,
     options.map((o) => {
       const [v, t] = Array.isArray(o) ? o : [o, pretty(o)];
       return h("option", { value: v, selected: v === value ? true : null }, t);
     }));
-  if ((value !== undefined && value !== null && value !== "") || blank !== undefined) el.value = value ?? "";
+  if (spot) el.value = spotKey;
+  else if ((value !== undefined && value !== null && value !== "") || blank !== undefined) el.value = value ?? "";
   if (el.selectedIndex < 0 && el.options.length) el.selectedIndex = 0;
-  el.addEventListener("change", () => onChange(el.value));
+  el.addEventListener("change", () => onChange(el.value === spotKey ? spot : el.value));
   return el;
 }
 
@@ -607,6 +612,14 @@ function castView() {
   const cast = S.state.cast;
   const keys = Object.keys(cast);
   if (S.castSel && !cast[S.castSel] && !S.castDraft[S.castSel]) S.castSel = null;
+  // characters written as files have no portrait yet: take one of each (once), so the cards show them
+  S.portraitAsked = S.portraitAsked || new Set();
+  for (const k of keys) {
+    const t = plugOf("character", cast[k].type || "toy") || {};
+    if (t.drawing === "toy" || packPicture(cast[k]) || renderOf(`renders/stills/cast_${k}.png`) || S.portraitAsked.has(k)) continue;
+    S.portraitAsked.add(k);
+    job({ kind: "cast", names: [k] }, () => render());
+  }
   return h("div", {},
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "Cast"), h("p", {}, "Who's in your film: people and animals from the 3D packs, toy figures, creatures, or your own models.")),

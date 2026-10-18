@@ -152,12 +152,13 @@ def cmd_cast(a):
     actors = s.cast(*names)
     actors = actors if isinstance(actors, list) else [actors]
     n = len(actors)
+    H = max([c.height() for c in actors] + [1.0])          # toys and grown-ups alike stand in full
+    gap = max(1.1, 0.55 * H)
     for i, c in enumerate(actors):
-        c.place((-(n - 1) * 0.55 + i * 1.1, -0.6), facing="camera")
+        c.place((-(n - 1) * gap / 2 + i * gap, -0.6), facing="camera")
     lens = 40
-    width = n * 1.1 + 0.6
-    d = s.cut._dist_for_width(width, lens)
-    s.cut._add("cast", 0.0, actors, (0, -0.6 - d, 0.75), (0, -0.6, 0.5), lens, 8.0, "cast")
+    d = max(s.cut._dist_for_width(n * gap + 0.6, lens), s.cut._dist_for_height(1.15 * H, lens))
+    s.cut._add("cast", 0.0, actors, (0, -0.6 - d, 0.75 * H), (0, -0.6, 0.5 * H), lens, 8.0, "cast")
     s.cut.manual = True
     s.finish()
     r = s.bscene.render
