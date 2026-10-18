@@ -111,6 +111,33 @@ def person():
     print(f"  person: ok (parts {sorted(parts)}, {len(names)} face shapes)")
 
 
+def fight():
+    s = dr.Scene({"kind": "street"})
+    ravi = s.cast(ravi=dict(type="human", gender="male", age=34))
+    arjun = s.cast(arjun=dict(type="human", gender="male", age=26))
+    ravi.place((-0.5, 0), facing="camera")
+    arjun.place((0.5, 0), facing="camera")
+    ravi.turn_to(arjun)
+    arjun.turn_to(ravi)
+    t_jab = s.clock
+    ravi.do("jab", target="arjun")
+    t_kick = s.clock
+    arjun.do("kick", target=ravi)
+    s.finish()
+
+    def closest(hand, t0):
+        return min((at(s, hand, t0 + k * 0.05) - arjun.head_point(t0 + k * 0.05)).length for k in range(40))
+    near = min(closest(h, t_jab) for h in ravi.hands.values())
+    assert near < 0.3, ("the jab reaches his face", near)
+    foot = arjun.rig.pose.bones[arjun.roles["r_ankle"]]
+    highest = 0.0
+    for k in range(20):
+        handling.evaluate(s, t_kick + k * 0.05)
+        highest = max(highest, (arjun.rig.matrix_world @ foot.head).z)
+    assert highest > 0.5, ("the kick comes up", highest)
+    print(f"  fight: ok (jab {near:.2f} m from the face, kick {highest:.2f} m high)")
+
+
 def main():
     stand_in()
     if not humans.installed():
@@ -118,6 +145,7 @@ def main():
         return
     recipes()
     person()
+    fight()
     print("humans: all ok")
 
 

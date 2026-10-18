@@ -724,7 +724,11 @@ class ModelCharacter(Character):
             # relaxed: the hand hangs a little forward, so the elbow is softly bent, not locked
             tgt = shapes.empty(f"{n}.hand.target.{s}", piv,
                                (side * out, -0.07 * reach, -math.sqrt(max(0.0, (reach * 0.94) ** 2 - out ** 2))))
-            pole = shapes.empty(f"{n}.elbow.pole.{s}", piv, (side * 0.05 * H, 0.6 * reach, -reach * 0.5))
+            if self.bends:      # elbows that bend point down and out whatever the arm does (on the body)
+                pole = shapes.empty(f"{n}.elbow.pole.{s}", self.body,
+                                    (sh.x + side * 0.35 * reach, sh.y + 0.3 * reach, sh.z - hip_z - 1.2 * reach))
+            else:
+                pole = shapes.empty(f"{n}.elbow.pole.{s}", piv, (side * 0.05 * H, 0.6 * reach, -reach * 0.5))
             self._ik(pb[roles[f"{s}_elbow"]], pb[roles[f"{s}_arm"]], tgt, pole)
             self.limb_targets[("arm", side)] = (tgt, tgt.location.copy())
             hand = shapes.empty(f"{n}.hand.{s}")

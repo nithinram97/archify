@@ -83,7 +83,7 @@ class ClipGesture(Gesture):
         return c.play(self.clip, t)
 
 
-for _name in ("punch", "kick", "dance", "roll", "interact", "eat", "attack", "die", "flinch", "look_down", "talk"):
+for _name in ("dance", "roll", "interact", "eat", "attack", "die", "look_down", "talk"):   # punch, kick, flinch: gestures.py
     type(_name.title().replace("_", ""), (ClipGesture,), {
         "name": _name, "label": _name.replace("_", " ").capitalize(), "clip": _name, "needs": (_name,),
         "description": f"{_name.replace('_', ' ').capitalize()} (people and animals with that animation)"})

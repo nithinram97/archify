@@ -205,6 +205,9 @@ class Style(Plugin):
                     m = fc.modifiers.new("STEPPED")
                     m.frame_step = self.steps
         self.render_settings(scene.bscene)
+        film = getattr(scene, "film", {}) or {}
+        if film.get("samples") and hasattr(scene.bscene.eevee, "taa_render_samples"):
+            scene.bscene.eevee.taa_render_samples = int(film["samples"])     # fewer: faster, noisier
 
     def render_settings(self, sc):
         try:

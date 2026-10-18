@@ -312,6 +312,8 @@ lid_slant, smile, frown, wide, o, smirk, mouth_open, teeth, blush, tears, sweat,
 
 **Gestures**: wave, nod, shake_head, shrug, point, jump, cheer, facepalm, clap, think, bow, stomp
 (toys); roar, sniff, spin, tail_wag, flap, rear_up, croak, tongue (any body that has what it needs).
+Fighting: jab, punch, kick (give a `target`; a punch steps in until it lands), block, dodge, flinch (start
+these with the blow, `with_previous = true`, so the defence meets it).
 
 ## Camera
 
