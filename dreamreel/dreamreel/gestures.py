@@ -248,6 +248,7 @@ def _own_clip(c, name, t):
 
 class Punch(Gesture):
     """A right cross: guard, a little wind-up, the punch thrown at face height with the body behind it."""
+    needs = ("arms",)
     description = "Punch (a right cross); start a block, dodge or flinch with it for the other fighter"
     uses_target = True
     side = -1
@@ -285,6 +286,7 @@ class Jab(Punch):
 
 class Kick(Gesture):
     """A front kick: lean back, the right leg snaps up, back down into a stance."""
+    needs = ("swing_legs",)
     description = "Kick (a front kick)"
     uses_target = True
 

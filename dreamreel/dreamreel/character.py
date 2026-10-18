@@ -818,6 +818,8 @@ class Character(Plugin):
         ("angrily", "nervously"...); otherwise the current mood shapes it (see acting.py)."""
         g = plugins.get("gesture", gesture)
         missing = set(g.needs) - self.capabilities
+        if gesture in getattr(self, "clip_names", {}):      # an actor's own animation of it
+            missing = set()
         if missing:
             able = [n for n, cls in plugins.registry("gesture").items() if not set(cls.needs) - self.capabilities]
             raise ValueError(f"{self.name} can't {g.label.lower()} (needs {', '.join(sorted(missing))}). "
