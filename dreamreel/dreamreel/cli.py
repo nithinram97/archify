@@ -271,12 +271,14 @@ def cmd_info(a):
         "models": [],
     }
     from . import actors, quaternius
+    from . import humans as humans_mod
     have = quaternius.installed()
     info["assets"] = {
         "packs": {n: {"installed": n in have, "about": spec["about"]} for n, spec in quaternius.PACKS.items()},
         "outfits": {b: sorted(actors.outfits(b)) for b in ("woman", "man")},
         "species": sorted(actors.species()),
         "thumbs": quaternius.thumb_names(),
+        "humans": humans_mod.installed(),
     }
     from . import motion as _motion
     info["motions"] = _motion.Library(p.root).names()
@@ -296,7 +298,12 @@ def cmd_info(a):
 
 def cmd_assets(a):
     """List Quaternius's free (CC0) packs dreamreel uses (people, animals...), or download them."""
-    from . import quaternius as q
+    from . import humans, materials, quaternius as q
+    extra = {"humans": humans, "materials": materials}
+    if a.pack in extra:                     # MakeHuman's people, or the real-world materials
+        print(f"fetching {a.pack}...")
+        humans.download() if a.pack == "humans" else materials.download_all()
+        return
     if a.download:
         q.download([a.pack] if a.pack else None)
     if a.download or a.thumbs:
@@ -310,6 +317,11 @@ def cmd_assets(a):
         print(f"  {name:12s} {mark:14s} {spec['about']}")
     if not have:
         print("Download them with: dreamreel assets --download   (or --pack NAME)")
+    print("\nAlso (all CC0):")
+    print(f"  {'humans':12s} {'installed' if humans.installed() else 'not installed':14s} realistic people: MakeHuman's "
+          "bodies, skins, hair, clothes and 52-shape faces (`--pack humans`, 700 MB)")
+    print(f"  {'materials':12s} {'fetched' if materials.fetched() else 'on demand':14s} real-world surfaces for the "
+          "realistic look, from ambientCG and Poly Haven (`--pack materials`, about 250 MB; else as needed)")
 
 
 def cmd_generate(a):
@@ -905,9 +917,9 @@ def main(argv=None):
     mo.add_argument("--name")
     mo.add_argument("--tags", help="comma separated, e.g. walk or dance")
     mo.set_defaults(fn=cmd_motions)
-    asp = sub.add_parser("assets", help="Quaternius's free 3D packs: people, animals and more")
+    asp = sub.add_parser("assets", help="free 3D packs: people, animals, realistic humans, real-world materials")
     asp.add_argument("--download", action="store_true", help="fetch the packs (CC0) into the cache")
-    asp.add_argument("--pack", help="just this pack (see the list)")
+    asp.add_argument("--pack", help="just this pack (see the list; humans and materials too)")
     asp.add_argument("--thumbs", action="store_true", help="(re)make the pictures of people and animals for menus")
     asp.set_defaults(fn=cmd_assets)
     ge = sub.add_parser("generate", help="make a character or prop with dreamreel's modelling agent (any AI model)")

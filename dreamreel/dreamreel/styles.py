@@ -369,14 +369,22 @@ class Noir(Style):
 
 
 class Realistic(Style):
-    description = "Realistic light and materials: less plastic, more texture, richer contrast"
+    description = "Real materials and light: photo-scanned surfaces on everything, real skies (see materials.py)"
     exaggeration = 0.8
     view = ("AgX", "AgX - Base Contrast")
     samples = 96
 
+    def finish(self, scene):
+        from . import materials
+        materials.soften(scene)
+        materials.realise_scene(scene)
+        materials.real_sky(scene)
+        super().finish(scene)
+
     def material(self, mat, scene):
+        """Anything materials.py didn't make real: less plastic, a fine grain."""
         bsdf, out = _bsdf(mat)
-        if bsdf is None or _glows(bsdf) or _glass(bsdf):
+        if bsdf is None or _glows(bsdf) or _glass(bsdf) or mat.get("dr_real"):
             return
         nt = mat.node_tree
         r = bsdf.inputs["Roughness"].default_value

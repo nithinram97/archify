@@ -103,6 +103,32 @@ heads to look and nod, carry things, and play their gestures: people `wave`, `in
 People sit on chairs, sofas and beds (in a set with `scale = "people"`, so the furniture fits them).
 Get the packs once with `dreamreel assets --download`.
 
+### `type = "human"`: a realistic person (MakeHuman)
+
+```toml
+type = "human"
+gender = "female"           # female or male
+age = 28                    # years (5-90)
+build = "average"           # slim, average, athletic, heavy, stocky
+heritage = "south_asian"    # african, east_asian, european, south_asian, latin, middle_eastern, mixed
+skin_tone = "#8d5a3b"       # optional; else one that suits the heritage
+hair = "long01"             # afro01, bob01, bob02, braid01, long01, ponytail01, short01-04, none
+hair_color = "black"
+eyes = "brown"              # brown, brownlight, blue, bluegreen, deepblue, green, grey, ice, lightblue
+outfit = "female_elegantsuit01"   # female_elegantsuit01, female_sportsuit01, male_casualsuit01-06,
+                                  # male_elegantsuit01, male_worksuit01 (any fits anyone)
+outfit_tint = "teal"        # optional: the outfit in another colour
+shoes = "shoes02"           # shoes01-06
+face = 0.5                  # how distinctive the face is (0-1); the same name always gives the same face
+height = 1.62               # metres
+```
+
+Realistic people walk, sit (knees bent, feet on the floor), gesture with bending elbows, perform
+motion capture and carry things. Their faces have ARKit's 52 shapes and 15 visemes: every mood
+becomes an expression, they blink, and their mouths make the sounds of speech (`lipsync = "ai"`
+with a booster moves the whole face with the voice). Get the assets once with
+`dreamreel assets --pack humans`; until then a toy figure stands in.
+
 ### `type = "model"`: your own 3D model
 
 ```toml
@@ -357,7 +383,17 @@ scene file gives that scene its own (flashbacks, dreams, a film within the film)
 | paper | flat card cut-outs with white edges, animated on threes |
 | storybook | soft pastel tones, gentle brown lines, a warm painted feel |
 | noir | black and white, a low hard side light, deep shadows |
-| realistic | less plastic, more texture, richer contrast |
+| realistic | real materials on everything (photo-scanned wood, plaster, brick, fabric, fur, skin...), real skies |
+
+In the realistic look each surface is given the real material it is made of, worked out from what
+it is (a floor, a wall, a pack's "Bark", a person's trousers, a dog). To say what something is made
+of yourself, give its material a `dr_material` property (in Blender, or `mat["dr_material"] = "leather"`
+in an extension): wood_floor, wood, painted_wood, plaster, brick, brick_pale, concrete, asphalt,
+paving, roof, tiles, granite, metal, chrome, painted_metal, fabric, cotton, denim, linen, corduroy,
+leather, carpet, grass, ground, gravel, sand, rock, bark, leaves, porcelain, paper, cardboard,
+wicker, fur, skin, hair, eye, glass, car_paint, rubber, baked, wax, petals, frosting, plastic.
+Textures come from ambientCG and Poly Haven (CC0); `dreamreel assets --pack materials` fetches them
+all at once, otherwise each is fetched the first time it's needed.
 
 ## Editing: transitions, time and the edit list
 

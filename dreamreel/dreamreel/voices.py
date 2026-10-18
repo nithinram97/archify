@@ -503,6 +503,16 @@ class Speech:
         from . import lipsync
         return lipsync.cues(self.path, self.text, self.english, download)
 
+    def letters(self, download=True):
+        """[(start, Rhubarb mouth shape letter)] from the sounds of the line, or None."""
+        from . import lipsync
+        return lipsync.letters(self.path, self.text, self.english, download)
+
+    def face_frames(self, download=True):
+        """[(time, {ARKit shape: weight})] from an AI reading the whole face in the voice, or None."""
+        from . import lipsync
+        return lipsync.face_frames(self.path, download)
+
     def face(self, download=True):
         """[(start, (open, round, wide))] from an AI reading the face in the voice, or None."""
         from . import lipsync

@@ -44,9 +44,9 @@ class Wave(Gesture):
 
     def perform(self, c, t, target=None):
         up = _deg(-150)
-        c.arm_to(1, t + 0.3, (0, up, 0))
+        c.arm_to(1, t + 0.3, (0, up, 0), reach=0.75)
         for i in range(4):
-            c.arm_to(1, t + 0.45 + i * 0.22, (0, up + _deg(22 if i % 2 else -22), 0))
+            c.arm_to(1, t + 0.45 + i * 0.22, (0, up + _deg(22 if i % 2 else -22), 0), reach=0.75)
         c.arm_to(1, t + 1.5, (0, 0, 0))
         return t + 1.5
 
@@ -77,8 +77,8 @@ class Shrug(Gesture):
 
     def perform(self, c, t, target=None):
         for s in (1, -1):
-            c.arm_to(s, t + 0.25, (_deg(-35), _deg(-55 * s), 0))
-            c.arm_to(s, t + 0.9, (_deg(-35), _deg(-55 * s), 0))
+            c.arm_to(s, t + 0.25, (_deg(-35), _deg(-55 * s), 0), reach=0.72)
+            c.arm_to(s, t + 0.9, (_deg(-35), _deg(-55 * s), 0), reach=0.72)
         c.tilt_head_at(t, 12)
         c.hop_at(t, 0.02, 0.3, 0.9)
         c.arms_rest(t + 1.2)
@@ -123,8 +123,9 @@ class Facepalm(Gesture):
     description = "Hand to the face"
 
     def perform(self, c, t, target=None):
-        c.arm_to(1, t + 0.35, (_deg(-150), _deg(30), 0))
-        c.arm_to(1, t + 1.3, (_deg(-150), _deg(30), 0))
+        palm = ((_deg(-137), _deg(-55), 0), 0.5)        # real proportions: the hand over the brow
+        c.arm_to(1, t + 0.35, (_deg(-150), _deg(30), 0), bent=palm)
+        c.arm_to(1, t + 1.3, (_deg(-150), _deg(30), 0), bent=palm)
         c.nod_at(t + 0.2, 14)
         c.arm_to(1, t + 1.7, (0, 0, 0))
         return t + 1.7
@@ -138,8 +139,8 @@ class Clap(Gesture):
         for i in range(4):
             tc = t + 0.25 + i * 0.25
             for s in (1, -1):
-                c.arm_to(s, tc, (_deg(-70), _deg(28 * s), 0))
-                c.arm_to(s, tc + 0.12, (_deg(-70), _deg(10 * s), 0))
+                c.arm_to(s, tc, (_deg(-70), _deg(28 * s), 0), bent=((_deg(-45), _deg(30 * s), 0), 0.8))
+                c.arm_to(s, tc + 0.12, (_deg(-70), _deg(10 * s), 0), bent=((_deg(-45), _deg(38 * s), 0), 0.84))
         c.arms_rest(t + 1.5)
         return t + 1.5
 
@@ -149,8 +150,9 @@ class Think(Gesture):
     description = "Hand on chin, thinking"
 
     def perform(self, c, t, target=None):
-        c.arm_to(1, t + 0.4, (_deg(-125), _deg(28), 0))
-        c.arm_to(1, t + 1.8, (_deg(-125), _deg(28), 0))
+        chin = ((_deg(-155), _deg(-70), 0), 0.43)       # real proportions: the hand under the chin
+        c.arm_to(1, t + 0.4, (_deg(-125), _deg(28), 0), bent=chin)
+        c.arm_to(1, t + 1.8, (_deg(-125), _deg(28), 0), bent=chin)
         c.tilt_head_at(t + 0.2, 12)
         c.arm_to(1, t + 2.2, (0, 0, 0))
         return t + 2.2

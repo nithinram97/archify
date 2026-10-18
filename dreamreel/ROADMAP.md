@@ -25,6 +25,9 @@ Since then:
 Next, roughly in order:
 
 ## Looks
+- (Done: the realistic look puts photo-scanned CC0 materials on everything and lights outdoor scenes
+  with real skies.) Next: fur strands on animals in close-ups, grass blades, wet and weathered
+  surfaces after rain, and textures from the AI for made models.
 - Styles that change over a scene (fading into a memory); hatching and watercolour styles.
 - (Experimental: AI restyling of final renders with Wan 2.1 on a booster.) Next: steadier frames
   (overlapping windows, guiding with depth and outlines), and the larger Wan models on bigger cards.
@@ -34,10 +37,15 @@ Next, roughly in order:
 - Physics for bodies (a character tripping and falling as a ragdoll), cloth and things that break.
 - Walk cycles that follow curves and stairs; crowds walking in the background.
 - More gestures (hug, high-five, dance, fall over, sneak) and gesture layering while talking.
-- (Done: lip sync from the sounds of speech, with Rhubarb Lip Sync.) Next: Audio2Face faces driven by the voice.
+- (Done: lip sync from the sounds of speech, with Rhubarb Lip Sync; visemes and the whole face from the voice
+  for realistic people.) Next: NVIDIA Audio2Face-3D (open since 2025) as a booster skill.
 - Eye direction (eyes follow before the head turns).
 
 ## Characters
+- (Done: realistic people from MakeHuman's CC0 assets, with ARKit's 52 face shapes and visemes, and
+  bending elbows and knees.) Next: more outfits and hair (MakeHuman's community packs), fingers that
+  grip, eyes that look where the head is about to turn, and ARKit faces transferred onto Quaternius
+  people and AI-made heads.
 - Quaternius everywhere: buses and trains, street props and a modular-kit builder for varied buildings (people, animals, furniture, nature, city buildings and cars are done); the base characters with the Universal Animation Library (talking, dancing).
 - The AI modeller, further: rigs for four legs, wings and tails; an animation preset library any
   rigged model can play; facial shape keys on made heads so they talk and emote; style filters

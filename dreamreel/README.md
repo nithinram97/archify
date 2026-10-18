@@ -150,13 +150,41 @@ bushes, rocks, flowers, grass) and city streets from its downtown kit and cars, 
 dreamreel studio, the Toolbox shows the packs (with a download button) and a gallery of everyone in
 them, and in Cast you dress people and pick animals by their pictures.
 
+## Realistic people
+
+`type = "human"` makes a realistic person from [MakeHuman](https://static.makehumancommunity.org)'s
+free (CC0) assets: describe them (gender, age, build, heritage, skin tone, hair and its colour, eyes,
+outfit) and every one comes out different, with a face of their own. They have photo-based skin with
+light scattering under it, real hair, eyebrows, eyelashes, wet eyes, teeth and fitted clothes, and a
+skeleton with motion-capture bone names, so they walk, sit with bent knees, gesture with bending
+elbows (a hand really reaches the face for a facepalm), perform motion capture and carry things.
+
+Their faces have the 52 shapes of Apple's ARKit (the standard of face capture) and the 15 mouth
+shapes of speech, and brows, lashes, eyes and teeth move with them: moods become real expressions
+(an inner brow lifting in sadness, cheeks rising in a real smile, a one-sided smirk), they blink,
+and their mouths make the sounds of each line. With an AI reading of the face from the voice (on a
+booster) the whole face moves with how a line is said. `dreamreel assets --pack humans` fetches the
+assets (700 MB, not bundled); until then a toy figure plays the part.
+
+```toml
+# cast/asha.toml
+type = "human"
+gender = "female"
+age = 28
+heritage = "south_asian"     # african, east_asian, european, south_asian, latin, middle_eastern, mixed
+hair = "long01"
+hair_color = "black"
+outfit = "female_elegantsuit01"
+```
+
 ## Your own characters
 
 Bring a 3D model (glTF/GLB, FBX or OBJ) into a film's `models/` folder and cast it with
 `type = "model"`. Rigged models (Mixamo, Ready Player Me, VRoid...) keep their skeleton, whatever its
 bones are called; unrigged models in a T or A pose get one automatically, found from the shape of the
 body. Either way the model walks, gestures, performs motion capture, carries things and, if it has
-facial shape keys, smiles, frowns and blinks with the story's moods. Heavy models (AI-made or
+facial shape keys, smiles, frowns and blinks with the story's moods (a face with ARKit's 52 shapes
+gets the full expressive face realistic people have; `bend = true` bends its elbows and knees like theirs). Heavy models (AI-made or
 scanned, up to millions of faces) are lightened as they load so they render quickly.
 
 ## Made by dreamreel's AI modeller
@@ -227,6 +255,15 @@ style where procedural animation looks intentional instead of stiff. One line in
 flashback, a storybook dream): toy, toon, anime, clay (animated on twos, like stop-motion), paper
 cut-out (on threes), storybook, noir and realistic. Styles change materials, outlines, light and
 colour, never the staging, so trying one costs a re-render and nothing else.
+
+In the **realistic** look everything is made of what it really is: floorboards, painted doors,
+plaster walls, granite worktops, brick and concrete buildings, asphalt roads, grass, bark, rock,
+glazed cups, car paint under a clear coat, denim, cotton and leather on people, fur on animals and
+skin with pores. Each surface gets a photo-scanned texture of the real material (its colour, its
+shine from place to place and its relief) at its real size, in the colour the film gave it, from
+[ambientCG](https://ambientcg.com) and [Poly Haven](https://polyhaven.com) (CC0, fetched the
+first time they're needed); low-poly people, animals and rocks are smoothed, and outdoors the sky
+is a real photographed sky turned so its sun is the scene's sun.
 
 ![The same moment in eight styles](docs/media/styles.jpg)
 

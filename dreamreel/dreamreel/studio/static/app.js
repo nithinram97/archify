@@ -734,7 +734,8 @@ function newCharacter() {
   const key = slug(name).replace(/-/g, "_") || "character";
   if (S.state.cast[key]) { toast("There's already a character called " + key); return; }
   const people = ((assets().outfits || {}).woman || []).length;
-  S.castDraft[key] = people ? { name: name.trim(), type: "person", body: "woman", outfit: "casual" }   // Quaternius people
+  S.castDraft[key] = assets().humans ? { name: name.trim(), type: "human", gender: "female", age: 30 }   // realistic people
+    : people ? { name: name.trim(), type: "person", body: "woman", outfit: "casual" }   // Quaternius people
     : { name: name.trim(), skin: "skin2", hair: "short", hair_color: "brown", top: "teal", bottom: "navy" };
   S.castSel = key;
   saveCharacter(key).then(render);
@@ -785,7 +786,8 @@ function castEditor(key) {
       h("div", { class: "figure-big" }, live ? figBox : null,
         portrait && (live || true) ? h("img", { src: fileUrl(portrait.path, portrait.mtime), alt: "Rendered portrait",
           onclick: () => lightbox(fileUrl(portrait.path, portrait.mtime)) }) : (!live ? figBox : null),
-        h("span", { class: "muted small" }, ["person", "animal"].includes(spec.type) ? "From the 3D pack (Quaternius, free). Render a portrait to see them in your film's look."
+        h("span", { class: "muted small" }, spec.type === "human" ? "A realistic person (MakeHuman, free): the same name always gives the same face. Render a portrait to see them."
+          : ["person", "animal"].includes(spec.type) ? "From the 3D pack (Quaternius, free). Render a portrait to see them in your film's look."
           : live ? (portrait ? "Drawing (live) and last render" : "Live drawing. Render a portrait to see the real thing.")
           : "Render a portrait to see this character.")),
       h("div", { class: "stack" },

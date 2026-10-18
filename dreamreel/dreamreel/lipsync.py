@@ -112,6 +112,12 @@ def available(download=True):
 
 def cues(wav, text=None, english=True, download=True):
     """[(start seconds, (open, round, wide))] for a voice file, or None if it can't be listened to."""
+    raw = letters(wav, text, english, download)
+    return None if raw is None else [(t, SHAPES.get(v, SHAPES["X"])) for t, v in raw]
+
+
+def letters(wav, text=None, english=True, download=True):
+    """[(start seconds, Rhubarb's mouth shape letter A-H or X)] for a voice file, or None."""
     cache = wav + ".cues.json"
     if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(wav):
         with open(cache) as f:
@@ -141,7 +147,7 @@ def cues(wav, text=None, english=True, download=True):
         with open(tmp, "w") as f:
             json.dump(raw, f)
         os.replace(tmp, cache)
-    return [(float(c["start"]), SHAPES.get(c["value"], SHAPES["X"])) for c in raw]
+    return [(float(c["start"]), c["value"]) for c in raw]
 
 
 # ---------------------------------------------------------------------- the face from the voice, by AI
@@ -153,11 +159,23 @@ def _w(frame, idx, *names):
     return sum(vals) / len(vals) if vals else 0.0
 
 
-def face_cues(wav, download=True):
-    """[(start, (open, round, wide))] from LAM Audio2Expression's 52 ARKit face shapes for the line,
-    made on a booster (cached next to the voice file); None without one. The jaw opens with jawOpen,
-    the lips round with mouthFunnel and mouthPucker, and stretch with mouthStretch (and a little with
-    mouthSmile)."""
+def face_frames(wav, download=True):
+    """[(time, {ARKit shape name: weight})] from LAM Audio2Expression on a booster, or None: the
+    whole face (brows, eyes, cheeks, lips) as the voice suggests it, for faces that have all 52."""
+    data = _face_data(wav, download)
+    if data is None:
+        return None
+    names = data.get("names") or data.get("metadata", {}).get("blendshape_names") or []
+    fps = float(data.get("metadata", {}).get("fps", 30.0))
+    out = []
+    for i, fr in enumerate(data.get("frames", [])):
+        w = fr.get("weights", [])
+        if len(w) >= len(names):
+            out.append((float(fr.get("time", i / fps)), dict(zip(names, w))))
+    return out or None
+
+
+def _face_data(wav, download=True):
     cache = wav + ".face.json"
     if not (os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(wav)):
         from . import boost
@@ -174,7 +192,17 @@ def face_cues(wav, download=True):
             return None
         os.replace(out["face"], cache)
     with open(cache) as f:
-        data = json.load(f)
+        return json.load(f)
+
+
+def face_cues(wav, download=True):
+    """[(start, (open, round, wide))] from LAM Audio2Expression's 52 ARKit face shapes for the line,
+    made on a booster (cached next to the voice file); None without one. The jaw opens with jawOpen,
+    the lips round with mouthFunnel and mouthPucker, and stretch with mouthStretch (and a little with
+    mouthSmile)."""
+    data = _face_data(wav, download)
+    if data is None:
+        return None
     names = data.get("names") or data.get("metadata", {}).get("blendshape_names") or []
     idx = {n: i for i, n in enumerate(names)}
     fps = float(data.get("metadata", {}).get("fps", 30.0))

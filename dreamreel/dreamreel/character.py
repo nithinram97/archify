@@ -578,8 +578,9 @@ class Character(Plugin):
             key(self.root, "location", t, (seat.at.x, seat.at.y, 0), "cut")
             self._key_heading(t, seat.facing, "cut")
             key(self.hips, "location", t, (0, 0, seat.height + 0.04 * self.H), "cut")
-            for leg in self.legs.values():
-                key(leg, "rotation_euler", t, (_deg(-80), 0, 0), "cut")
+            for s, leg in self.legs.items():
+                key(leg, "rotation_euler", t, (_deg(self.seat_pose[0]), 0, 0), "cut")
+                self._reach(("leg", s), t, self.seat_pose[1], "cut")
             self.sitting = seat
             return self
         self.walk_to(seat.front, at=at)
@@ -589,9 +590,11 @@ class Character(Plugin):
         hold(self.hips, "location", t + 0.3)
         key(self.root, "location", t + 0.75, (seat.at.x, seat.at.y, 0))
         key(self.hips, "location", t + 0.75, (0, 0, seat.height + 0.04 * self.H))
-        for leg in self.legs.values():
+        self._hold_reach(t + 0.3)
+        for s, leg in self.legs.items():
             hold(leg, "rotation_euler", t + 0.3)
-            key(leg, "rotation_euler", t + 0.75, (_deg(-80), 0, 0))
+            key(leg, "rotation_euler", t + 0.75, (_deg(self.seat_pose[0]), 0, 0))
+            self._reach(("leg", s), t + 0.75, self.seat_pose[1])
         self.sitting = seat
         self.scene._event("move", self, t, t + 0.75)
         return self._end(t + 0.75, wait)
@@ -605,9 +608,11 @@ class Character(Plugin):
         hold(self.hips, "location", t)
         key(self.root, "location", t + 0.45, (seat.front.x, seat.front.y, 0))
         key(self.hips, "location", t + 0.45, (0, 0, self.hip_z))
-        for leg in self.legs.values():
+        self._hold_reach(t)
+        for s, leg in self.legs.items():
             hold(leg, "rotation_euler", t)
             key(leg, "rotation_euler", t + 0.45, (0, 0, 0))
+            self._reach(("leg", s), t + 0.45, 1.0)
         self.sitting = None
         return self._end(t + 0.45, wait)
 
@@ -728,11 +733,33 @@ class Character(Plugin):
         key(self.neck, "rotation_euler", t + 0.9, tuple(cur))
 
     # ------------------------------------------------------------------ pose helpers (for gestures)
-    def arm_to(self, side, t, rot, ease="smooth"):
+    bends = False                 # elbows and knees that bend (see models.py); toys swing straight limbs
+
+    def arm_to(self, side, t, rot, ease="smooth", reach=None, bent=None):
         """Key one arm (1 = left, -1 = right) to a rotation (x forward/back, y out to the side, z twist).
-        Bodies without arms ignore it, so gestures that also move arms still work on them."""
+        reach: how far the hand is from the shoulder, as a fraction of the arm's length (1 straight;
+        0.45 brings a hand to the face): bodies with real elbows bend them, toys ignore it. Back at
+        rest (rotation 0) the arm straightens again. bent: (rotation, reach) to use instead on bodies
+        whose elbows bend, whose proportions are real (a hand that reaches the face goes in front of
+        it, not beside a toy's big head). Bodies without arms ignore it all, so gestures that also
+        move arms still work on them."""
+        if bent is not None and self.bends:
+            rot, reach = bent
         if side in self.arms:
             key(self.arms[side], "rotation_euler", t, rot, ease)
+            if reach is None and not any(rot):
+                reach = 1.0
+            if reach is not None:
+                self._reach(("arm", side), t, reach, ease)
+
+    def _reach(self, limb, t, reach, ease="smooth"):
+        """Bend an elbow or a knee so the hand or foot is `reach` of the limb's length away (only
+        bodies with jointed limbs, see models.py)."""
+
+    def _hold_reach(self, t):
+        """Key every limb's current reach at `t`, so the next bend starts from here."""
+
+    seat_pose = (-80, 1.0)       # sitting: each leg's swing forward (degrees) and the foot's reach
 
     def arms_rest(self, t):
         for s in (1, -1):
@@ -795,6 +822,7 @@ class Character(Plugin):
         t = self._start(at)
         for arm in self.arms.values():
             hold(arm, "rotation_euler", t)
+        self._hold_reach(t)
         hold(self.body, "rotation_euler", t)
         with keys.recording() as curves:
             end = g().perform(self, t, target=target)

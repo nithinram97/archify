@@ -540,6 +540,48 @@ FACE_KEYS = {
 }
 
 
+# A face with Apple's ARKit shape keys (52 of them, the standard for face capture: MakeHuman's
+# faceunits, Ready Player Me, VRoid exports, MetaHuman-style rigs) is driven shape by shape from
+# dreamreel's face controls. Variables: brow stand-in x, z and tilt (bx, bz, bt); eye stand-in
+# width and height (sx, sz: blinks squash sz); lid keys upper, lower, angry, sad (lu, ll, la, ls);
+# mouth keys smile, frown, wide, o, smirk (sm, fr, wd, oo, sk); jaw (mz); the lips while talking:
+# round and wide (rd, wl). Each expression is in 0..~1.3; an AI reading of the face is added on top.
+def _arkit_drive(H):
+    sq = f"max(0, -bx / {0.014 * H:.6f})"
+    lift = f"(bz / {H:.6f} + 0.006 * {sq})"
+    tilt = "(bt * 57.2958)"
+    brow_down = f"min(1.3, max(0, -{tilt}) / 22 + 0.6 * {sq} + max(0, -{lift}) / 0.015)"
+    brow_out = f"min(1.3, max(0, max(0, {lift}) / 0.022 - max(0, {tilt}) / 50))"
+    blink = "min(1, max(1 - sz / max(sx, 0.05), 0.75 * lu + 0.25 * max(la, ls)))"
+    out = {
+        "browInnerUp": f"min(1.3, max(0, {tilt}) / 20 + max(0, {lift}) / 0.022)",
+        "browOuterUpLeft": brow_out, "browOuterUpRight": brow_out,
+        "browDownLeft": brow_down, "browDownRight": brow_down,
+        "eyeBlinkLeft": blink, "eyeBlinkRight": blink,
+        "eyeWideLeft": "min(1.3, max(0, (sx - 1) * 2.8))", "eyeWideRight": "min(1.3, max(0, (sx - 1) * 2.8))",
+        "eyeSquintLeft": "min(1.2, ll + max(0, 1 - sx) * 2 + 0.25 * sm)",
+        "eyeSquintRight": "min(1.2, ll + max(0, 1 - sx) * 2 + 0.25 * sm)",
+        "cheekSquintLeft": "min(1, 0.55 * sm + 0.4 * ll)", "cheekSquintRight": "min(1, 0.55 * sm + 0.4 * ll)",
+        "mouthSmileLeft": "min(1.3, sm + max(0, sk))", "mouthSmileRight": "min(1.3, sm)",
+        "mouthDimpleLeft": "0.3 * sm", "mouthDimpleRight": "0.3 * sm",
+        "mouthFrownLeft": "fr", "mouthFrownRight": "fr",
+        "mouthShrugLower": "0.35 * fr", "mouthShrugUpper": "0.2 * fr",
+        "mouthStretchLeft": "min(1.2, wd + 0.7 * wl)", "mouthStretchRight": "min(1.2, wd + 0.7 * wl)",
+        "mouthPucker": "min(1, 0.5 * oo + rd)", "mouthFunnel": "min(1, 0.8 * oo + 0.5 * rd)",
+        "jawOpen": "min(1.1, max(0, (mz - 1) / 2.2))",
+        "noseSneerRight": "max(0, -sk)", "noseSneerLeft": "0.15 * max(0, -sk)",
+        "mouthUpperUpRight": "0.6 * max(0, -sk) + 0.2 * wd", "mouthUpperUpLeft": "0.2 * wd",
+        "mouthLowerDownLeft": "0.3 * wd", "mouthLowerDownRight": "0.3 * wd",
+    }
+    return out
+
+
+ARKIT_NAMES = set(_arkit_drive(1.0)) | {
+    "cheekPuff", "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft",
+    "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "jawForward", "jawLeft", "jawRight", "mouthClose",
+    "mouthLeft", "mouthRight", "mouthPressLeft", "mouthPressRight", "mouthRollLower", "mouthRollUpper", "tongueOut"}
+
+
 class ModelCharacter(Character):
     """A character from a 3D model file, rigged or not (see models.py)."""
     name = "model"
@@ -553,6 +595,7 @@ class ModelCharacter(Character):
         Param("turn", "number", default=0, min=-180, max=180, step=90, label="Turn (degrees)"),
         Param("faces", "number", default=FACES, min=2000, max=1000000, step=1000,
               label="Most faces (heavier models are lightened)"),
+        Param("bend", "bool", default=False, label="Bend elbows and knees (realistic people)"),
         Param("voice", "voice"),
     ]
     default_capabilities = ("walk", "arms", "swing_legs", "face")
@@ -585,13 +628,18 @@ class ModelCharacter(Character):
             return None
         return {k: holder.matrix_world @ v for k, v in joints.items()}
 
-    def build(self):
-        n, H = self.name, self.H
+    def _load(self):
+        """The model's skeleton (or None) and meshes, in the scene."""
         objs = import_file(self._path())
         arm, meshes = keep_character(objs)
         if not meshes:
             raise ValueError(f"{self.name}: no mesh in {self.spec['file']}")
         lighten(meshes, int(self.spec.get("faces") or FACES))
+        return arm, meshes
+
+    def build(self):
+        n, H = self.name, self.H
+        arm, meshes = self._load()
         # stand it up: feet on the ground, centred, facing the front, at the height asked for
         holder = shapes.empty(f"{n}.model")
         bpy.context.view_layer.update()
@@ -663,6 +711,7 @@ class ModelCharacter(Character):
         c.target, c.mix_mode, c.owner_space, c.target_space = self.neck, "ADD", "POSE", "LOCAL"
         # limbs: a pivot at each shoulder and hip; the hand or foot reaches for a target the pivot swings
         self.arms, self.legs, self.hands, self.iks = {}, {}, {}, []
+        self.limb_targets = {}            # (limb, side) -> (IK target, its rest place)
         pts = world_points(self.meshes, dense=20000)
         cx = (J("l_arm").x + J("r_arm").x) / 2
         for side, s in ((1, "l"), (-1, "r")):
@@ -677,6 +726,7 @@ class ModelCharacter(Character):
                                (side * out, -0.07 * reach, -math.sqrt(max(0.0, (reach * 0.94) ** 2 - out ** 2))))
             pole = shapes.empty(f"{n}.elbow.pole.{s}", piv, (side * 0.05 * H, 0.6 * reach, -reach * 0.5))
             self._ik(pb[roles[f"{s}_elbow"]], pb[roles[f"{s}_arm"]], tgt, pole)
+            self.limb_targets[("arm", side)] = (tgt, tgt.location.copy())
             hand = shapes.empty(f"{n}.hand.{s}")
             hand.parent = arm
             hand.parent_type = "BONE"
@@ -694,6 +744,7 @@ class ModelCharacter(Character):
             ft = shapes.empty(f"{n}.foot.target.{s}", lp, (ank.x - hp.x, ank.y - hp.y, -min(leg_len * 0.98, hp.z - ank.z)))
             kp = shapes.empty(f"{n}.knee.pole.{s}", lp, (0, -0.6 * leg_len, -leg_len * 0.5))
             self._ik(pb[roles[f"{s}_knee"]], pb[roles[f"{s}_hip"]], ft, kp)
+            self.limb_targets[("leg", side)] = (ft, ft.location.copy())
             self.legs[side] = lp
         self._calibrate()
         bpy.context.view_layer.update()
@@ -702,6 +753,30 @@ class ModelCharacter(Character):
         self._arm_rest = None
         handling.arm_rest(self)
         self._mrest = (self._arm_rest, {s: (Vector((0, 0, -1)), 1.0) for s in self.legs}, hip_z)
+
+    @property
+    def bends(self):
+        """Elbows and knees bend for gestures and sitting (a hand to the face, feet on the floor):
+        for models with well-weighted skin and human proportions (cast file: bend = true)."""
+        return bool(getattr(self, "spec", {}).get("bend", False))
+
+    @property
+    def seat_pose(self):
+        # sitting with real legs: the thigh forward, the shin down, the foot on the floor
+        return (-48, 0.74) if self.bends else Character.seat_pose
+
+    def _reach(self, limb, t, reach, ease="smooth"):
+        if not self.bends:
+            return
+        tgt = getattr(self, "limb_targets", {}).get(limb)
+        if tgt is not None:
+            from .keys import key as _key
+            _key(tgt[0], "location", t, tuple(tgt[1] * reach), ease)
+
+    def _hold_reach(self, t):
+        from .keys import hold as _hold
+        for tgt, _ in getattr(self, "limb_targets", {}).values():
+            _hold(tgt, "location", t)
 
     def _ik(self, lower, upper, target, pole):
         chain = 1
@@ -754,6 +829,15 @@ class ModelCharacter(Character):
         face.lid_keys(lids, 0.001, 0.001, 1)
         self.scleras, self.irises = [lids], []
         self.face_keys = {}
+        ModelCharacter._wire_face(self, meshes)
+
+    def _wire_face(self, meshes):
+        """Drive the model's facial shape keys (blink, smile, jawOpen... by name) from the stand-ins."""
+        m = self.mouth_mesh
+        lids = self.scleras[0]
+        names = {kb.name for mesh in meshes if mesh.data.shape_keys for kb in mesh.data.shape_keys.key_blocks}
+        if len(names & ARKIT_NAMES) >= 30:
+            return ModelCharacter._wire_arkit(self, meshes)
         for mesh in meshes:
             keys_ = mesh.data.shape_keys
             if keys_ is None:
@@ -798,6 +882,60 @@ class ModelCharacter(Character):
                     var.targets[0].id = self.mouth
                     var.targets[0].data_path = f'["{lips}"]'
                     d.expression = f"max({expr}, s)"
+
+    def _wire_arkit(self, meshes):
+        """Every ARKit shape key driven from dreamreel's face controls (see _arkit_drive), plus an AI
+        reading of the face (self.face_ai's keys) on top. Keys dreamreel has no control for (gaze,
+        jaw sideways, tongue) follow the AI reading alone."""
+        import re as _re
+        m, lids = self.mouth_mesh, self.scleras[0]
+        mk, lk = m.data.shape_keys, lids.data.shape_keys
+        H = getattr(self, "face_H", self.H)
+        src = {
+            "bx": ("OBJECT", self.brows[1], "location[0]"), "bz": ("OBJECT", self.brows[1], "location[2]"),
+            "bt": ("OBJECT", self.brows[1], "rotation_euler[1]"),
+            "sx": ("OBJECT", self.eyes[0], "scale[0]"), "sz": ("OBJECT", self.eyes[0], "scale[2]"),
+            "lu": ("KEY", lk, 'key_blocks["upper"].value'), "ll": ("KEY", lk, 'key_blocks["lower"].value'),
+            "la": ("KEY", lk, 'key_blocks["angry"].value'), "ls": ("KEY", lk, 'key_blocks["sad"].value'),
+            "sm": ("KEY", mk, 'key_blocks["smile"].value'), "fr": ("KEY", mk, 'key_blocks["frown"].value'),
+            "wd": ("KEY", mk, 'key_blocks["wide"].value'), "oo": ("KEY", mk, 'key_blocks["o"].value'),
+            "sk": ("KEY", mk, 'key_blocks["smirk"].value'),
+            "mz": ("OBJECT", self.mouth, "scale[2]"), "rd": ("OBJECT", self.mouth, '["round"]'),
+            "wl": ("OBJECT", self.mouth, '["wide"]'),
+        }
+        # an invisible stand-in carrying the AI's reading of the face, one key per ARKit shape
+        ai = shapes.plane(f"{self.name}.faceai", 0.001, 0.001, None, self.neck)
+        ai.hide_render = ai.hide_viewport = True
+        ai.shape_key_add(name="Basis")
+        for nm in sorted(ARKIT_NAMES):
+            ai.shape_key_add(name=nm, from_mix=False).value = 0.0
+        self.face_ai = ai
+        exprs = _arkit_drive(H)
+        self.face_keys = {}
+        for mesh in meshes:
+            if mesh.data.shape_keys is None:
+                continue
+            for kb in mesh.data.shape_keys.key_blocks[1:]:
+                if kb.name not in ARKIT_NAMES:
+                    continue
+                expr = exprs.get(kb.name)
+                d = kb.driver_add("value").driver
+                d.type = "SCRIPTED"
+                used = set(_re.findall(r"\b[a-z]{2}\b", expr)) & set(src) if expr else set()
+                for v in sorted(used):
+                    kind, target, path = src[v]
+                    var = d.variables.new()
+                    var.name, var.type = v, "SINGLE_PROP"
+                    var.targets[0].id_type = kind
+                    var.targets[0].id = target
+                    var.targets[0].data_path = path
+                var = d.variables.new()
+                var.name, var.type = "ai", "SINGLE_PROP"
+                var.targets[0].id_type = "KEY"
+                var.targets[0].id = ai.data.shape_keys
+                var.targets[0].data_path = f'key_blocks["{kb.name}"].value'
+                d.expression = f"min(1.5, ({expr}) + ai)" if expr else "ai"
+                self.face_keys.setdefault(kb.name, []).append(kb)
 
     # the toy's build steps don't apply
     def build_rig(self):
