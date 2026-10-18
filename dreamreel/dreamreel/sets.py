@@ -27,6 +27,12 @@ ZONES = {
     "front-left": (-1, -1), "front": (0, -1), "front-right": (1, -1),
 }
 SIZES = {"small": (5.0, 3.6), "medium": (6.5, 4.4), "large": (8.5, 5.6)}
+FLOOR_MATERIALS = {"wood": "wood_floor", "tiles": "tiles", "carpet": "carpet", "concrete": "concrete",
+                   "grass": "grass", "sand": "sand", "stone": "paving"}
+# the real material of an outdoor ground, by its name or its biome (see materials.py)
+GROUND_MATERIALS = {"grass": "grass", "meadow": "grass", "forest": "ground", "autumn": "leaves", "dirt": "ground",
+                    "mud": "ground", "earth": "ground", "sand": "sand", "beach": "sand", "desert": "sand",
+                    "gravel": "gravel", "rock": "rock", "stone": "rock", "mountains": "grass", "moon": "rock"}
 FLOORS = {"wood": "wood", "tiles": "cream", "carpet": "beige", "concrete": "#9a9a9a", "grass": "grass",
           "sand": "#e3cf9e", "stone": "#a9a196"}
 
@@ -439,7 +445,12 @@ class Room(Set):
         W, D, Hh = self.width, self.depth, self.wall_h
         wall = look.matte(spec.get("walls", "cream"))
         floor = spec.get("floor", "wood")
-        shapes.box("floor", W + 0.4, D + 0.4, 0.1, look.matte(FLOORS.get(floor, floor), 0.6), at=(0, 0, -0.1), bevel=0)
+        floor_mat = look.matte(FLOORS.get(floor, floor), 0.6)
+        made_of = FLOOR_MATERIALS.get(str(floor).lower())
+        if made_of:                       # what it's made of, for the realistic look (materials.py)
+            floor_mat = floor_mat.copy()
+            floor_mat["dr_material"] = made_of
+        shapes.box("floor", W + 0.4, D + 0.4, 0.1, floor_mat, at=(0, 0, -0.1), bevel=0)
         if floor == "wood":
             for i in range(int(W / 0.5) + 1):
                 shapes.box("floor.board", 0.012, D, 0.003, look.matte("darkwood", 0.7), at=(-W / 2 + i * 0.5, 0, 0), bevel=0)
@@ -538,7 +549,12 @@ class Outdoor(Set):
         if self.terrain.extra is not None:
             base = self.terrain.height
             self.terrain.height = lambda x, y: base(x, y) + self.biome.height(x, y, self)
-        self.terrain.build(ground, far, self.biome.snow_line)
+        land = self.terrain.build(ground, far, self.biome.snow_line)
+        # what the ground is made of, for the realistic look (materials.py)
+        made_of = GROUND_MATERIALS.get(str(spec.get("ground") or "").lower()) or \
+            GROUND_MATERIALS.get(type(self.biome).__name__.lower())
+        if land is not None and made_of is not None and land.data.materials:
+            land.data.materials[0]["dr_material"] = made_of
         if spec.get("path", True) and self.biome.path:
             shapes.box("ground.path", W + 3.0, 0.7, 0.02, look.matte(self.biome.path, 0.8), at=(0, -0.2, -0.01),
                        bevel=0.01)

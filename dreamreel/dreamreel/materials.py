@@ -24,6 +24,8 @@ import zipfile
 import bpy
 from mathutils import Vector
 
+from . import look
+
 CACHE = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "materials")
 RES = os.environ.get("DREAMREEL_TEXTURES", "1K")       # 1K, 2K or 4K
 UA = {"User-Agent": "dreamreel material fetcher"}
@@ -58,10 +60,10 @@ KINDS = {
     "corduroy": dict(src=("ph", "ribbed_corduroy"), color="tint", bump=0.6, rough=(0.8, 0.95), size=0.5),
     "leather": dict(src=("ph", "brown_leather"), color="tint", bump=0.4, rough=(0.3, 0.6), size=0.6),
     "carpet": dict(src=("acg", "Carpet016"), color="tint", bump=0.8, rough=(0.85, 1.0), size=1.0),
-    "grass": dict(src=("acg", "Grass004"), color="natural", bump=0.6, size=2.0),
-    "ground": dict(src=("acg", "Ground037"), color="natural", bump=0.6, size=3.0),
-    "gravel": dict(src=("acg", "Gravel023"), color="natural", bump=0.8, size=1.5),
-    "sand": dict(src=("acg", "Ground054"), color="natural", bump=0.6, size=2.0),
+    "grass": dict(src=("acg", "Grass004"), color="natural", bump=0.6, size=2.0, rough=(0.75, 1.0)),
+    "ground": dict(src=("acg", "Ground037"), color="natural", bump=0.6, size=3.0, rough=(0.75, 1.0)),
+    "gravel": dict(src=("acg", "Gravel023"), color="natural", bump=0.8, size=1.5, rough=(0.7, 1.0)),
+    "sand": dict(src=("acg", "Ground054"), color="natural", bump=0.6, size=2.0, rough=(0.75, 1.0)),
     "rock": dict(src=("acg", "Rock030"), color="natural", bump=1.0, size=2.0),
     "bark": dict(src=("acg", "Bark014"), color="natural", bump=1.0, size=1.0),
     "leaves": dict(src=("acg", "ScatteredLeaves009"), color="tint", bump=0.8, size=0.8, foliage=True),
@@ -817,7 +819,7 @@ def real_sky(scene, download=True):
     mapping = N.new("ShaderNodeMapping")
     N.link(co.outputs["Generated"], mapping.inputs["Vector"])
     N.link(mapping.outputs["Vector"], env_tex.inputs["Vector"])
-    az = _sun_azimuth(env_tex.image)
+    az, photo_lum = _sun_azimuth(env_tex.image)
     sun = next((o for o in scene.bscene.objects if o.type == "LIGHT" and o.data.type == "SUN"), None)
     if sun is not None and az is not None:
         d = sun.matrix_world.to_3x3() @ Vector((0, 0, 1))          # towards the sun
@@ -826,8 +828,13 @@ def real_sky(scene, download=True):
         mapping.inputs["Rotation"].default_value[2] = az - math.atan2(d.y, d.x)
     strength = bg.inputs["Strength"].default_value
     if env.outdoor:
+        # as bright overall as the sky dreamreel painted for this light (the sun lamp gives the
+        # sunlight; the photo's own sun would double it)
+        L = env.light
+        painted = [(a + b) / 2 for a, b in zip(look.rgb(L.horizon), look.rgb(L.zenith))]
+        want = (0.2126 * painted[0] + 0.7152 * painted[1] + 0.0722 * painted[2]) * strength
         N.link(env_tex.outputs["Color"], bg.inputs["Color"])
-        bg.inputs["Strength"].default_value = max(0.05, strength * 0.9)
+        bg.inputs["Strength"].default_value = max(0.02, want / max(1e-3, photo_lum)) if photo_lum else strength * 0.3
     else:
         # indoors the room's own light stays; the photo only shows in reflections
         lp = N.new("ShaderNodeLightPath")
@@ -842,26 +849,31 @@ def real_sky(scene, download=True):
 
 
 def _sun_azimuth(img):
-    """Where the sun is in a sky photograph: the azimuth (from +x towards +y) of its brightest spot."""
+    """Where the sun is in a sky photograph (the azimuth, from +x towards +y, of its brightest
+    spot), and the photo's typical brightness (the median, so the sun doesn't count)."""
     try:
         w, h = img.size
         if not w or not h:
-            return None
+            return None, None
         small = img.copy()
         small.scale(64, 32)
         px = list(small.pixels)
         bpy.data.images.remove(small)
     except (RuntimeError, ValueError):
-        return None
+        return None, None
     best, bi = -1.0, 0
+    lums = []
     for i in range(64 * 32):
         lum = px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]
+        if i >= 64 * 16:                 # the upper half (rows run bottom-up): the sky, not the ground
+            lums.append(lum / 3)
         if lum > best:
             best, bi = lum, i
     u = (bi % 64 + 0.5) / 64
     # Blender's equirectangular lookup: u = atan2(dir.y, -dir.x) / 2pi + 0.5
     theta = (u - 0.5) * 2 * math.pi
-    return math.atan2(math.sin(theta), -math.cos(theta))
+    lums.sort()
+    return math.atan2(math.sin(theta), -math.cos(theta)), lums[len(lums) // 2] if lums else None
 
 
 def describe():

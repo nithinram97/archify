@@ -582,11 +582,27 @@ def _rig(name, V, meshes):
         for v, w in wts[bname]:
             if v < n:
                 W[v, j] = w
+    # helper vertices clothes and shoes sit on may have no weights: they take the nearest weighted one's
+    from mathutils.kdtree import KDTree
+    weighted = np.nonzero(W.sum(axis=1) > 1e-6)[0]
+    bare = np.nonzero(W.sum(axis=1) <= 1e-6)[0]
+    if len(bare) and len(weighted):
+        tree = KDTree(len(weighted))
+        for i, v in enumerate(weighted.tolist()):
+            tree.insert(V[v], i)
+        tree.balance()
+        for v in bare.tolist():
+            _, i, _ = tree.find(V[v])
+            W[v] = W[weighted[i]]
     for obj, used, px in meshes:
         if px is None:
             Wm = W[used]
         else:
-            Wm = (W[px.refs] * px.w[:, :, None].astype(np.float32)).sum(axis=1)
+            # the triangle's weights can be negative (a point just beyond the triangle): for skinning
+            # only the positive parts count, so they can't cancel out to nothing
+            pw = np.clip(px.w, 0.0, None)
+            pw = np.where(pw.sum(axis=1, keepdims=True) > 1e-6, pw, np.abs(px.w) + 1e-6)
+            Wm = (W[px.refs] * pw[:, :, None].astype(np.float32)).sum(axis=1)
         tot = Wm.sum(axis=1, keepdims=True)
         Wm = np.where(tot > 1e-6, Wm / np.maximum(tot, 1e-6), 0)
         for j, bname in enumerate(bones):
