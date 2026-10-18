@@ -245,6 +245,7 @@ cast = ["mia", "tom"]
 time_of_day = "golden_hour"  # dawn, morning, day, golden_hour, sunset, dusk, night
 weather = "rain"             # clear, cloudy, overcast, fog, rain, snow, storm, windy
 weather_strength = 1.0       # 0.3 a little ... 2 a lot
+ambience = "sea"             # the sound of the place; default: from the set, time and weather; "none"
 restyle = "a watercolour painting"   # experimental, needs a booster: AI repaints the final render
 restyle_strength = 0.5               # 0.1 barely ... 0.9 freely (film.toml [restyle] sets it for all)
 
@@ -285,6 +286,7 @@ Beats play in order. `with_previous = true` starts a beat together with the one 
 | caption, title_card (no who) | text, duration |
 | slow_motion (no who) | seconds, speed (0.3 slow ... 2 fast), ramp, after: the next story-seconds play at that speed |
 | freeze_frame (no who) | seconds, after: everything stops, then carries on |
+| sound (no who) | sound, volume, after: a sound effect (`dreamreel plugins sound`, or a file in `audio/sfx/`) |
 | jump_cut (no who) | seconds, after: that much story is cut out and the picture jumps ahead |
 | screen (no who) | effect (fade_out, fade_in, flash, dip, blackout), duration, color, after |
 | shot (no who) | shot, of, other, angle, side, move, amount, to, handheld, dutch, lens, duration (see Camera) |
@@ -314,6 +316,41 @@ lid_slant, smile, frown, wide, o, smirk, mouth_open, teeth, blush, tears, sweat,
 (toys); roar, sniff, spin, tail_wag, flap, rear_up, croak, tongue (any body that has what it needs).
 Fighting: jab, punch, kick (give a `target`; a punch steps in until it lands), block, dodge, flinch (start
 these with the blow, `with_previous = true`, so the defence meets it).
+
+## Sound
+
+Scenes sound like what happens in them, with nothing to set up:
+
+- **Footsteps** on what the floor or ground is made of (wood, carpet, concrete, grass, snow).
+- **Fights**: punches and kicks whoosh; a blow smacks where it lands (on whoever flinches or blocks).
+- **Claps, stomps, landings**, and any sound you add with a `sound` beat:
+  `do = "sound"`, `sound = "door_close"`. `dreamreel plugins sound` shows them all: doors, glass,
+  metal, wood, books, coins, knives, clicks, lasers, explosions, cartoon pops and boings...
+- **Ambience** under every scene, from the place: room tone, a street's hum and cars, birds in the
+  country and the woods, crickets at night, the sea, rain. `ambience = "..."` in a scene chooses.
+
+Recorded sounds come from Kenney's CC0 packs, downloaded when first needed (`dreamreel assets --pack
+sounds`); offline, dreamreel makes every sound itself. Put your own files in `audio/sfx/`:
+`punch.wav` replaces the built-in punch (`punch_1.wav`, `punch_2.wav`... for variations), and any
+other name becomes a new sound. Sounds follow slow motion. The music ducks under dialogue.
+
+```toml
+# film.toml
+[music]
+file = "audio/music/theme.mp3"
+volume = 0.35
+duck = 0.4                 # music volume while someone speaks (1 = no ducking)
+
+[sound]
+effects = true             # false: no sound effects
+footsteps = true
+ambience = true            # false: none; or the name of one for the whole film
+volume = 1.0               # all sound effects
+ambience_volume = 1.0
+```
+
+New sounds and ambiences are classes (`dr.Sound` with a `synth`, or a file; `dr.Ambience`), and a body
+can change its footsteps by overriding `footstep_sound` (a robot clanks, a ghost is silent).
 
 ## Camera
 

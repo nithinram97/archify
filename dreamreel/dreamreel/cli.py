@@ -283,6 +283,11 @@ def cmd_info(a):
     }
     from . import motion as _motion
     info["motions"] = _motion.Library(p.root).names()
+    from . import sounds as _sounds
+    sfx = os.path.join(p.root, "audio", "sfx")
+    own = sorted({os.path.splitext(f)[0] for f in (os.listdir(sfx) if os.path.isdir(sfx) else [])
+                  if f.lower().endswith((".wav", ".ogg", ".mp3", ".flac"))})
+    info["sounds"] = {"library": _sounds.names(), "own": own, "ambiences": _sounds.ambiences()}
     from . import models as _models
     info["models"] = _models.files(p.root)
     for name in p.set_names():
@@ -299,11 +304,11 @@ def cmd_info(a):
 
 def cmd_assets(a):
     """List Quaternius's free (CC0) packs dreamreel uses (people, animals...), or download them."""
-    from . import humans, materials, quaternius as q
-    extra = {"humans": humans, "materials": materials}
-    if a.pack in extra:                     # MakeHuman's people, or the real-world materials
+    from . import humans, materials, quaternius as q, sounds
+    extra = {"humans": humans.download, "materials": materials.download_all, "sounds": sounds.download_all}
+    if a.pack in extra:                     # MakeHuman's people, real-world materials, Kenney's sounds
         print(f"fetching {a.pack}...")
-        humans.download() if a.pack == "humans" else materials.download_all()
+        extra[a.pack]()
         return
     if a.download:
         q.download([a.pack] if a.pack else None)
@@ -323,6 +328,9 @@ def cmd_assets(a):
           "bodies, skins, hair, clothes and 52-shape faces (`--pack humans`, 700 MB)")
     print(f"  {'materials':12s} {'fetched' if materials.fetched() else 'on demand':14s} real-world surfaces for the "
           "realistic look, from ambientCG and Poly Haven (`--pack materials`, about 250 MB; else as needed)")
+    got = sum(sounds.pack_installed(p) for p in sounds.PACKS)
+    print(f"  {'sounds':12s} {f'{got}/{len(sounds.PACKS)} fetched':14s} recorded sound effects from Kenney's packs "
+          "(`--pack sounds`, 10 MB; else as needed; made-up sounds stand in offline)")
 
 
 def cmd_generate(a):
@@ -920,7 +928,7 @@ def main(argv=None):
     mo.set_defaults(fn=cmd_motions)
     asp = sub.add_parser("assets", help="free 3D packs: people, animals, realistic humans, real-world materials")
     asp.add_argument("--download", action="store_true", help="fetch the packs (CC0) into the cache")
-    asp.add_argument("--pack", help="just this pack (see the list; humans and materials too)")
+    asp.add_argument("--pack", help="just this pack (see the list; humans, materials and sounds too)")
     asp.add_argument("--thumbs", action="store_true", help="(re)make the pictures of people and animals for menus")
     asp.set_defaults(fn=cmd_assets)
     ge = sub.add_parser("generate", help="make a character or prop with dreamreel's modelling agent (any AI model)")

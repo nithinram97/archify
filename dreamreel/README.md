@@ -236,6 +236,15 @@ of a scene, cut away, come back), J and L cuts and split screens. Inside a scene
 speed ramps), freeze frames and jump cuts retime the animation itself, so slow motion is smooth,
 and screen effects fade, flash or dip the picture. Changing the edit never re-renders a scene.
 
+## Sound
+
+Scenes sound like what happens in them: footsteps on wood, carpet, concrete, grass or snow; the
+whoosh of a punch and the smack where it lands; claps, stomps, doors, glass, books, coins, lasers,
+explosions; and a bed of ambience from the place (room tone, a street's traffic, birds, crickets, the
+sea, rain). Recorded sounds come from Kenney's CC0 packs; offline, dreamreel makes every sound itself.
+Your own files in `audio/sfx/` replace or add sounds, a `sound` beat plays one anywhere, sounds keep
+time through slow motion, and the music ducks under dialogue.
+
 ## Everything is extensible
 
 Every feature is a Python class: character types, body plans, hair, extras, moods, gestures,

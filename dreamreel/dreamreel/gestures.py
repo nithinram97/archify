@@ -105,6 +105,7 @@ class Jump(Gesture):
 
     def perform(self, c, t, target=None):
         c.jump_at(t)
+        c.scene.sound("thud", at=t + 0.65, volume=0.5)            # landing
         return t + 0.9
 
 
@@ -142,6 +143,7 @@ class Clap(Gesture):
             for s in (1, -1):
                 c.arm_to(s, tc, (_deg(-70), _deg(28 * s), 0), bent=(_aim(s, 0.1, 0.35, -0.2), 0.75))
                 c.arm_to(s, tc + 0.12, (_deg(-70), _deg(10 * s), 0), bent=(_aim(s, 0.22, 0.32, -0.2), 0.78))
+            c.scene.sound("clap", at=tc + 0.12, volume=0.7)
         c.arms_rest(t + 1.5)
         return t + 1.5
 
@@ -180,6 +182,7 @@ class Stomp(Gesture):
             hold(c.legs[s], "rotation_euler", tl)
             key(c.legs[s], "rotation_euler", tl + 0.12, (_deg(-30), 0, 0))
             key(c.legs[s], "rotation_euler", tl + 0.24, (0, 0, 0), "ease_in")
+            c.scene.sound("thud", at=tl + 0.24, volume=0.6)
         for sd in (1, -1):
             c.arm_to(sd, t + 0.2, (0, _deg(-25 * sd), 0))
         c.arms_rest(t + 1.0)
@@ -268,6 +271,7 @@ class Punch(Gesture):
         _twist(c, t + 0.22, 12 * s, -4)                         # wind up: the shoulder goes back
         strike = (_aim(s, 0.3, 1.0, 0.3), 1.0)                 # straight out at the face
         c.arm_to(s, t + i, (_deg(-90), 0, 0), "ease_in", bent=strike)
+        c.scene.sound("whoosh" if self.step > 0.15 else "swish", at=t + i - 0.12, volume=0.45)
         _twist(c, t + i, -18 * s, 8)                            # the body turns into the punch
         _step(c, t, t + i, t + i + 0.7, _closing(c, t, target, s, self.step))   # in, and back out
         c.arm_to(s, t + i + 0.12, (_deg(-90), 0, 0), bent=strike)
@@ -310,6 +314,7 @@ class Kick(Gesture):
         key(leg, "rotation_euler", t + 0.18, (_deg(-35), 0, 0))           # the knee comes up
         c._reach(("leg", -1), t + 0.18, 0.75)
         key(leg, "rotation_euler", t + IMPACT, (_deg(-80), 0, 0), "ease_out")   # and the foot snaps out
+        c.scene.sound("whoosh", at=t + IMPACT - 0.15, volume=0.5)
         c._reach(("leg", -1), t + IMPACT, 1.0, "ease_out")
         _twist(c, t + IMPACT, 0, -12)                                       # leaning back
         key(leg, "rotation_euler", t + IMPACT + 0.25, (_deg(-30), 0, 0))
@@ -334,6 +339,7 @@ class Block(Gesture):
             c.arm_to(s, t + IMPACT - 0.12, (_deg(-120), _deg(20 * s), 0), "ease_out", bent=cover[s])
         c.fist(t + IMPACT - 0.12)
         _twist(c, t + IMPACT + 0.05, 0, -8)                      # the blow pushes them back a little
+        c.scene.sound("block", at=t + IMPACT, volume=0.55)       # the blow lands on the forearms
         _step(c, t + IMPACT, t + IMPACT + 0.15, None, -0.08)
         for s in (1, -1):
             c.arm_to(s, t + IMPACT + 0.45, (_deg(-120), _deg(20 * s), 0), bent=cover[s])
@@ -352,6 +358,7 @@ class Dodge(Gesture):
         if c.arms:
             _guard(c, t + IMPACT - 0.15)
         key(c.body, "rotation_euler", t + IMPACT, (_deg(14), _deg(-24), 0), "ease_out")   # duck and slip
+        c.scene.sound("cloth", at=t + IMPACT - 0.2, volume=0.35)
         z = c.hip_z
         key(c.hips, "location", t + IMPACT, (0, 0, z - 0.06 * c.H), "ease_out")
         key(c.body, "rotation_euler", t + IMPACT + 0.4, (0, 0, 0))
@@ -366,6 +373,7 @@ class Flinch(Gesture):
     description = "Take a hit (start it together with the punch or kick)"
 
     def perform(self, c, t, target=None):
+        c.scene.sound("punch_heavy", at=t + IMPACT, volume=0.65)  # the blow lands (whoever threw it)
         end = _own_clip(c, "flinch", t + IMPACT - 0.1)
         if end is not None:
             return end

@@ -23,6 +23,8 @@ shows it in its menus with a form built from `params`. The same works for every 
     set         dr.Set              set files         kind = "spaceship"
     shot        dr.ShotType         beats             do = "shot", shot = "dutch_angle"
     voice       dr.VoiceEngine      film.toml         voice_engine = "my-tts"
+    sound       dr.Sound            beats             do = "sound", sound = "squeak"
+    ambience    dr.Ambience         scene files       ambience = "market"
 
 A class registers under its `name` (default: the class name in snake_case). Giving a child class the
 same name as a built-in replaces the built-in, e.g. `class Say(dr.actions.Say)` to change how all

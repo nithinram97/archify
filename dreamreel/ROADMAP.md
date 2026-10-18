@@ -63,7 +63,8 @@ Next, roughly in order:
 
 ## Film-making
 - Shot variety learnt from scene content (reaction shots, cutaways to props).
-- Sound effects library and footsteps; music ducking under dialogue.
+- (Done: sound effects, footsteps, ambience and music ducking, see REFERENCE.md "Sound".)
+- Sounds placed in space (louder near the camera, panned left and right); pitch following slow motion.
 - Cloud voice engines as plugins; multi-language voices and subtitles.
 
 ## Tooling

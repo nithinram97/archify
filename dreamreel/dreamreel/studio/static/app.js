@@ -339,6 +339,8 @@ function paramField(p, value, onChange, ctx = {}) {
     }
     case "shot": el = select(choicesOf("shot"), value ?? p.default, onChange, { label: p.label }); break;
     case "voice": el = voiceField(value, onChange, ctx); break;
+    case "sound": el = select([...soundsInfo().own.map((f) => [f, "🎵 " + f]), ...soundsInfo().library.map((n) => [n, "🔊 " + pretty(n)])],
+      value ?? p.default, onChange, { label: p.label }); break;
     case "place": el = select(cat.places, value ?? p.default ?? ctx.defaultPlace ?? "center", onChange, { label: p.label }); break;
     case "facing":
       el = select([["camera", "the camera"], ["left", "left"], ["right", "right"], ["back", "the back"],
@@ -381,6 +383,7 @@ function paramField(p, value, onChange, ctx = {}) {
 }
 
 const assets = () => info().assets || {};
+const soundsInfo = () => info().sounds || { library: [], own: [], ambiences: [] };
 const thumbUrl = (key) => (assets().thumbs || []).includes(key) ? `/thumbs/${key}.png` : null;
 
 // pick one of several things by its picture (outfits, animals)
@@ -1070,6 +1073,9 @@ function sceneHeader(file, spec, chk) {
         select(choicesOf("time"), spec.time_of_day || "day", (v) => change("time_of_day", v === "day" ? undefined : v), { label: "Time of day" })),
       h("label", { class: "field" }, h("span", {}, "Weather"),
         select(choicesOf("weather"), spec.weather || "clear", (v) => change("weather", v === "clear" ? undefined : v), { label: "Weather" })),
+      h("label", { class: "field" }, h("span", {}, "Sound of the place"),
+        select([["", "(from the place and weather)"], ["none", "silence"], ...soundsInfo().ambiences.map((a) => [a, pretty(a)]),
+          ...soundsInfo().own.map((f) => [f, "🎵 " + f])], spec.ambience || "", (v) => change("ambience", v || undefined), { label: "Ambience" })),
       spec.weather && spec.weather !== "clear" ? h("label", { class: "field" }, h("span", {}, "How much"),
         h("input", { type: "number", min: 0.2, max: 2.5, step: 0.1, style: "width:96px", value: spec.weather_strength ?? "",
           placeholder: "1", "aria-label": "Weather strength",

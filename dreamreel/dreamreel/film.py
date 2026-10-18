@@ -39,6 +39,10 @@ def scene_hash(proj, path, quality):
     for f in files:
         with open(f, "rb") as fh:
             h.update(fh.read())
+    sfx = os.path.join(proj.root, "audio", "sfx")            # the film's own sounds replace built-in ones
+    if os.path.isdir(sfx):
+        for n in sorted(os.listdir(sfx)):
+            h.update(f"{n}|{os.path.getmtime(os.path.join(sfx, n))}".encode())
     h.update(_library_hash().encode())
     return h.hexdigest()[:16]
 
@@ -148,6 +152,25 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     return meta
 
 
+def duck(strip, spans, amount, fade=6):
+    """Lower a sound strip to `amount` of its volume while anyone speaks (spans of frames)."""
+    if not spans or amount >= 1:
+        return
+    v = strip.volume
+    merged = []
+    for a, b in sorted(spans):
+        if merged and a <= merged[-1][1] + 2 * fade:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    strip.keyframe_insert("volume", frame=1)
+    for a, b in merged:
+        for f, val in ((a - fade, v), (a, v * amount), (b, v * amount), (b + fade, v)):
+            strip.volume = val
+            strip.keyframe_insert("volume", frame=max(1, f))
+    strip.volume = v
+
+
 def assemble(proj, metas, quality="final", subtitles=True, edit=None):
     """Cut the film together: clips from the rendered scenes in edit-list order, title cards, transitions,
     screen effects, subtitles, captions, voices and music."""
@@ -176,6 +199,7 @@ def assemble(proj, metas, quality="final", subtitles=True, edit=None):
     cursor = 1
     channel = 2
     sounds = 0
+    speech = []        # (first, last frame) of every line spoken, to duck the music under
 
     def place_movie(meta, start, from_s, to_s, chan):
         mv = ed.strips.new_movie(name=meta["name"], filepath=meta["video"], channel=chan, frame_start=int(start),
@@ -201,9 +225,20 @@ def assemble(proj, metas, quality="final", subtitles=True, edit=None):
                 ed.text(content, off + t0 * fps, off + min(t1, to_s) * fps, ed.top + 3, y=0.86, size=0.05)
         for t0, wav in meta.get("audio", []):
             if a_from <= t0 < a_to:
-                ed.strips.new_sound(name="voice", filepath=wav, channel=ed.top + 5 + sounds % 4,
-                                    frame_start=int(off + t0 * fps))
+                v = ed.strips.new_sound(name="voice", filepath=wav, channel=ed.top + 5 + sounds % 4,
+                                        frame_start=int(off + t0 * fps))
+                speech.append((v.frame_final_start, v.frame_final_end))
                 sounds += 1
+        for t0, wav, vol in meta.get("sounds", []):           # sound effects (sounds.py)
+            if a_from <= t0 < a_to and os.path.exists(wav):
+                fx = ed.strips.new_sound(name="sfx", filepath=wav, channel=ed.top + 11, frame_start=int(off + t0 * fps))
+                fx.volume = vol
+        bed = meta.get("ambience")
+        if bed and os.path.exists(bed[0]):                    # the scene's ambience, for as long as it's on screen
+            amb = ed.strips.new_sound(name="ambience", filepath=bed[0], channel=ed.top + 20,
+                                      frame_start=int(off + a_from * fps))
+            amb.volume = bed[1]
+            amb.frame_final_end = min(amb.frame_final_end, max(amb.frame_final_start + 1, int(off + a_to * fps)))
         for t, fx, dur, color in meta.get("screen", []):
             if from_s <= t < to_s:
                 plugins.get("screen", fx)().apply(ed, int(off + t * fps), ed.frames(dur), color)
@@ -291,6 +326,7 @@ def assemble(proj, metas, quality="final", subtitles=True, edit=None):
         m.volume = music.get("volume", 0.35)
         if m.frame_final_end > cursor:
             m.frame_final_end = cursor
+        duck(m, speech, music.get("duck", 0.4))
     sc.frame_start, sc.frame_end = 1, max(2, cursor - 1)
     r = sc.render
     _compat.set_video_output(r)

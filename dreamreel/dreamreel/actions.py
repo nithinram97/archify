@@ -389,6 +389,19 @@ class SlowMotion(Action):
         s.slow_motion(float(seconds), float(speed), float(ramp), float(after))
 
 
+class Sound(Action):
+    scope = "scene"
+    label = "sound"
+    description = "A sound effect: a door, glass, a bell, a boom... (or any file in audio/sfx/)"
+    sentence = "sound {sound}"
+    params = [Param("sound", "sound", default="knock", label="Sound"),
+              Param("volume", "number", default=1.0, min=0, max=3, step=0.1, label="Volume"),
+              Param("after", "number", default=0.0, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, sound="knock", volume=1.0, after=0.0):
+        s.sound(str(sound), at=s.clock + float(after), volume=float(volume))
+
+
 class FreezeFrame(Action):
     scope = "scene"
     label = "freeze frame"

@@ -85,6 +85,9 @@ class Street(Set):
         Param("seed", "number", default=2, min=0, max=999, step=1, label="Shuffle"),
     ]
 
+    def ambience(self, time_of_day=None):
+        return "city_night" if time_of_day in ("night", "midnight") else "city"
+
     def build_environment(self):
         spec = self.spec
         style = self.STYLES.get(spec.get("style", "town"), self.STYLES["town"])

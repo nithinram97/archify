@@ -34,6 +34,8 @@ from .camera import CameraMove, CameraState, ShotType  # noqa: F401,E402
 from . import camera  # noqa: F401,E402
 from .actions import Action  # noqa: F401,E402
 from .voices import VoiceEngine  # noqa: F401,E402
+from .sounds import Ambience, Sound  # noqa: F401,E402
+from . import sounds  # noqa: F401,E402
 from .scene import BeatError, Scene  # noqa: F401,E402
 from .look import COLORS  # noqa: F401,E402
 from .editing import Editor, ScreenEffect, Transition  # noqa: F401,E402

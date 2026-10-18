@@ -681,7 +681,7 @@ class Handler(BaseHTTPRequestHandler):
         elif kind == "assets":
             pack = b.get("pack")
             from .. import quaternius
-            if pack is not None and pack not in quaternius.PACKS:
+            if pack is not None and pack not in quaternius.PACKS and pack not in ("humans", "materials", "sounds"):
                 return self._error("unknown pack")
             args = ["assets", "--download"] + (["--pack", pack] if pack else [])
             label, quick = f"Download {pack or 'all the 3D packs'}", False

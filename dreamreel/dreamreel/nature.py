@@ -455,6 +455,10 @@ class Biome(Plugin):
     def build_extra(self, s, rng):
         pass
 
+    def ambience(self, night):
+        """The sound of this land (an Ambience name, see sounds.py)."""
+        return "night" if night else "country"
+
     def allowed(self, x, y, s):
         """Whether scenery may go at (x, y) (not in the sea, say)."""
         return True
@@ -485,6 +489,9 @@ class Forest(Biome):
         light.sun_energy *= 0.85
         light.wind *= 0.7
 
+    def ambience(self, night):
+        return "night" if night else "forest"
+
 
 class Autumn(Biome):
     description = "Woods in autumn: orange and red leaves"
@@ -492,6 +499,9 @@ class Autumn(Biome):
     scatter = [("autumn_tree", 1.0), ("autumn_bush", 0.6), ("tree", 0.15), ("rock", 0.15)]
     near = [("dry_grass", 1.0), ("mushroom", 0.3)]
     density = 1.6
+
+    def ambience(self, night):
+        return "night" if night else "forest"
 
 
 class Beach(Biome):
@@ -532,6 +542,9 @@ class Beach(Biome):
                 f.location.y = y - 0.6 * (0.5 + 0.5 * math.sin(t * 0.9 + i * 2.1))
                 f.keyframe_insert("location", index=1, frame=fr)
 
+    def ambience(self, night):
+        return "sea"
+
 
 class Desert(Biome):
     description = "Sand dunes, cacti and rocks under a hot sky"
@@ -547,6 +560,9 @@ class Desert(Biome):
         light.horizon = mix(light.horizon, "#f2d3a0", 0.35)
         light.sun_energy *= 1.1
 
+    def ambience(self, night):
+        return "wind"
+
 
 class SnowField(Biome):
     name = "snow"
@@ -561,6 +577,9 @@ class SnowField(Biome):
     def adjust_light(self, light):
         light.room *= 1.1
 
+    def ambience(self, night):
+        return "wind"
+
 
 class Mountains(Biome):
     description = "An alpine valley with peaks and snow caps"
@@ -570,6 +589,9 @@ class Mountains(Biome):
     scatter = [("pine", 1.0), ("rock", 0.6), ("bush", 0.3)]
     near = [("flowers", 0.6), ("grass", 1.0)]
     density = 0.9
+
+    def ambience(self, night):
+        return "wind"
 
 
 class Moon(Biome):
@@ -661,3 +683,7 @@ def scatter(s, biome, rng, density=1.0):
     put([t for t in small if not plugins.get("scenery", t[0]).blocks], (-7, 7, -D / 2 - 7, -D / 2 - 0.7),
         int(10 * density), (0.8, 1.2), grow=False)                                              # foreground
     return placed
+
+
+    def ambience(self, night):
+        return "space"

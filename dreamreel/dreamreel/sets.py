@@ -78,6 +78,20 @@ class Set(Plugin):
     params = []
     size = (6.5, 4.4)
     outdoor = False
+    made_of = "concrete"     # what the floor is: the realistic look (materials.py) and footsteps (sounds.py)
+    FOOTING = {"wood_floor": "wood", "wood": "wood", "painted_wood": "wood", "carpet": "carpet", "rug": "carpet",
+               "grass": "grass", "leaves": "grass", "ground": "grass", "sand": "grass", "gravel": "grass",
+               "snow": "snow", "ice": "snow"}
+
+    def ambience(self, time_of_day=None):
+        """The sound of this place (an Ambience name, see sounds.py): room tone indoors, country outside."""
+        if not self.outdoor:
+            return "room"
+        return "night" if time_of_day in ("night", "midnight") else "country"
+
+    def footing(self):
+        """What footsteps sound like here: wood, carpet, concrete, grass or snow."""
+        return self.FOOTING.get(self.made_of, "concrete")
 
     @staticmethod
     def create(spec, name="set"):
@@ -447,6 +461,7 @@ class Room(Set):
         floor = spec.get("floor", "wood")
         floor_mat = look.matte(FLOORS.get(floor, floor), 0.6)
         made_of = FLOOR_MATERIALS.get(str(floor).lower())
+        self.made_of = made_of or str(floor).lower()     # also what footsteps sound like (sounds.py)
         if made_of:                       # what it's made of, for the realistic look (materials.py)
             floor_mat = floor_mat.copy()
             floor_mat["dr_material"] = made_of
@@ -527,6 +542,9 @@ class Outdoor(Set):
         Param("seed", "number", default=3, min=0, max=999, step=1, label="Shuffle"),
     ]
 
+    def ambience(self, time_of_day=None):
+        return self.biome.ambience(time_of_day in ("night", "midnight"))
+
     def __init__(self, spec, name="set"):
         self.foam = []
         super().__init__(spec, name)
@@ -553,6 +571,7 @@ class Outdoor(Set):
         # what the ground is made of, for the realistic look (materials.py)
         made_of = GROUND_MATERIALS.get(str(spec.get("ground") or "").lower()) or \
             GROUND_MATERIALS.get(type(self.biome).__name__.lower())
+        self.made_of = made_of or "grass"
         if land is not None and made_of is not None and land.data.materials:
             land.data.materials[0]["dr_material"] = made_of
         if spec.get("path", True) and self.biome.path:

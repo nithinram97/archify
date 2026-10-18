@@ -489,6 +489,7 @@ class Character(Plugin):
         end = ws + dur
 
         self.animate_steps(Stride(path, ws, dur, total), n_steps, step_t, run)
+        self._footsteps(ws, n_steps, step_t, run)
         self.scene._event("move", self, t, end)
         if facing is not None:
             self._end(end, wait)
@@ -498,6 +499,20 @@ class Character(Plugin):
             self._end(end, wait)
             return self.turn_to(math.degrees(mark.facing), at=end, wait=wait)
         return self._end(end, wait)
+
+    def footstep_sound(self, footing):
+        """The sound (sounds.py) of one of this character's steps on wood, carpet, concrete, grass or
+        snow, or None for silent feet. Bodies override it: a robot clanks, a ghost makes none."""
+        return "footstep_" + footing
+
+    def _footsteps(self, t0, n_steps, step_t, run):
+        """A footstep as each foot lands."""
+        name = self.footstep_sound(self.scene.set.footing() if self.scene.set else "concrete")
+        if name is None:
+            return
+        vol = (0.5 if run else 0.3) * min(1.0, max(0.3, getattr(self, "H", 1.0) / 1.7))
+        for k in range(n_steps):
+            self.scene.sound(name, at=t0 + (k + 0.5) * step_t, volume=vol, kind="footsteps")
 
     def gait_timing(self, speed, run):
         """(stride length in metres, seconds per step) for a speed factor. Bodies override this."""
@@ -829,9 +844,14 @@ class Character(Plugin):
             hold(arm, "rotation_euler", t)
         self._hold_reach(t)
         hold(self.body, "rotation_euler", t)
+        n_sounds = len(self.scene.sound_fx)
         with keys.recording() as curves:
             end = g().perform(self, t, target=target)
-        end = acting.shape(curves, t, end, acting.effort_of(self, t, how), self.scene.exaggeration)
+        effort = acting.effort_of(self, t, how)
+        end = acting.shape(curves, t, end, effort, self.scene.exaggeration)
+        tempo = effort.tempo()          # the gesture's sounds keep time with its retimed moves
+        fx = self.scene.sound_fx
+        fx[n_sounds:] = [(t + (ts - t) * tempo, f, v, n) for ts, f, v, n in fx[n_sounds:]]
         self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
         return self._end(end, wait)
 

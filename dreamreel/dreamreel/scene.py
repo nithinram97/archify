@@ -76,6 +76,8 @@ class Scene:
         self.screen_fx = []      # (time, effect, duration, colour) done to the picture in the edit
         self.time_fx = []        # (story start, story end, label) of the time effects, for the timeline
         self.transition = None   # how this scene comes in after the previous one (see editing.py)
+        self.sound_fx = []       # (time, file, volume, name) of the sound effects (see sounds.py)
+        self.ambience = None     # None: chosen from the set, time and weather; a kind, a file name or "none"
         self.fixed_length = length
         self.time_of_day = time_of_day
         self.weather = weather
@@ -204,6 +206,8 @@ class Scene:
         if spec.get("transition"):
             s.transition = {"name": spec["transition"], "duration": spec.get("transition_duration"),
                             "color": spec.get("transition_color"), "direction": spec.get("transition_direction")}
+        if spec.get("ambience"):
+            s.ambience = spec["ambience"]
         s.run_beats(spec.get("beats", []))
         return s
 
@@ -316,6 +320,41 @@ class Scene:
         return self
 
     # ------------------------------------------------------------------ bookkeeping
+    # ------------------------------------------------------------------ sound
+    def sound(self, name, at=None, volume=1.0, kind="effects"):
+        """Play a sound effect at `at` seconds (now, if not given): a name from dr.sounds.names() or a
+        file in the film's audio/sfx/ folder. `kind` ("effects" or "footsteps") is what the film's
+        [sound] settings can turn off. Returns the file, or None when turned off."""
+        from . import sounds
+        cfg = self.film.get("sound") or {}
+        if cfg.get(kind, True) is False:
+            return None
+        t = self.clock if at is None else float(at)
+        root = self.project.root if self.project else None
+        f = sounds.path(name, seed=sounds._seed(self.name, name, round(t, 3)), project_dir=root)
+        if f is None:
+            raise ValueError(f"no sound called {name!r}: try one of {', '.join(sounds.names())}, "
+                             f"or put {name}.wav in audio/sfx/")
+        self.sound_fx.append((t, f, float(volume) * float(cfg.get("volume", 1.0)), name))
+        return f
+
+    def ambience_bed(self):
+        """[file, volume] of the scene's ambience, or None."""
+        from . import sounds
+        cfg = self.film.get("sound") or {}
+        kind = self.ambience or cfg.get("ambience", True)
+        if kind in (False, "none", "off"):
+            return None
+        if kind in (True, None, "auto"):
+            kind = sounds.ambience_for(self.set, self.time_of_day, self.weather)
+        vol = float(cfg.get("ambience_volume", 1.0))
+        if kind in sounds.ambiences():
+            return [sounds.ambience(kind, self.length, seed=sounds._seed(self.name) % 4), vol]
+        f = sounds.path(kind, project_dir=self.project.root if self.project else None)
+        if f is None:
+            raise ValueError(f"no ambience {kind!r}: try one of {', '.join(sounds.ambiences())}, or a file in audio/sfx/")
+        return [f, vol]
+
     def _event(self, kind, who, t0, t1, **kw):
         e = {"kind": kind, "who": who, "t0": t0, "t1": t1, "beat": self._beat, **kw}
         self.events.append(e)
@@ -465,6 +504,7 @@ class Scene:
         self.subtitles = [(m(a), m(b), who, line) for a, b, who, line in self.subtitles]
         self.captions = [(m(a), m(b), text) for a, b, text in self.captions]
         self.screen_fx = [(m(t), fx, d, c) for t, fx, d, c in self.screen_fx]
+        self.sound_fx = [(m(t), f, v, n) for t, f, v, n in self.sound_fx]
         self.time_fx = [(m(a), m(b) if b is not None else None, label) for a, b, label in self.time_fx]
         for shot in self.cut.final:
             shot.at = m(shot.at)
@@ -554,6 +594,8 @@ class Scene:
             "audio": [[e["t0"], e["audio"].path] for e in self.events if e["kind"] == "say" and e.get("audio")],
             "shots": self.cut.describe(),
             "screen": [list(x) for x in self.screen_fx],
+            "sounds": [[round(t, 3), f, round(v, 3)] for t, f, v, n in sorted(self.sound_fx) if t < self.length],
+            "ambience": self.ambience_bed(),
             "transition": self.transition,
             "time_of_day": self.time_of_day, "weather": self.weather, "style": self.style.name,
         }
