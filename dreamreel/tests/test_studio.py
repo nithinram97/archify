@@ -122,6 +122,11 @@ def main():
                 assert e.code == 404
         assert call(base, "POST", "/api/jobs", {"kind": "assets", "pack": "../../etc"})[0] == 400
 
+        # the logo and the tab icon are served as pictures
+        for name in ("logo.svg", "favicon.svg"):
+            with urllib.request.urlopen(base + "/static/" + name) as r:
+                assert r.headers["Content-Type"].startswith("image/svg+xml") and b"<svg" in r.read(200), name
+
         # voices: languages and engines are offered; keys are saved but never sent back
         info = st["info"]["catalog"]
         assert info["languages"]["ta"]["native"] == "தமிழ்" and "piper" in info["voice_engines"], info.keys()

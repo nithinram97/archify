@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/logo-dark.svg">
-  <img src="docs/media/logo.svg" alt="The dreamreel logo: a paper plane drawn in one line" width="120">
-</picture>
+<img src="docs/media/logo.svg" alt="The dreamreel logo: an owl's eye whose iris is a film reel" width="160">
 
 # dreamreel
 

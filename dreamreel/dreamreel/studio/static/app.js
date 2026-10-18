@@ -183,15 +183,8 @@ function render() {
 }
 
 function reelIcon() {
-  // the dreamreel logo: a paper plane drawn in one line, looping in on its flight
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "4 20 94 71");
-  svg.setAttribute("class", "reel");
-  svg.setAttribute("aria-hidden", "true");
-  svg.innerHTML = `<path d="M8 86C20 88 32 84 34 72C36 58 18 56 20 68C22 80 40 74 46.4 51.7L34.4 37.9 93.7 24.2 46.4 51.7 47 75.2 93.7 24.2 69.9 69 46.4 51.7" fill="none" stroke="currentColor" stroke-width="5"
-    stroke-linejoin="round" stroke-linecap="round"/>`;
-  return svg;
+  // the dreamreel logo: an owl's eye whose iris is a film reel
+  return h("img", { class: "reel", src: "/static/logo.svg", alt: "" });
 }
 
 // ------------------------------------------------------------------ welcome
