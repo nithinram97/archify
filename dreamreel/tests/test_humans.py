@@ -63,6 +63,7 @@ def person():
     assert len(names & set(humans.ARKIT)) >= 50 and len([n for n in names if n.startswith("viseme_")]) >= 14, names
     assert "browInnerUp" in brows.data.shape_keys.key_blocks, "the brows move with the face"
     assert 1.55 < asha.H < 1.72, asha.H
+    assert abs(asha.height() - asha.H) < 0.06, ("framed by her full height", asha.height(), asha.H)
     asha.place("center", facing="camera")
     t0 = s.clock
     asha.feel("happy")

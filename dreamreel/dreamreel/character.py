@@ -318,7 +318,7 @@ class Character(Plugin):
 
     def height(self):
         """Top of the head above the feet, in metres (for framing)."""
-        return self.top_z + self.head_center.z + self.head_r
+        return getattr(self, "hip_z", 0.0) + self.top_z + self.head_center.z + self.head_r
 
     def length(self):
         """Front-to-back size, in metres (for framing long bodies)."""
