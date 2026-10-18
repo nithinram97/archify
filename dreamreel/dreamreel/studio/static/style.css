@@ -38,7 +38,8 @@ a { color: var(--accent); }
 .nav { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 14px; display: flex;
   flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; padding: 4px 8px 16px; }
-.brand .reel { width: 28px; height: 28px; }
+.brand .reel { width: 44px; height: 33px; }
+.reel { width: 40px; height: 30px; color: var(--ink); flex: none; }
 .film-name { font-size: 13px; color: var(--ink-2); padding: 0 8px 14px; overflow-wrap: anywhere; }
 .nav button { all: unset; cursor: pointer; padding: 9px 12px; border-radius: 10px; display: flex; gap: 10px;
   align-items: center; font-weight: 600; color: var(--ink-2); }

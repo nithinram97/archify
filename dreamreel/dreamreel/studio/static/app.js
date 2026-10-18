@@ -183,13 +183,14 @@ function render() {
 }
 
 function reelIcon() {
+  // the dreamreel logo: a paper plane drawn in one line, looping in on its flight
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 32 32");
+  svg.setAttribute("viewBox", "4 20 94 71");
   svg.setAttribute("class", "reel");
-  svg.innerHTML = `<circle cx="16" cy="16" r="14" fill="#e4572e"/><circle cx="16" cy="16" r="4" fill="#fff8ef"/>
-    <circle cx="16" cy="7.5" r="3" fill="#fff8ef"/><circle cx="16" cy="24.5" r="3" fill="#fff8ef"/>
-    <circle cx="7.5" cy="16" r="3" fill="#fff8ef"/><circle cx="24.5" cy="16" r="3" fill="#fff8ef"/>`;
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = `<path d="M8 86C20 88 32 84 34 72C36 58 18 56 20 68C22 80 40 74 46.4 51.7L34.4 37.9 93.7 24.2 46.4 51.7 47 75.2 93.7 24.2 69.9 69 46.4 51.7" fill="none" stroke="currentColor" stroke-width="5"
+    stroke-linejoin="round" stroke-linecap="round"/>`;
   return svg;
 }
 
