@@ -759,6 +759,9 @@ class Character(Plugin):
     def _hold_reach(self, t):
         """Key every limb's current reach at `t`, so the next bend starts from here."""
 
+    def fist(self, t, amount=1.0, sides=(1, -1), ease="smooth"):
+        """Close the hands into fists by `t` (amount 0 opens them again); only bodies with fingers."""
+
     seat_pose = (-80, 1.0)       # sitting: each leg's swing forward (degrees) and the foot's reach
 
     def arms_rest(self, t):

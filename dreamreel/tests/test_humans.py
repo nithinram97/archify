@@ -129,6 +129,11 @@ def fight():
         return min((at(s, hand, t0 + k * 0.05) - arjun.head_point(t0 + k * 0.05)).length for k in range(40))
     near = min(closest(h, t_jab) for h in ravi.hands.values())
     assert near < 0.3, ("the jab reaches his face", near)
+    finger = ravi.rig.pose.bones["mixamorig:LeftHandIndex2"]
+    handling.evaluate(s, t_jab + 0.3)
+    assert finger.rotation_quaternion.angle > 1.0, "he punches with a fist"
+    handling.evaluate(s, t_kick - 0.05)
+    assert finger.rotation_quaternion.angle < 0.1, "and opens his hands after"
     foot = arjun.rig.pose.bones[arjun.roles["r_ankle"]]
     highest = 0.0
     for k in range(20):

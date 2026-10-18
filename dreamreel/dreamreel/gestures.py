@@ -205,6 +205,13 @@ def _guard(c, t, ease="smooth"):
     """Fists up in front of the chin, elbows down."""
     for s in (1, -1):
         c.arm_to(s, t, (_deg(-60), _deg(15 * s), 0), ease, bent=(_aim(s, 0.35, 0.8, 0.45), 0.52))
+    c.fist(t)
+
+
+def _rest(c, t):
+    """Arms down and the hands open again."""
+    c.arms_rest(t)
+    c.fist(t, 0)
 
 
 def _step(c, t0, t1, t2, metres):
@@ -261,11 +268,11 @@ class Punch(Gesture):
         strike = (_aim(s, 0.3, 1.0, 0.3), 1.0)                 # straight out at the face
         c.arm_to(s, t + i, (_deg(-90), 0, 0), "ease_in", bent=strike)
         _twist(c, t + i, -18 * s, 8)                            # the body turns into the punch
-        _step(c, t, t + i, None, _closing(c, t, target, s, self.step))
+        _step(c, t, t + i, t + i + 0.7, _closing(c, t, target, s, self.step))   # in, and back out
         c.arm_to(s, t + i + 0.12, (_deg(-90), 0, 0), bent=strike)
         _guard(c, t + i + 0.4)
         _twist(c, t + i + 0.4, 0)
-        c.arms_rest(t + i + 0.9)
+        _rest(c, t + i + 0.9)
         return t + i + 0.9
 
 
@@ -294,6 +301,10 @@ class Kick(Gesture):
         hold(c.body, "rotation_euler", t)
         if c.arms:
             _guard(c, t + 0.12)
+        if target is not None:                                          # close in so the foot lands
+            q, p = c._point(target, t), c.position(t)
+            gap = math.hypot(q.x - p.x, q.y - p.y)
+            _step(c, t, t + IMPACT, t + IMPACT + 0.6, min(max(0.0, gap - 0.55 * c.H), 0.4 * c.H))
         key(leg, "rotation_euler", t + 0.18, (_deg(-35), 0, 0))           # the knee comes up
         c._reach(("leg", -1), t + 0.18, 0.75)
         key(leg, "rotation_euler", t + IMPACT, (_deg(-80), 0, 0), "ease_out")   # and the foot snaps out
@@ -305,7 +316,7 @@ class Kick(Gesture):
         c._reach(("leg", -1), t + IMPACT + 0.5, 1.0)
         _twist(c, t + IMPACT + 0.5, 0)
         if c.arms:
-            c.arms_rest(t + IMPACT + 0.9)
+            _rest(c, t + IMPACT + 0.9)
         return t + IMPACT + 0.9
 
 
@@ -319,12 +330,13 @@ class Block(Gesture):
         cover = {s: (_aim(s, 0.3, 0.6, 0.75), 0.5) for s in (1, -1)}   # forearms up in front of the face
         for s in (1, -1):
             c.arm_to(s, t + IMPACT - 0.12, (_deg(-120), _deg(20 * s), 0), "ease_out", bent=cover[s])
+        c.fist(t + IMPACT - 0.12)
         _twist(c, t + IMPACT + 0.05, 0, -8)                      # the blow pushes them back a little
         _step(c, t + IMPACT, t + IMPACT + 0.15, None, -0.08)
         for s in (1, -1):
             c.arm_to(s, t + IMPACT + 0.45, (_deg(-120), _deg(20 * s), 0), bent=cover[s])
         _twist(c, t + IMPACT + 0.45, 0)
-        c.arms_rest(t + IMPACT + 0.85)
+        _rest(c, t + IMPACT + 0.85)
         return t + IMPACT + 0.85
 
 
@@ -343,7 +355,7 @@ class Dodge(Gesture):
         key(c.body, "rotation_euler", t + IMPACT + 0.4, (0, 0, 0))
         key(c.hips, "location", t + IMPACT + 0.4, (0, 0, z))
         if c.arms:
-            c.arms_rest(t + IMPACT + 0.8)
+            _rest(c, t + IMPACT + 0.8)
         return t + IMPACT + 0.8
 
 
@@ -365,6 +377,7 @@ class Flinch(Gesture):
         if c.arms:
             for s in (1, -1):
                 c.arm_to(s, hit + 0.15, (_deg(-30), _deg(-40 * s), 0), "ease_out", bent=(_aim(s, -0.6, 0.4, -0.5), 0.85))
+            c.fist(hit + 0.15, 0, sides=(s,))
         key(c.neck, "rotation_euler", hit + 0.7, tuple(cur))
         key(c.body, "rotation_euler", hit + 0.7, (0, 0, 0))
         if c.arms:

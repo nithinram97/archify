@@ -25,6 +25,7 @@ capture clips play on it), and 67 facial shape keys that brows, lashes, eyes and
 """
 import gzip
 import json
+import math
 import os
 import random
 import re
@@ -803,7 +804,7 @@ def _proxy_material(px, role, r, name):
 
 
 # ---------------------------------------------------------------------- the character
-from .keys import key  # noqa: E402
+from .keys import hold, key  # noqa: E402
 from .models import ModelCharacter  # noqa: E402
 from .plugins import Param  # noqa: E402
 
@@ -886,6 +887,18 @@ class Human(ModelCharacter):
                 if kb.name.startswith("viseme_"):
                     out.setdefault(kb.name[7:], []).append(kb)
         return out
+
+    def fist(self, t, amount=1.0, sides=(1, -1), ease="smooth"):
+        from mathutils import Euler
+        for side in sides:
+            hand = f"mixamorig:{'Left' if side == 1 else 'Right'}Hand"
+            for b in self.rig.pose.bones:
+                if not b.name.startswith(hand) or b.name[-1] not in "123":
+                    continue
+                curl = (-40, 0, 0) if "Thumb" in b.name else (0, 0, -70 * side)    # the thumb tucks in
+                q = Euler([math.radians(v * amount) for v in curl]).to_quaternion()
+                hold(b, "rotation_quaternion", t - 0.12)
+                key(b, "rotation_quaternion", t, tuple(q), ease)
 
     def _lipsync_audio(self, t0, speech):
         """Real mouth shapes for the sounds of speech (visemes); with an AI face reading (lipsync =
