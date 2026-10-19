@@ -718,9 +718,10 @@ class Brawl:
         return hit, who.busy
 
     def cover(self, t, kind, *who, **kw):
-        """A shot of the exchange (cut on the action)."""
-        if not self.coverage:
+        """A shot of the exchange (cut on the action), unless the last cut was a moment ago."""
+        if not self.coverage or abs(t - getattr(self, "last_cut", -9.0)) < 0.6:
             return
+        self.last_cut = t
         from . import plugins
         subjects = plugins.get("shot", kind).subjects
         try:
@@ -743,17 +744,16 @@ class Brawl:
         hero.turn_to(a.key, at=max(t, go - 0.3), wait=False)
         attack = rng.choice(ATTACKS)
         defence = "dodge" if attack in ("kick", "hook") or rng.random() < 0.35 else "block"
-        if n % 3 == 0:
-            self.cover(go - 0.2, "full", hero, angle="low", handheld=True)
-        else:
-            self.cover(go - 0.2, "over_shoulder", a, hero)
+        # fights are covered side-on, both fighters in the frame (never over a shoulder, which hides the blow)
+        self.cover(go - 0.2, "full_two_shot", hero, a, handheld=n % 2 == 0)
         hit, a_end = self.strike(a, attack, hero, go, defence)
         hero_end = hero.busy
         counter = rng.choice(COUNTERS)
         c_at = max(hit + 0.25, hero_end - 0.35)
         down = _gesture(counter).power >= 0.65 or rng.random() < 0.3
-        self.cover(c_at + _gesture(counter).impact - 0.35, "medium_wide" if n % 2 else "full", hero,
-                   angle="low" if counter in ("uppercut", "spin_kick") else None)
+        big = counter in ("uppercut", "spin_kick", "flying_kick")
+        self.cover(c_at + _gesture(counter).impact - 0.35, "full", hero, side="profile",
+                   angle="low" if big else None, handheld=not big)
         chit, c_end = self.strike(hero, counter, a, c_at, "knocked_down" if down else "flinch")
         self.back_to_ring(a)
         # the next one is already on his way in as this blow lands: the hero is never left standing about
@@ -796,11 +796,11 @@ class Brawl:
         # slip that, and take the one behind on the way round...
         hero_at = hero.busy - 0.25
         hero.turn_to(back.key, at=hero_at, wait=False)
-        self.cover(hero_at + 0.2, "full", hero, angle="low", handheld=True)
+        self.cover(hero_at + 0.2, "full", hero, side="profile", angle="low", handheld=True)
         k_hit, _ = self.strike(hero, rng.choice(("spin_kick", "kick", "hook")), back, hero.busy - 0.05, "knocked_down")
         # ... then the one in front
         hero.turn_to(front.key, at=hero.busy - 0.1, wait=False)
-        self.cover(hero.busy - 0.1, "over_shoulder", front, hero)
+        self.cover(hero.busy - 0.1, "full_two_shot", hero, front)
         p_hit, end = self.strike(hero, rng.choice(("uppercut", "punch", "hook")), front, hero.busy, "knocked_down")
         for a in (front, back):
             self.back_to_ring(a)

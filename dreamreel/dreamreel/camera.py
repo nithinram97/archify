@@ -807,6 +807,16 @@ class TwoShot(ShotType):
         return d.frame_group([of, other], t, angle=angle, lens=lens)
 
 
+class FullTwoShot(ShotType):
+    label = "Two-shot (full)"
+    description = "Two characters head to toe, from their side of the line (fights, dances)"
+    subjects = 2
+
+    def frame(self, d, t, of=None, other=None, angle="eye_level", side="auto", lens=None, dutch=0.0):
+        return d.frame_group([of, other], t, kind="two_shot", angle=angle, lens=lens, size="full",
+                             label=f"two_shot_full({d.character(of).name}, {d.character(other).name})")
+
+
 class Group(ShotType):
     description = "Everyone in the scene who's visible"
 
