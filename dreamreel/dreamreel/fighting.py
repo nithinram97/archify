@@ -458,6 +458,8 @@ def knock_down(c, hit, attacker=None, distance=1.4, height=0.3, lie=1.0, get_up=
     (with get_up) stands up again. Returns when it's back on its feet (or has landed)."""
     d = Flinch.away(c, hit, attacker)
     p = c.position(hit)
+    while distance > 0.6 and not standable(c.scene, p + d * (distance + 0.3)):
+        distance *= 0.8                            # not through a wall (landing short of it instead)
     h = heading_to(-d.x, -d.y)                     # facing the blow, falling on its back
     lift = 0.09 * c.H                              # lying, its back is on the ground, not its middle
     T = 0.45 + 0.12 * distance + 0.4 * height
@@ -596,13 +598,44 @@ def _gesture(name):
     return plugins.get("gesture", name)
 
 
-def _ring(centre, n, radius, start, rng):
-    """n points round a centre, evenly spread from angle `start`, a little uneven."""
+def standable(scene, p):
+    """Whether someone can stand at p: on the ground, not inside a building, a lamp post or a tree."""
+    import bpy
+    st = scene.set
+    ground = st.ground_height(p.x, p.y) if st is not None and hasattr(st, "ground_height") else 0.0
+    roots = {c.root for c in scene.actors.values()}
+    dg = bpy.context.evaluated_depsgraph_get()
+    origin, down = Vector((p.x, p.y, ground + 40.0)), Vector((0, 0, -1))
+    for _ in range(8):
+        hit, loc, _n, _i, obj, _m = scene.bscene.ray_cast(dg, origin, down, distance=60.0)
+        if not hit:
+            return True
+        top = obj
+        while top.parent is not None:
+            top = top.parent
+        if top in roots or obj.name.startswith("camera"):
+            origin = loc + down * 0.01
+            continue
+        return loc.z < ground + 0.25
+    return True
+
+
+def _ring(centre, n, radius, start, rng, scene=None):
+    """n points round a centre, evenly spread from angle `start`, a little uneven; with a scene, each
+    one somewhere a person can stand (pulled in, or moved round, out of buildings and the like)."""
     out = []
     for i in range(n):
         a = start + 2 * math.pi * i / n + rng.uniform(-0.25, 0.25) * math.pi / n
         r = radius * rng.uniform(0.92, 1.1)
-        out.append(Vector((centre.x + r * math.sin(a), centre.y - r * math.cos(a))))
+        p = Vector((centre.x + r * math.sin(a), centre.y - r * math.cos(a)))
+        if scene is not None and not standable(scene, p):
+            tries = [(a + da, r * k) for k in (1.0, 0.8, 0.6, 0.45) for da in (0.0, 0.35, -0.35, 0.7, -0.7)]
+            for aa, rr in tries:
+                q = Vector((centre.x + rr * math.sin(aa), centre.y - rr * math.cos(aa)))
+                if standable(scene, q):
+                    p = q
+                    break
+        out.append(p)
     return out
 
 
@@ -614,10 +647,10 @@ def surround(scene, hero, attackers, t=None, radius=1.8, seed=0, enter_from=None
     rng = random.Random(seed)
     c = hero.position(t)
     if enter_from:
-        for a, p in zip(attackers, _ring(c, len(attackers), float(enter_from), hero.heading(t) + 0.4, rng)):
+        for a, p in zip(attackers, _ring(c, len(attackers), float(enter_from), hero.heading(t) + 0.4, rng, scene)):
             if not _compat.fcurves(a.root):              # not placed yet: they've been standing out there
                 a.place((p.x, p.y), facing=hero.key, at=0.0)
-    spots = _ring(c, len(attackers), radius, hero.heading(t), rng)
+    spots = _ring(c, len(attackers), radius, hero.heading(t), rng, scene)
     # nearest spot for each, so nobody walks through the middle
     free, done = list(spots), t
     for a in sorted(attackers, key=lambda a: (a.position(t) - c).length):
@@ -738,6 +771,10 @@ class Brawl:
         c, p = self.hero.position(t), a.position(t)
         d = p - c
         d = d.normalized() if d.length > 1e-3 else Vector((1, 0))
+        for turn in (0.0, 0.4, -0.4, 0.8, -0.8, 1.3, -1.3):
+            q = c + Vector((d.x * math.cos(turn) - d.y * math.sin(turn), d.x * math.sin(turn) + d.y * math.cos(turn))) * radius
+            if standable(self.s, q):
+                return q
         return c + d * radius
 
     def double(self, t, n):
@@ -752,7 +789,7 @@ class Brawl:
             self.wait_in_stance(a, t)
         g1 = self.approach(front, t)
         self.approach(back, t + 0.2)
-        self.cover(t, "wide", hero)
+        self.cover(t, "group", hero)
         hero.turn_to(front.key, at=max(t, g1 - 0.3), wait=False)
         first, answer = rng.choice((("punch", "dodge"), ("hook", "dodge"), ("jab", "block"), ("kick", "dodge")))
         self.strike(front, first, hero, g1, answer)
@@ -829,7 +866,7 @@ def burst(scene, hero, attackers, t=None, hold_s=0.9, seed=0, coverage=True):
     hero.flash("fierce", arrive + hold_s - 0.4, hold=0.9, how_much=1.2)
     if coverage:
         try:
-            scene.cut.shot("wide", at=t, angle="high")
+            scene.cut.shot("group", at=t, angle="high")
             scene.cut.shot("full", of=hero.key, at=arrive + hold_s - 0.3, angle="low", move="pull_out")
         except ValueError:
             pass

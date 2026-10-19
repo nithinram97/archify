@@ -276,10 +276,30 @@ class Director:
             return pos
         return loc - dirn * 0.12
 
+    def in_front(self, pos, aim, margin=0.3):
+        """`pos`, or if a wall (not a character) is between it and `aim`, just in front of the wall."""
+        pos, aim = Vector(pos), Vector(aim)
+        if self.clear_view(aim, pos):
+            return pos
+        roots = self._actor_roots()
+        dg = bpy.context.evaluated_depsgraph_get()
+        dirn = (pos - aim).normalized()
+        origin, left = aim + dirn * 0.05, (pos - aim).length
+        for _ in range(12):
+            hit, loc, _n, _i, obj, _m = self.scene.bscene.ray_cast(dg, origin, dirn, distance=left)
+            if not hit:
+                return pos
+            if self._top(obj) not in roots and not obj.name.startswith(("camera", "floor", "ground")) \
+                    and not obj.get("dr_fx"):
+                return aim + dirn * max(0.4, (loc - aim).length - margin)
+            left -= (loc - origin).length + 0.01
+            origin = loc + dirn * 0.01
+        return pos
+
     def _add(self, kind, at, subjects, pos, aim, lens, fstop, label, roll=0.0, focus=None):
         at = self.scene._now() if at is None else at
         pos = self._keep_inside(pos)
-        if kind not in ("custom", "pov", "cast", "wide", "establishing"):
+        if kind not in ("custom", "pov", "cast"):
             pos = self.unblock(pos, aim, kind)
         s = Shot(kind, at, subjects, self._keep_inside(pos), Vector(aim), lens, fstop, label, roll, focus)
         self.shots.append(s)
@@ -641,6 +661,8 @@ class Director:
             for j, (t, st) in enumerate(track):
                 e = "cut" if j == len(track) - 1 else ease
                 pos = self._keep_inside(st.pos)
+                if j > 0 and s.kind not in ("custom", "pov", "cast"):
+                    pos = self.in_front(pos, st.aim)      # a move (an orbit, a pull-out) mustn't end up inside a wall
                 key(self.rig, "location", t, tuple(pos), e)
                 key(self.aim, "location", t, tuple(st.aim), e)
                 key(cd, "lens", t, st.lens, e)
