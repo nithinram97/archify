@@ -121,6 +121,114 @@ def bvh_positions(path):
     return out, 1.0 / dt
 
 
+# ---------------------------------------------------------------------- reading ASF/AMC (the CMU database's own format)
+def _asf_rot(angles, order="XYZ"):
+    m = Matrix.Identity(3)
+    for ax, a in zip(order, angles):      # rotations applied in order: the first one first
+        m = Matrix.Rotation(math.radians(a), 3, ax) @ m
+    return m
+
+
+def read_asf(path):
+    """A skeleton: {bone: dict(direction, length, axis matrix, dof, parent)}, root order, length unit."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        lines = [l.strip() for l in f]
+    bones, section, cur, unit = {}, None, None, 1.0
+    hierarchy, root_order = [], ["TX", "TY", "TZ", "RX", "RY", "RZ"]
+    for l in lines:
+        if not l or l.startswith("#"):
+            continue
+        if l.startswith(":"):
+            section = l.split()[0][1:]
+            continue
+        w = l.split()
+        if section == "units" and w[0] == "length":
+            unit = float(w[1])
+        elif section == "root" and w[0] == "order":
+            root_order = [x.upper() for x in w[1:]]
+        elif section == "bonedata":
+            if w[0] == "begin":
+                cur = {"dof": [], "direction": Vector((0, 0, 0)), "length": 0.0, "axis": Matrix.Identity(3)}
+            elif w[0] == "end":
+                bones[cur["name"]] = cur
+            elif w[0] == "name":
+                cur["name"] = w[1]
+            elif w[0] == "direction":
+                cur["direction"] = Vector(tuple(float(x) for x in w[1:4]))
+            elif w[0] == "length":
+                cur["length"] = float(w[1])
+            elif w[0] == "axis":
+                cur["axis"] = _asf_rot([float(x) for x in w[1:4]], w[4].upper() if len(w) > 4 else "XYZ")
+            elif w[0] == "dof":
+                cur["dof"] = [x.upper() for x in w[1:]]
+        elif section == "hierarchy" and w[0] not in ("begin", "end"):
+            hierarchy.append(w)
+    for w in hierarchy:
+        for child in w[1:]:
+            if child in bones:
+                bones[child]["parent"] = w[0]
+    return bones, root_order, unit
+
+
+def read_amc(path, bones, root_order):
+    """Frames of {bone: [values]} (root: its order's values)."""
+    frames, cur = [], None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for l in f:
+            l = l.strip()
+            if not l or l.startswith(("#", ":")):
+                continue
+            w = l.split()
+            if len(w) == 1 and w[0].isdigit():
+                cur = {}
+                frames.append(cur)
+            elif cur is not None:
+                cur[w[0]] = [float(x) for x in w[1:]]
+    return frames
+
+
+def asf_amc_positions(asf, amc, fps=120.0):
+    """World positions (metres, z up) of the start of every bone, and the root, in every frame."""
+    bones, root_order, unit = read_asf(asf)
+    frames = read_amc(amc, bones, root_order)
+    scale = 0.0254 / unit                               # ASF lengths are inches times `unit`
+    order = []                                          # parents before children
+    pending = list(bones)
+    while pending:
+        for b in list(pending):
+            par = bones[b].get("parent", "root")
+            if par == "root" or par in order:
+                order.append(b)
+                pending.remove(b)
+    out = {"root": []}
+    out.update({b: [] for b in bones})
+    for fr in frames:
+        rv = fr.get("root", [0] * 6)
+        vals = dict(zip(root_order, rv))
+        pos = Vector((vals.get("TX", 0), vals.get("TY", 0), vals.get("TZ", 0)))
+        rot = _asf_rot([vals.get("RX", 0), vals.get("RY", 0), vals.get("RZ", 0)], "XYZ")
+        world_rot, start = {"root": rot}, {"root": pos}
+        for b in order:
+            bd = bones[b]
+            par = bd.get("parent", "root")
+            angles = dict(zip(bd["dof"], fr.get(b, [])))
+            m = _asf_rot([angles.get("RX", 0), angles.get("RY", 0), angles.get("RZ", 0)], "XYZ")
+            C = bd["axis"]
+            R = world_rot[par] @ C @ m @ C.inverted()
+            world_rot[b] = R
+            s = start[par] if par == "root" else start[par] + world_rot[par] @ (bones[par]["direction"] * bones[par]["length"])
+            start[b] = s
+        for b, s in start.items():
+            out[b].append((Y_UP_TO_Z_UP.to_3x3() @ s) * scale)
+    return out, fps
+
+
+ASF_ROLES = {"hips": "root", "chest": "thorax", "neck": "lowerneck", "head": "head",
+             "l_arm": "lhumerus", "l_elbow": "lradius", "l_wrist": "lwrist", "l_hip": "lfemur", "l_knee": "ltibia",
+             "l_ankle": "lfoot", "r_arm": "rhumerus", "r_elbow": "rradius", "r_wrist": "rwrist", "r_hip": "rfemur",
+             "r_knee": "rtibia", "r_ankle": "rfoot"}
+
+
 # ---------------------------------------------------------------------- joint roles
 def _norm(name):
     n = re.sub(r"^(mixamorig\d*|bip0?1|def|characters?\d*)[:_ ]*", "", name.lower())
@@ -177,6 +285,11 @@ class Clip:
                          for i in range(self.n))
         self.hip_height = max(1e-6, heights[len(heights) // 2])
         self.floor = min(min(roles["l_ankle"][i].z, roles["r_ankle"][i].z) for i in range(self.n))
+        # how long the legs are: the same whatever the pose (a clip spent mostly on the floor has a
+        # tiny standing hip height, but not short legs)
+        legs = sorted((roles["l_hip"][i] - roles["l_knee"][i]).length + (roles["l_knee"][i] - roles["l_ankle"][i]).length
+                      for i in range(0, self.n, max(1, self.n // 50)))
+        self.leg_length = max(1e-6, legs[len(legs) // 2])
         self.loop = None                        # (first, last) frame of a clean cycle, for walks
 
     @property
@@ -243,6 +356,11 @@ def load(path, name=None, tags=None):
     ext = os.path.splitext(path)[1].lower()
     if ext == ".bvh":
         positions, fps = bvh_positions(path)
+    elif ext == ".amc":                                   # the CMU database: the skeleton is the subject's .asf
+        asf = os.path.join(os.path.dirname(path), os.path.basename(path).split("_")[0] + ".asf")
+        positions, fps = asf_amc_positions(asf, path)
+        stem = os.path.splitext(os.path.basename(path))[0]
+        return Clip(name or stem, {r: positions[j] for r, j in ASF_ROLES.items()}, fps, tags or set(), source=path)
     elif ext in (".fbx", ".glb", ".gltf"):
         positions, fps = _import_with_blender(path)
     else:
@@ -424,7 +542,15 @@ def pose(c, clip, p, h0, mirror=False):
 
 
 def perform(c, clip, t0, speed=1.0, mirror=False, in_place=False, blend=0.25, start=0.0, end=None):
-    """Play `clip` on character `c` from t0. Returns when it ends (seconds)."""
+    """Play `clip` on character `c` from t0. Returns when it ends (seconds). Bodies with a skeleton of
+    their own play it bone by bone (ModelCharacter.perform_clip); others through dreamreel's pivots."""
+    if hasattr(c, "perform_clip"):
+        return c.perform_clip(clip, t0, speed, mirror, in_place, blend, start, end)
+    return perform_pivots(c, clip, t0, speed, mirror, in_place, blend, start, end)
+
+
+def perform_pivots(c, clip, t0, speed=1.0, mirror=False, in_place=False, blend=0.25, start=0.0, end=None):
+    """Play `clip` through dreamreel's pivots: limb directions, the torso's lean, the hips' height."""
     from . import keys
     from .keys import key, value_at
     if not can_perform(c):

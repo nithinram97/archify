@@ -126,6 +126,44 @@ def bullet_time():
     print("  bullet time: ok")
 
 
+def captured_and_ragdolls():
+    """Realistic people fight with captured moves and fall as ragdolls (needs MakeHuman's people and the
+    CMU recordings: dreamreel assets --pack humans / --pack fights)."""
+    from dreamreel import fightmoves, humans, handling
+    if not (humans.installed() and fightmoves.installed()):
+        print("  captured moves and ragdolls: skipped (assets not downloaded)")
+        return
+    kinds = {m["kind"] for m in fightmoves.index()}
+    assert {"punch", "kick", "block", "duck", "get_up", "stance"} <= kinds, kinds
+    s = dr.Scene({"kind": "outdoor", "biome": "meadow", "trees": 0})
+    a = s.cast(a=dict(type="human", gender="male"))
+    b = s.cast(b=dict(type="human", gender="male", age=50))
+    a.place((-0.6, 0), facing="right")
+    b.place((0.6, 0), facing="left")
+    t = 0.5
+    a.do("uppercut", target="b", at=t, wait=False)
+    b.do("knocked_down", target="a", at=t, wait=False)
+    hit = t + dr.get("gesture", "uppercut").impact
+    up = b.busy
+    s.end_time = up + 0.5
+    s.finish()
+    _, down_until = b._down
+    head = b.rig.pose.bones[b.roles["head"]]
+
+    def head_z(tt):
+        handling.evaluate(s, tt)
+        return (b.rig.matrix_world @ head.head).z
+    standing = head_z(hit - 0.3)
+    lying = head_z(down_until - 0.2)
+    risen = head_z(up)
+    moved = (b.position(down_until - 0.2) - b.position(hit - 0.05)).length
+    assert lying < 0.35 * standing, ("on the ground after the blow", lying, standing)
+    assert risen > 0.85 * standing, ("back on his feet", risen, standing)
+    assert 0.5 < moved < 4.0, ("knocked back, not into the next street", moved)
+    print(f"  captured moves and ragdolls: ok (head {standing:.2f} m standing, {lying:.2f} m down, "
+          f"thrown {moved:.1f} m, up again at {up:.1f} s)")
+
+
 def main():
     moves()
     mood_keeps_time()
@@ -133,6 +171,7 @@ def main():
     clones()
     choreography()
     bullet_time()
+    captured_and_ragdolls()
     print("fighting: all ok")
 
 

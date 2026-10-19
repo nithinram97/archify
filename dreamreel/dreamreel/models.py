@@ -752,11 +752,95 @@ class ModelCharacter(Character):
             self.legs[side] = lp
         self._calibrate()
         bpy.context.view_layer.update()
+        self._rig_in_root = self.root.matrix_world.inverted() @ arm.matrix_world     # for motion capture
         # rest directions for motion capture (arms hang down, legs straight down)
         from . import handling
         self._arm_rest = None
         handling.arm_rest(self)
         self._mrest = (self._arm_rest, {s: (Vector((0, 0, -1)), 1.0) for s in self.legs}, hip_z)
+
+    # ------------------------------------------------------------------ motion capture on the skeleton itself
+    def perform_clip(self, clip, t0, speed=1.0, mirror=False, in_place=False, blend=0.2, start=0.0, end=None,
+                     drift=None, drift_until=None):
+        """Play a motion-capture clip on the skeleton, bone by bone: the pelvis in full 3D (crouching,
+        falling, lying down), the spine bending, elbows and knees bending as captured. dreamreel's own
+        controls are faded out while it plays and back in after. `drift` (x, y metres) is extra travel,
+        spread over the first `drift_until` seconds (stepping in to reach someone). Returns when it ends."""
+        if not self.rig or not all(r in self.roles for r in ("hips", "neck", "l_arm", "l_elbow", "l_wrist",
+                                                                  "l_hip", "l_knee", "l_ankle")):
+            from . import motion
+            return motion.perform_pivots(self, clip, t0, speed, mirror, in_place, blend, start, end)
+        from . import motion
+        from .keys import CLOCK, key, value_at
+        end = clip.length if end is None else min(end, clip.length)
+        fps = CLOCK.fps
+        nf = max(2, int(round((end - start) / max(0.05, speed) * fps)))
+        loc0 = Vector(value_at(self.root, "location", t0))
+        H0 = value_at(self.root, "rotation_euler", t0)[2]
+        first = clip.at(start)
+        hs0 = clip.heading(first)
+        hips0 = Vector((first["hips"].x, first["hips"].y))
+        J = self._joint
+        legs = (J("l_hip") - J("l_knee")).length + (J("l_knee") - J("l_ankle")).length
+        s = legs / clip.leg_length                       # the clip's body to this one's (by leg length)
+        solver = _RigPose(self)
+        cons = [c for pb in self.rig.pose.bones for c in pb.constraints]
+        t_end = t0 + nf / fps
+        from . import _compat
+        from .keys import hold
+        cut = CLOCK.frame(t0 - blend) + 0.5               # a clip takes over from whatever was playing
+        fingers = ("Thumb", "Index", "Middle", "Ring", "Pinky")
+        for fc in _compat.fcurves(self.rig):
+            if fc.data_path.startswith("pose.bones[") and not any(f in fc.data_path for f in fingers):
+                for kp in [kp for kp in fc.keyframe_points if kp.co.x > cut][::-1]:
+                    fc.keyframe_points.remove(kp)
+        for c in cons:                                   # dreamreel's controls fade out, and back in after
+            hold(c, "influence", t0 - blend)
+            key(c, "influence", t0, 0.0)
+            key(c, "influence", t_end, 0.0)
+            key(c, "influence", t_end + blend, 1.0)
+        bones = self.rig.pose.bones
+        for pb in bones:
+            pb.rotation_mode = "QUATERNION"
+            hold(pb, "rotation_quaternion", t0 - blend)
+            hold(pb, "location", t0 - blend)
+        heading = H0
+        for i in range(nf + 1):
+            p = clip.at(start + i / fps * speed)
+            if mirror:
+                p = {(("r_" if r[0] == "l" else "l_") + r[2:]) if r[:2] in ("l_", "r_") else r: v for r, v in p.items()}
+            hs = clip.heading(p)
+            R = Matrix.Rotation(-hs, 3, "Z")
+            base = Vector((p["hips"].x, p["hips"].y, clip.floor))
+            local = {}
+            for r, v in p.items():
+                q = R @ (v - base) * s
+                local[r] = Vector((-q.x, q.y, q.z)) if mirror else q
+            t = t0 + i / fps
+            for name, (rot, loc) in solver.solve(local).items():
+                key(bones[name], "rotation_quaternion", t, tuple(rot), "linear")
+                key(bones[name], "location", t, tuple(loc), "linear")
+            dh = (hs - hs0) * (-1 if mirror else 1)
+            heading = H0 + dh
+            if in_place:
+                pos = loc0.copy()
+            else:
+                d = Matrix.Rotation(-hs0, 3, "Z") @ Vector((p["hips"].x - hips0.x, p["hips"].y - hips0.y, 0)) * s
+                if mirror:
+                    d.x = -d.x
+                d = Matrix.Rotation(H0, 3, "Z") @ d
+                pos = loc0 + Vector((d.x, d.y, 0))
+            if drift is not None:
+                u = min(1.0, (i / fps) / max(1e-3, drift_until or (nf / fps)))
+                u = u * u * (3 - 2 * u)
+                pos = pos + Vector((drift[0], drift[1], 0)) * u
+            key(self.root, "location", t, tuple(pos), "linear")
+            key(self.root, "rotation_euler", t, (0, 0, heading), "linear")
+        for pb in bones:
+            if any(fc.data_path.startswith(f'pose.bones["{pb.name}"].rotation') for fc in _compat.fcurves(self.rig)):
+                key(pb, "rotation_quaternion", t_end + blend, (1, 0, 0, 0))
+                key(pb, "location", t_end + blend, (0, 0, 0))
+        return t_end + blend
 
     @property
     def bends(self):
@@ -944,3 +1028,104 @@ class ModelCharacter(Character):
     # the toy's build steps don't apply
     def build_rig(self):
         pass
+
+
+class _RigPose:
+    """Turns joint positions (in the character's root space, metres) into the skeleton's bone poses."""
+
+    def __init__(self, c):
+        arm = c.rig.data
+        self.c = c
+        self.to_arm = getattr(c, "_rig_in_root", None)
+        if self.to_arm is None:
+            bpy.context.view_layer.update()
+            self.to_arm = c.root.matrix_world.inverted() @ c.rig.matrix_world
+        self.to_arm = self.to_arm.inverted()
+        self.scale = self.to_arm.to_scale()
+        self.rest = {b.name: b.matrix_local.copy() for b in arm.bones}
+        self.order = sorted(arm.bones, key=lambda b: len(b.parent_recursive))
+        R = c.roles
+        self.role_bone = R
+        J = {r: arm.bones[R[r]].head_local.copy() for r in R if R[r] in arm.bones}
+        self.J = J
+        hips = arm.bones[R["hips"]]
+        neck = arm.bones[R["neck"]]
+        self.spine = []
+        b = neck.parent
+        while b is not None and b != hips:
+            self.spine.append(b.name)
+            b = b.parent
+        self.spine.reverse()
+
+    @staticmethod
+    def _frame(across, up):
+        x = across.normalized()
+        z = (up - x * up.dot(x)).normalized()
+        y = z.cross(x)
+        return Matrix((x, y, z)).transposed()
+
+    def solve(self, local):
+        """{bone name: (rotation quaternion, location)} of the pose bones' own (basis) transforms."""
+        P = {r: self.to_arm @ v for r, v in local.items()}
+        J, R = self.J, self.role_bone
+        mid_rest = (J["l_hip"] + J["r_hip"]) / 2
+        mid = (P["l_hip"] + P["r_hip"]) / 2
+        pelvis = self._frame(P["l_hip"] - P["r_hip"], P["chest"] - mid) @ \
+            self._frame(J["l_hip"] - J["r_hip"], J["neck"] - mid_rest).inverted()
+        pq = pelvis.to_quaternion()
+        torso_rest = J["neck"] - J["hips"]
+        top = (pq.to_matrix() @ torso_rest).rotation_difference(P["neck"] - P["hips"]) @ pq
+        rot = {R["hips"]: pq}
+        for k, name in enumerate(self.spine):
+            rot[name] = pq.slerp(top, (k + 1) / max(1, len(self.spine)))
+        head_dir = (J["head"] - J["neck"]) if "head" in J and (J["head"] - J["neck"]).length > 1e-6 else torso_rest
+        target_head = (P["head"] - P["neck"]) if "head" in P else P["neck"] - P["hips"]
+        nq = (top.to_matrix() @ head_dir).rotation_difference(target_head) @ top
+        rot[R["neck"]] = nq
+        if "head" in R:
+            rot[R["head"]] = nq
+
+        def chain(a, b, c_, base):
+            q1 = (base.to_matrix() @ (J[b] - J[a])).rotation_difference(P[b] - P[a]) @ base
+            q2 = (q1.to_matrix() @ (J[c_] - J[b])).rotation_difference(P[c_] - P[b]) @ q1
+            return q1, q2
+        for s in "lr":
+            q1, q2 = chain(f"{s}_arm", f"{s}_elbow", f"{s}_wrist", top)
+            rot[R[f"{s}_arm"]], rot[R[f"{s}_elbow"]], rot[R[f"{s}_wrist"]] = q1, q2, q2
+            q1, q2 = chain(f"{s}_hip", f"{s}_knee", f"{s}_ankle", pq)
+            rot[R[f"{s}_hip"]], rot[R[f"{s}_knee"]], rot[R[f"{s}_ankle"]] = q1, q2, q2
+        return self.bases(rot, mid + pq.to_matrix() @ (J["hips"] - mid_rest))
+
+    def bases(self, rot, hips_head):
+        """Pose-bone (basis) transforms from each driven bone's turn from its rest orientation (in the
+        armature) and where the hips are; every other bone keeps its rest place on its parent."""
+        R = self.role_bone
+        desired, out = {}, {}
+        for b in self.order:
+            rest = self.rest[b.name]
+            if b.parent is None or b.parent.name not in desired:
+                if b.name == R["hips"]:
+                    m = Matrix.Translation(hips_head) @ (rot[b.name].to_matrix() @ rest.to_3x3()).to_4x4()
+                else:
+                    m = rest.copy()
+                parent_part = Matrix.Identity(4)
+            else:
+                pr = self.rest[b.parent.name]
+                parent_part = desired[b.parent.name] @ pr.inverted()
+                m = parent_part @ rest
+                if b.name in rot:
+                    m = Matrix.Translation(m.translation) @ (rot[b.name].to_matrix() @ rest.to_3x3()).to_4x4()
+            desired[b.name] = m
+            if b.name in rot or b.name == R["hips"]:      # fingers, toes, collarbones: left to whatever else moves them
+                basis = (parent_part @ rest).inverted() @ m
+                out[b.name] = (basis.to_quaternion(), basis.translation)
+        return out
+
+    def turns_from(self, world, rig_world):
+        """Bone turns (as `bases` takes them) from bones' world matrices: {bone name: Matrix}."""
+        inv = rig_world.inverted()
+        rot = {}
+        for name, m in world.items():
+            arm = (inv @ m).to_3x3().normalized()
+            rot[name] = (arm @ self.rest[name].to_3x3().normalized().inverted()).to_quaternion()
+        return rot

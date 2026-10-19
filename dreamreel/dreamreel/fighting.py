@@ -78,6 +78,41 @@ def gap_to(c, target, t):
     return math.hypot(q.x - p.x, q.y - p.y)
 
 
+def face_now(c, t, target, turn=0.25):
+    """Turn the whole body to face `target` by `t` (from `turn` seconds before)."""
+    if target is None:
+        return
+    q, p = c._point(target, t), c.position(t)
+    if (q.to_2d() - p).length < 1e-3:
+        return
+    hold(c.root, "rotation_euler", t - turn)
+    h0 = value_at(c.root, "rotation_euler", t - turn)[2]
+    h = heading_to(q.x - p.x, q.y - p.y)
+    h = h0 + (h - h0 + math.pi) % (2 * math.pi) - math.pi          # the short way round
+    key(c.root, "rotation_euler", t, (0, 0, h))
+
+
+def captured(c, move, hit, lead, target=None, side=None, reach=None):
+    """Play a captured `move` (see fightmoves.py) on `c` so its blow lands at `hit`, facing `target` and
+    stepping in to be `reach` metres from them at the blow. The end time, or None if there's none to play."""
+    if not hasattr(c, "perform_clip"):
+        return None
+    from . import fightmoves
+    got = fightmoves.pick(move, random.Random(f"{c.key}/{move}/{round(hit, 2)}"), side)
+    if got is None:
+        return None
+    m, mirror = got
+    t0 = hit - lead
+    face_now(c, t0, target)
+    drift = None
+    if target is not None and reach is not None:
+        p = c.position(t0)
+        d = c._point(target, hit).to_2d() - p
+        if d.length > 1e-3:
+            drift = d.normalized() * max(-0.3, min(0.9, d.length - reach))
+    return fightmoves.play(c, m, hit, mirror, drift, lead)
+
+
 def shake(c, t, strength):
     """The camera feels a blow."""
     cut = getattr(c.scene, "cut", None)
@@ -101,12 +136,21 @@ class Strike(Gesture):
         end = own_clip(c, self.clip or self.name, t)
         if end is not None:
             return end
-        if target is not None:
-            c.turn_to(target, at=t, wait=False)
-        hold(c.body, "rotation_euler", t)
-        end = self.strike(c, t, target, t + self.impact)
-        c.flash(self.face, t + self.impact - 0.2, hold=0.45)
+        hit = t + self.impact
+        end = captured(c, self.name, hit, self.impact, target, getattr(self, "side", None), self.reach_at)
+        if end is None:                                   # no captured move for this body: dreamreel's own
+            if target is not None:
+                c.turn_to(target, at=t, wait=False)
+            hold(c.body, "rotation_euler", t)
+            end = self.strike(c, t, target, hit)
+        else:
+            c.scene.sound("whoosh" if self.power > 0.4 else "swish", at=hit - 0.12, volume=0.45)
+            c.fist(t + 0.1)                           # the capture has no fingers: dreamreel closes the hands
+            c.fist(end - 0.2, 0)
+        c.flash(self.face, hit - 0.2, hold=0.45)
         return end
+
+    reach_at = 0.75       # how far from the target to be when the blow lands (metres)
 
     def strike(self, c, t, target, hit):
         raise NotImplementedError
@@ -229,12 +273,14 @@ class LegStrike(Strike):
 
 class Kick(LegStrike):
     """A front kick: lean back, the right leg snaps up, back down into a stance."""
+    reach_at = 1.0
     description = "Kick (a front kick)"
     power = 0.7
 
 
 class SpinKick(LegStrike):
     """A spinning roundhouse: a full turn on the standing foot, the leg swinging out flat into the target."""
+    reach_at = 1.0
     description = "A spinning kick: a full turn, the leg swinging round at head height"
     impact = 0.55
     power = 0.95
@@ -257,6 +303,7 @@ class SpinKick(LegStrike):
 
 class FlyingKick(LegStrike):
     """A flying kick: a run-up step, a leap, the leg straight out in the air, and the landing."""
+    reach_at = 1.0
     description = "A flying kick: a leap at them, foot first"
     impact = 0.6
     power = 1.0
@@ -305,6 +352,7 @@ class FlyingKick(LegStrike):
 
 class Sweep(LegStrike):
     """A leg sweep: drop low and swing the leg round at the ankles."""
+    reach_at = 1.0
     description = "A leg sweep: low, at their ankles (they fall)"
     impact = 0.45
     power = 0.8
@@ -332,8 +380,19 @@ class Reaction(Gesture):
     keeps_time = True
     impact = IMPACT
 
+    capture = None        # the captured move to play instead (fightmoves.py), for bodies with a skeleton
+
     def perform(self, c, t, target=None):
-        return self.react(c, self.meets(c, t, target), target)
+        hit = self.meets(c, t, target)
+        if self.capture:
+            end = captured(c, self.capture, hit, max(0.2, hit - t), target)
+            if end is not None:
+                self.after(c, hit, target)
+                return end
+        return self.react(c, hit, target)
+
+    def after(self, c, hit, attacker):
+        """What goes with a captured reaction (a sound, the camera's jolt)."""
 
     def meets(self, c, t, attacker):
         """When the blow lands: the attacker's strike that started at `t` (when started together with it),
@@ -355,6 +414,12 @@ class Block(Reaction):
     """Forearms up in front of the face, taking the blow, a half step back."""
     needs = ("arms",)
     description = "Block a blow (start it together with the punch)"
+    capture = "block"
+
+    def after(self, c, hit, attacker):
+        c.scene.sound("block", at=hit, volume=0.55)
+        shake(c, hit, 0.25)
+        c.flash("fierce", hit - 0.05, hold=0.3, how_much=0.7)
 
     def react(self, c, hit, attacker):
         hold(c.body, "rotation_euler", hit - self.impact)
@@ -377,6 +442,10 @@ class Block(Reaction):
 class Dodge(Reaction):
     """Duck and slip to the side as the blow comes."""
     description = "Dodge a blow (start it together with the punch or kick)"
+    capture = "dodge"
+
+    def after(self, c, hit, attacker):
+        c.scene.sound("cloth", at=hit - 0.2, volume=0.35)
 
     def react(self, c, hit, attacker):
         hold(c.body, "rotation_euler", hit - self.impact)
@@ -453,9 +522,13 @@ class KnockedDown(Reaction):
 
 
 def knock_down(c, hit, attacker=None, distance=1.4, height=0.3, lie=1.0, get_up=True):
-    """Throw `c` away from `attacker` at `hit`: a ballistic arc `distance` metres long and `height`
-    high, turning onto its back in the air; it lands, bounces, slides, lies for `lie` seconds and
-    (with get_up) stands up again. Returns when it's back on its feet (or has landed)."""
+    """Knock `c` down at `hit`, away from `attacker`: a body with a skeleton falls as a ragdoll (real
+    physics) and gets up with a captured get-up; others are thrown on a ballistic arc `distance` metres
+    long and `height` high onto their backs. They lie for `lie` seconds and (with get_up) stand up again.
+    Returns when they're back on their feet (or have come to rest)."""
+    from . import ragdoll
+    if ragdoll.can_fall(c):
+        return fall_together([(c, attacker, distance, height)], hit, lie, get_up)[c]
     d = Flinch.away(c, hit, attacker)
     p = c.position(hit)
     while distance > 0.6 and not standable(c.scene, p + d * (distance + 0.3)):
@@ -508,6 +581,55 @@ def knock_down(c, hit, attacker=None, distance=1.4, height=0.3, lie=1.0, get_up=
     return get_up_from_floor(c, down)
 
 
+def _push(c, attacker, t, distance, height):
+    """The velocity a blow gives a body: away from the attacker, and up, enough to carry it `distance`."""
+    d = Flinch.away(c, t, attacker)
+    speed = 0.8 + 1.0 * distance                     # a hard punch: 2-3 m/s; the burst: 3-4
+    return Vector((d.x * speed, d.y * speed, 0.6 + 2.0 * height))
+
+
+def fall_together(falls, hit, lie=1.0, get_up=True):
+    """Ragdoll falls for several bodies knocked down at once ([(character, attacker, distance, height)]),
+    simulated together so they hit each other; each gets up with a captured get-up. {character: end}."""
+    from . import fightmoves, ragdoll
+    scene = falls[0][0].scene
+    chosen = {}
+
+    def settle(c, axis, on_back, pelvis):
+        got = fightmoves.pick("get_up" if on_back else "get_up_face_down", random.Random(f"{c.key}/up/{hit}"))
+        if got is None and not on_back:
+            got = fightmoves.pick("get_up", random.Random(f"{c.key}/up/{hit}"))
+        if got is None:
+            return pelvis, math.atan2(axis.x, -axis.y)
+        m, _ = got
+        cl = fightmoves.clip(m["trial"])
+        first = cl.at(m["start"])
+        clip_axis = (first["chest"] - first["hips"]).to_2d()
+        hs0 = cl.heading(first)
+        # turn the get-up so it starts lying the way the body came to rest
+        H0 = math.atan2(axis.y, axis.x) - math.atan2(clip_axis.y, clip_axis.x) + hs0
+        chosen[c] = m
+        return pelvis, H0
+    for c, attacker, distance, height in falls:
+        shake(c, hit, 0.7)
+        c.flash("pain", hit, hold=1.5 + lie)
+    res = ragdoll.knock_down(scene, [(c, _push(c, a, hit, d, h)) for c, a, d, h in falls], hit, settle=settle)
+    out = {}
+    for c, info in res.items():
+        rest = info["rest"]
+        c.scene.sound("thud", at=min(rest, hit + 0.6), volume=0.8)
+        c._down = (hit, rest + lie)
+        if not get_up or c not in chosen:
+            out[c] = rest
+            scene._end(c, rest, False)
+            continue
+        m = chosen[c]
+        out[c] = c.perform_clip(fightmoves.clip(m["trial"]), rest + lie, start=m["start"], end=m["end"], blend=0.45)
+        c.scene.sound("cloth", at=rest + lie + 0.2, volume=0.4)
+        scene._end(c, out[c], False)
+    return out
+
+
 def get_up_from_floor(c, t, seconds=1.1):
     """Get up from lying on the back: sit up, draw the feet in, push up to standing."""
     loc = value_at(c.root, "location", t)
@@ -557,7 +679,25 @@ class GetUp(Gesture):
 
 # ---------------------------------------------------------------------- stance
 def stance(c, t0, t1, bounce=0.02, lean=6, period=0.55):
-    """A fighter's stance from t0 to t1: guard up, knees soft, bouncing on the balls of the feet."""
+    """A fighter's stance from t0 to t1: guard up, knees soft, bouncing on the balls of the feet (captured
+    boxers' footwork for bodies with a skeleton)."""
+    if hasattr(c, "perform_clip") and t1 - t0 > 0.8:
+        from . import fightmoves
+        rng = random.Random(f"{c.key}/stance/{round(t0, 2)}")
+        t, done = t0, False
+        while t < t1 - 0.4:
+            got = fightmoves.pick("stance", rng)
+            if got is None:
+                break
+            m, _ = got
+            seg = min(m["end"] - m["start"], t1 - t)
+            fightmoves.play(c, dict(m, end=m["start"] + seg, at=m["start"]), t, in_place=True)
+            t += seg
+            done = True
+        if done:
+            c.fist(t0 + 0.2)
+        if done:
+            return t1
     if c.arms:
         guard(c, t0 + 0.2)
     hold(c.hips, "location", t0)
@@ -885,10 +1025,16 @@ def burst(scene, hero, attackers, t=None, hold_s=0.9, seed=0, coverage=True):
     scene.sound("whoosh", at=go - 0.05, volume=0.8)
     shake(hero, go, 1.2)
     end = go
-    for a in attackers:
-        dist = rng.uniform(2.4, 3.6)
-        end = max(end, knock_down(a, go + rng.uniform(0, 0.08), hero, distance=dist, height=rng.uniform(0.4, 0.8),
-                                  lie=rng.uniform(1.0, 2.2)))
-        scene._end(a, end, False)
+    from . import ragdoll
+    flying = [(a, hero, rng.uniform(2.4, 3.6), rng.uniform(0.4, 0.8)) for a in attackers]
+    bodies = [f for f in flying if ragdoll.can_fall(f[0])]
+    if bodies:                    # thrown together, they hit each other on the way
+        for a, t_up in fall_together(bodies, go, lie=rng.uniform(1.0, 2.0)).items():
+            end = max(end, t_up)
+    for a, h, dist, height in flying:
+        if not ragdoll.can_fall(a):
+            end = max(end, knock_down(a, go + rng.uniform(0, 0.08), h, distance=dist, height=height,
+                                      lie=rng.uniform(1.0, 2.2)))
+            scene._end(a, end, False)
     scene._end(hero, go + 0.9, False)
     return go + 0.9
