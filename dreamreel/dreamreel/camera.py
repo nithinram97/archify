@@ -40,7 +40,7 @@ import bpy
 from mathutils import Euler, Matrix, Vector
 
 from . import keys, plugins
-from .keys import key
+from .keys import key, value_at
 from .plugins import Param, Plugin
 
 SENSOR = 36.0
@@ -212,14 +212,15 @@ class Director:
             obj = obj.parent
         return obj
 
-    def clear_view(self, a, b):
-        """True if nothing but characters is between points a and b (furniture and walls block)."""
+    def clear_view(self, a, b, subjects=None):
+        """True if nothing is between points a and b but characters (furniture and walls block). With
+        `subjects`, only those characters can be seen past: anyone else standing in the way blocks too."""
         d = Vector(b) - Vector(a)
         L = d.length
         if L < 0.15:
             return True
         dirn = d / L
-        roots = self._actor_roots()
+        roots = self._actor_roots() if subjects is None else {self.character(c).root for c in subjects}
         dg = bpy.context.evaluated_depsgraph_get()
         origin, remaining = Vector(a) + dirn * 0.05, L - 0.1
         for _ in range(12):
@@ -235,11 +236,12 @@ class Director:
                 return True
         return True
 
-    def unblock(self, pos, aim, kind=""):
+    def unblock(self, pos, aim, kind="", subjects=None):
         """If something hides the subject from `pos`, find a nearby position that sees it: higher first,
-        then a little round to either side (less for two-person shots, to keep the 180-degree rule)."""
+        then a little round to either side (less for two-person shots, to keep the 180-degree rule).
+        With `subjects`, other people in the way (a crowd round a fight) count as being in the way."""
         pos, aim = Vector(pos), Vector(aim)
-        if self.clear_view(aim, pos):
+        if self.clear_view(aim, pos, subjects):
             return pos
         off = pos - aim
         dist = off.length
@@ -256,8 +258,14 @@ class Director:
                 f = Matrix.Rotation(math.radians(yaw), 3, UP) @ (flat.normalized() if flat.length > 1e-6 else Vector((0, -1, 0)))
                 cand = aim + Vector((f.x * math.cos(e), f.y * math.cos(e), math.sin(e))) * dist
                 cand = self._keep_inside(cand)
-                if self.clear_view(aim, cand):
+                if self.clear_view(aim, cand, subjects):
                     return cand
+        if subjects is not None:          # no clear view past the people: come in closer, then settle for the walls
+            for k in (0.8, 0.65, 0.5):
+                cand = self._keep_inside(aim + (pos - aim) * k)
+                if self.clear_view(aim, cand, subjects):
+                    return cand
+            return self.unblock(pos, aim, kind)
         # nothing clear nearby: come in front of whatever is in the way
         dg = bpy.context.evaluated_depsgraph_get()
         dirn = (pos - aim).normalized()
@@ -275,6 +283,59 @@ class Director:
         if (loc - aim).length < 0.3:   # the aim point itself is inside something: leave it
             return pos
         return loc - dirn * 0.12
+
+    # ------------------------------------------------------------------ people in the way, over a whole shot
+    EXEMPT = ("over_shoulder", "group", "wide", "establishing", "custom", "pov", "cast", "insert")
+
+    def _people_in_way(self, pos, aim, subjects, t):
+        """Whether someone other than the subjects stands between the camera and its aim at time t, or
+        the camera is inside them. People are taken as upright cylinders (it's fast: no scene update)."""
+        for c in self.scene.actors.values():
+            if c in subjects or not c.visible(t):
+                continue
+            p = c.position(t)
+            H, r = c.height(), 0.13 * c.height() + 0.03      # shoulder-wide
+            z0 = value_at(c.root, "location", t)[2]
+            d = Vector(aim) - Vector(pos)
+            flat = Vector((d.x, d.y))
+            q = Vector((pos.x - p.x, pos.y - p.y))
+            if q.length < r + 0.15 and z0 - 0.1 < pos.z < z0 + H + 0.1:
+                return True                                        # inside them
+            if flat.length < 1e-6:
+                continue
+            u = max(0.0, min(1.0, -q.dot(flat) / flat.length_squared))
+            if (q + flat * u).length < r and z0 < pos.z + d.z * u < z0 + H and u < 0.97:
+                return True                                        # between the camera and the subject
+        return False
+
+    def _keep_clear_of_people(self, s, t0, t1):
+        """Over the whole of shot s, nobody but its subjects should block it; if someone does (a crowd round
+        a fight, people walking through), move the camera round, up or in until nobody does."""
+        if s.kind in self.EXEMPT or not s.subjects or len(self.scene.actors) <= len(s.subjects):
+            return
+        subjects = [self.character(c) for c in s.subjects]
+        times = [t0 + (t1 - t0) * k / 5 for k in range(6)] if t1 > t0 else [t0]
+        st = s.state
+
+        def clear(pos):
+            return not any(self._people_in_way(pos, st.aim, subjects, tt) for tt in times)
+        if clear(st.pos):
+            return
+        off = st.pos - st.aim
+        dist, flat = off.length, Vector((off.x, off.y, 0))
+        el = math.atan2(off.z, flat.length) if flat.length > 1e-6 else math.pi / 2
+        f0 = flat.normalized() if flat.length > 1e-6 else Vector((0, -1, 0))
+        for k in (1.0, 0.8, 0.65, 0.5):
+            for yaw in (0, 20, -20, 40, -40, 65, -65, 90, -90):
+                for rise in (0, 15, 30, 45):
+                    if k == 1.0 and yaw == 0 and rise == 0:
+                        continue
+                    e = min(math.radians(80), el + math.radians(rise))
+                    f = Matrix.Rotation(math.radians(yaw), 3, UP) @ f0
+                    cand = self._keep_inside(st.aim + Vector((f.x * math.cos(e), f.y * math.cos(e), math.sin(e))) * dist * k)
+                    if clear(cand) and self.clear_view(st.aim, cand):
+                        s.state = st.copy(pos=cand)
+                        return
 
     def in_front(self, pos, aim, margin=0.3):
         """`pos`, or if a wall (not a character) is between it and `aim`, just in front of the wall."""
@@ -300,7 +361,11 @@ class Director:
         at = self.scene._now() if at is None else at
         pos = self._keep_inside(pos)
         if kind not in ("custom", "pov", "cast"):
-            pos = self.unblock(pos, aim, kind)
+            # a shot of somebody shouldn't be of the back of somebody else (over-the-shoulder shots mean to be)
+            own = subjects if kind not in ("over_shoulder", "group", "wide", "establishing") and subjects else None
+            if own and len(self.scene.actors) > len(own):
+                self.scene.bscene.frame_set(keys.CLOCK.frame(at))     # where everyone is at that moment
+            pos = self.unblock(pos, aim, kind, own)
         s = Shot(kind, at, subjects, self._keep_inside(pos), Vector(aim), lens, fstop, label, roll, focus)
         self.shots.append(s)
         return s
@@ -652,6 +717,7 @@ class Director:
         for i, s in enumerate(shots):
             t0 = s.at
             t1 = (shots[i + 1].at if i + 1 < len(shots) else L) - spf
+            self._keep_clear_of_people(s, t0, t1)
             track = [(t0, s.state)]
             ease = "smooth"
             for mv, params in s.moves:

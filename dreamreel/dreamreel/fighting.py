@@ -724,6 +724,7 @@ class Brawl:
         self.last_cut = t
         from . import plugins
         subjects = plugins.get("shot", kind).subjects
+        kw.setdefault("lens", 20)          # a wide lens close in: inside the ring of fighters, the action big
         try:
             self.s.cut.shot(kind, of=who[0].key if subjects >= 1 else None,
                             other=who[1].key if subjects >= 2 and len(who) > 1 else None, at=max(0.0, t), **kw)
