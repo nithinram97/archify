@@ -243,7 +243,9 @@ dodges, flinches, knockdowns that throw a body through the air to land, lie and 
 the blow, with faces of effort and pain, the smack of the hit and the camera jolting. Whole fights,
 one against many, are staged the way stunt teams do it: a ring of attackers in their stances, coming in
 one or two at a time, each attack answered and countered, the pile-on and the hero bursting out of it,
-and bullet time. `cast = ["agent*8"]` brings eight identical copies of a character.
+and bullet time. `cast = ["agent*8"]` brings eight identical copies of a character. Realistic people
+fight with captured moves (real fighters from the CMU motion capture library), fall as ragdolls with
+real physics and get up the way people do, and a long coat is cloth that flares in a spin kick.
 
 ## Sound
 

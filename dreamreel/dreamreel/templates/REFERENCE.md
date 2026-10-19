@@ -327,6 +327,15 @@ moment, getting up), get_up. **stance**: guard up, bouncing on the toes. Faces f
 (`fierce`) and `pain`; the moods `focused` and `cold` suit the moments before. Blows sound where they
 land and the camera feels them. A mood shapes a move but never changes when its blow lands.
 
+Realistic people and rigged models fight with **captured moves**: real people punching, kicking,
+blocking, ducking and getting up off the floor, from the CMU Motion Capture Database (free for any
+use), played bone by bone and timed so the captured blow lands exactly on the beat. They're downloaded
+the first time a fight needs them (`dreamreel assets --pack fights` fetches them all). When they're
+**knocked down** they fall as ragdolls (real physics: they crumple, hit the ground and anything in the
+way, and lie however they landed), then get up with a captured get-up that starts from how they lie.
+A `long_coat` is cloth: its tails swing and flare in a spin kick and hang again after
+(`coat_cloth = false` keeps it stiff, which renders faster when scrubbing).
+
 Whole fights, one against many, are staged with three beats, the way stunt teams do it (attackers wait
 in a ring in their stances and come in one or two at a time; every attack is answered with a block or
 a dodge and a counter; whoever is beaten is thrown out of the fight, gets up and comes again; the
@@ -549,5 +558,5 @@ so trying a different one is quick.
 | `dreamreel extend KIND NAME` | start a new feature as a class in `extensions/` |
 | `dreamreel generate NAME --prompt/--image` | make a character (or `--prop`) with the AI modeller |
 | `dreamreel kit` | the modelling kit model recipes are written in |
-| `dreamreel assets [--download] [--pack P]` | Quaternius's free 3D packs: people, animals, furniture... |
+| `dreamreel assets [--download] [--pack P]` | free asset packs: Quaternius 3D (people, animals, furniture...), humans, materials, sounds, fights |
 | `dreamreel voices` | how to set up voices |

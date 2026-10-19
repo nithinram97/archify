@@ -34,7 +34,8 @@ Next, roughly in order:
 
 ## Acting
 - Open doors, sit on and climb things.
-- Physics for bodies (a character tripping and falling as a ragdoll), cloth and things that break.
+- Ragdolls beyond fights (tripping, falling down stairs), cloth for more clothes (skirts, capes, flags), and
+  things that break. (Done: ragdoll knockdowns, captured fight moves, a cloth coat.)
 - Walk cycles that follow curves and stairs; crowds walking in the background.
 - More gestures (hug, high-five, dance, fall over, sneak) and gesture layering while talking.
 - (Done: lip sync from the sounds of speech, with Rhubarb Lip Sync; visemes and the whole face from the voice
