@@ -1055,11 +1055,70 @@ class LongCoat(Wear):
         chest_rings = [(neck.z - 0.01 * H, c0[1], c0[2] + 0.01, 0.42 * person.body_r, c0[4] * 0.7),     # the collar
                        (shoulder_z + 0.015 * H, c0[1], c0[2], 1.0 * person.body_r, c0[4] * 0.95)] + chest_rings
         waist = ring(hips.z)
-        tails = [(z, waist[0], waist[1], waist[2] * (1 + 0.5 * k), waist[3] * (1 + 0.6 * k))
-                 for k, z in zip(np.linspace(0, 1, 5), np.linspace(hips.z, hem_z, 5))]
-        # the body of the coat follows the chest, the tails the hips (they flare as the legs move)
+        cloth = person.spec.get("coat_cloth", True)
+        rows = 12 if cloth else 5
+        tails = [(z, waist[0], waist[1], waist[2] * (1 + 0.35 * k), waist[3] * (1 + 0.45 * k))
+                 for k, z in zip(np.linspace(0, 1, rows), np.linspace(hips.z, hem_z, rows))]
+        # the body of the coat follows the chest; the tails hang from the waist and are cloth: they swing,
+        # flare and settle with the body's moves, and don't go through the legs
         person.attach(_open_tube(f"{person.name}.coat", chest_rings, mat, gap=0.1), "chest")
-        person.attach(_open_tube(f"{person.name}.coat.tails", tails, mat, gap=0.16), "hips")
+        if not cloth:
+            person.attach(_open_tube(f"{person.name}.coat.tails", tails, mat, gap=0.16), "hips")
+            return
+        skirt = _open_tube(f"{person.name}.coat.tails", tails, mat, gap=0.16, segments=36)
+        _skin_tails(skirt, person, waist, hips.z, hem_z)
+        _make_cloth(skirt, person)
+
+
+def _skin_tails(obj, person, waist, top, bottom):
+    """Let the tails follow the hips at the waist and more and more the thighs further down (the shape
+    the cloth is drawn back towards), and pin them to that shape firmly at the waist, loosely at the hem."""
+    bpy.context.view_layer.update()
+    mw = obj.matrix_world.copy()
+    obj.parent = person.rig
+    obj.matrix_parent_inverse = person.rig.matrix_world.inverted()
+    obj.matrix_world = mw
+    person.meshes.append(obj)
+    groups = {r: obj.vertex_groups.new(name=person.bone(r)) for r in ("hips", "l_hip", "r_hip")}
+    pin = obj.vertex_groups.new(name="pin")
+    left = 1 if person._joint("l_hip").x > waist[0] else -1
+    for v in obj.data.vertices:
+        k = min(1.0, max(0.0, (top - v.co.z) / max(1e-6, top - bottom)))
+        side = max(-1.0, min(1.0, (v.co.x - waist[0]) / waist[2])) * left
+        legs = 0.75 * k
+        wl = legs * (0.5 + 0.5 * side)
+        groups["l_hip"].add([v.index], wl, "REPLACE")
+        groups["r_hip"].add([v.index], legs - wl, "REPLACE")
+        groups["hips"].add([v.index], 1.0 - legs, "REPLACE")
+        pin.add([v.index], 1.0 - 0.8 * k ** 0.7, "REPLACE")
+    arm = obj.modifiers.new("skin", "ARMATURE")
+    arm.object = person.rig
+    obj.modifiers.move(len(obj.modifiers) - 1, 0)
+
+
+def _make_cloth(obj, person):
+    """Cloth drawn back towards its skinned shape by its "pin" weights, colliding with its wearer."""
+    mod = obj.modifiers.new("cloth", "CLOTH")
+    obj.modifiers.move(len(obj.modifiers) - 1, 1)          # after the skin, before the thickness
+    cs = mod.settings
+    cs.quality = 6
+    cs.mass = 0.5
+    cs.air_damping = 1.0
+    cs.tension_stiffness = cs.compression_stiffness = 30.0
+    cs.shear_stiffness = 15.0
+    cs.bending_stiffness = 2.0
+    cs.vertex_group_mass = "pin"
+    cs.pin_stiffness = 1.5
+    mod.collision_settings.use_collision = True
+    mod.collision_settings.distance_min = 0.012
+    mod.point_cache.frame_start = 1
+    mod.point_cache.frame_end = 1000000
+    for m in person.meshes:                                  # the body, the clothes and the shoes push it
+        if m is obj or m.type != "MESH" or not m.name.split(".")[-1] in ("body", "outfit", "shoes"):
+            continue
+        if not any(md.type == "COLLISION" for md in m.modifiers):
+            m.modifiers.new("collision", "COLLISION")
+            m.collision.thickness_outer = 0.015
 
 
 def _open_tube(name, rings, mat, gap=0.2, segments=28):
