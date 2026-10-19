@@ -34,6 +34,7 @@ import zipfile
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
 CACHE = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "makehuman")
 BASE = os.path.join(CACHE, "base")
@@ -378,13 +379,14 @@ class Recipe:
         self.eyes = spec.get("eyes", "brown")
         self.eyebrows = spec.get("eyebrows", "eyebrow001" if male else "eyebrow010")
         self.eyelashes = spec.get("eyelashes", "eyelashes01" if male else "eyelashes02")
-        pick = random.Random(f"{name}/outfit")
+        # a seed of its own makes the same person whatever the name (clones, twins)
+        self.seed = f"seed/{spec['seed']}" if spec.get("seed") not in (None, "") else f"{name}/"
+        pick = random.Random(f"{self.seed}/outfit" if spec.get("seed") not in (None, "") else f"{name}/outfit")
         self.outfit = spec.get("outfit") or pick.choice(OUTFITS["male" if male else "female"])
         self.outfit_tint = spec.get("outfit_tint")
         self.shoes = spec.get("shoes", "shoes01" if male else "shoes02")
         self.extra = list(spec.get("wear", []) or [])
         self.face = float(spec.get("face", 0.5))
-        self.seed = f"{name}/{spec.get('seed', '')}"
 
     def skin_file(self):
         if self.skin:
@@ -806,7 +808,8 @@ def _proxy_material(px, role, r, name):
 # ---------------------------------------------------------------------- the character
 from .keys import hold, key  # noqa: E402
 from .models import ModelCharacter  # noqa: E402
-from .plugins import Param  # noqa: E402
+from .plugins import Param, Plugin  # noqa: E402
+from . import look, shapes  # noqa: E402
 
 # Rhubarb's mouth shapes as visemes (the 15 mouth shapes of speech): {letter: {viseme: weight}}
 LETTER_VISEMES = {
@@ -842,6 +845,7 @@ class Human(ModelCharacter):
         Param("shoes", "choice", default=None, choices=("shoes01", "shoes02", "shoes03", "shoes04", "shoes05", "shoes06")),
         Param("face", "number", default=0.5, min=0, max=1, step=0.05, label="Face: how distinctive"),
         Param("height", "number", default=None, min=0.8, max=2.2, step=0.01, label="Height (m)"),
+        Param("extras", "choices", default=[], choices=("sunglasses", "long_coat"), label="Extras"),
         Param("voice", "voice"),
     ]
     default_capabilities = ("walk", "arms", "swing_legs", "face")
@@ -875,6 +879,28 @@ class Human(ModelCharacter):
 
     def _load(self):
         return build(self.spec, self.name)
+
+    def build(self):
+        super().build()
+        for name in self.spec.get("extras") or []:
+            from . import plugins
+            plugins.get("wear", name)().make(self)
+
+    def bone(self, role):
+        """The name of the skeleton's bone for a role ("head", "hips", "chest", "l_knee"...)."""
+        return self.roles[role]
+
+    def attach(self, obj, role):
+        """Make `obj` move with a bone, keeping where it is now."""
+        bpy.context.view_layer.update()          # a new object has no world position until then
+        mw = obj.matrix_world.copy()
+        obj.parent = self.rig
+        obj.parent_type = "BONE"
+        obj.parent_bone = self.bone(role)
+        bpy.context.view_layer.update()
+        obj.matrix_world = mw
+        self.meshes.append(obj)
+        return obj
 
     # ------------------------------------------------------------------ talking with visemes
     def _viseme_keys(self):
@@ -948,3 +974,116 @@ class Human(ModelCharacter):
                     key(kb, "value", t0 + t, max(0.0, min(1.0, float(w))), "linear")
         for kb in kbs[1:]:
             key(kb, "value", t0 + duration + 0.1, 0.0)
+
+
+# ---------------------------------------------------------------------- things dreamreel makes to wear
+class Wear(Plugin):
+    """Something a realistic person wears that dreamreel makes itself (MakeHuman's own clothes are the
+    `outfit` and `wear` settings). `make(person)` builds it and attaches it to the skeleton."""
+    kind = "wear"
+    abstract = True
+
+    def make(self, person):
+        raise NotImplementedError
+
+
+def _eye_centres(person):
+    bpy.context.view_layer.update()
+    eyes = next((m for m in person.meshes if m.name.endswith(".eyes")), None)
+    if eyes is None:
+        return None
+    pts = [eyes.matrix_world @ v.co for v in eyes.data.vertices]
+    out = []
+    for side in (1, -1):
+        mine = [p for p in pts if p.x * side > 0]
+        out.append((sum(mine, Vector()) / len(mine), max(p.y for p in mine) - min(p.y for p in mine)))
+    return out
+
+
+class Sunglasses(Wear):
+    """Narrow black sunglasses."""
+
+    def make(self, person):
+        eyes = _eye_centres(person)
+        if eyes is None:
+            return
+        black = look.plastic("#0b0b0d", rough=0.15, coat=0.8)
+        (l, d), (r, _) = eyes
+        front = min(l.y, r.y) - 0.55 * d - 0.006
+        for side, c in ((1, l), (-1, r)):
+            lens = shapes.ellipsoid(f"{person.name}.lens.{side}", 0.019, 0.004, 0.012, black, at=(c.x, front, c.z))
+            person.attach(lens, "head")
+        mid = (l + r) / 2
+        bridge = shapes.box(f"{person.name}.bridge", abs(l.x - r.x), 0.004, 0.004, black, at=(mid.x, front, mid.z + 0.004),
+                            bevel=0, base=False)
+        person.attach(bridge, "head")
+        for side, c in ((1, l), (-1, r)):          # the arms back to the ears
+            arm = shapes.box(f"{person.name}.temple.{side}", 0.003, 0.09, 0.004, black,
+                             at=(c.x + side * 0.024, front + 0.045, c.z + 0.002), bevel=0, base=False)
+            person.attach(arm, "head")
+
+
+class LongCoat(Wear):
+    """A long coat from the shoulders to the shins, open at the front, its tails flaring as they swing."""
+    color = "#0d0d10"
+
+    def make(self, person):
+        H = person.H
+        bpy.context.view_layer.update()
+        J = person._joint
+        hips = J("hips")
+        knee = (J("l_knee") + J("r_knee")) / 2
+        mat = look.matte(person.spec.get("coat_color") or self.color, 0.55).copy()
+        mat["dr_material"] = "leather"
+        body = next(m for m in person.meshes if m.name.endswith(".body"))
+        pts = np.array([tuple(body.matrix_world @ v.co) for v in body.data.vertices])
+        cx = (J("l_arm").x + J("r_arm").x) / 2
+        reach = 0.6 * person.body_r                     # the torso, not the arms
+
+        def ring(z, grow=1.0):
+            near = pts[(np.abs(pts[:, 2] - z) < 0.02 * H) & (np.abs(pts[:, 0] - cx) < reach)]
+            if len(near) < 8:
+                return (cx, hips.y, 0.17 * H * grow, 0.11 * H * grow)
+            x0, x1 = near[:, 0].min(), near[:, 0].max()
+            y0, y1 = near[:, 1].min(), near[:, 1].max()
+            rx = min((x1 - x0) / 2, 0.85 * person.body_r)
+            return ((x0 + x1) / 2, (y0 + y1) / 2, rx * grow + 0.015, (y1 - y0) / 2 * grow + 0.02)
+
+        neck, shoulder_z, hem_z = J("neck"), J("l_arm").z, knee.z - 0.17 * H
+        chest_rings = [(z, *ring(z)) for z in np.linspace(shoulder_z - 0.06 * H, hips.z - 0.06 * H, 4)]  # over the tails
+        c0 = chest_rings[0]
+        chest_rings = [(neck.z - 0.01 * H, c0[1], c0[2] + 0.01, 0.42 * person.body_r, c0[4] * 0.7),     # the collar
+                       (shoulder_z + 0.015 * H, c0[1], c0[2], 1.0 * person.body_r, c0[4] * 0.95)] + chest_rings
+        waist = ring(hips.z)
+        tails = [(z, waist[0], waist[1], waist[2] * (1 + 0.5 * k), waist[3] * (1 + 0.6 * k))
+                 for k, z in zip(np.linspace(0, 1, 5), np.linspace(hips.z, hem_z, 5))]
+        # the body of the coat follows the chest, the tails the hips (they flare as the legs move)
+        person.attach(_open_tube(f"{person.name}.coat", chest_rings, mat, gap=0.1), "chest")
+        person.attach(_open_tube(f"{person.name}.coat.tails", tails, mat, gap=0.16), "hips")
+
+
+def _open_tube(name, rings, mat, gap=0.2, segments=28):
+    """A tube through elliptical rings (height, centre x, centre y, radius x, radius y), open down the
+    front (a `gap` of the circle)."""
+    import bmesh
+    bm = bmesh.new()
+    a0 = -math.pi / 2 + gap * math.pi            # the front is -y; leave it open
+    span = 2 * math.pi * (1 - gap)
+    rows = []
+    for z, cx, cy, rx, ry in rings:
+        rows.append([bm.verts.new((cx + rx * math.cos(a0 + span * i / segments),
+                                   cy + ry * math.sin(a0 + span * i / segments), z)) for i in range(segments + 1)])
+    for a, b in zip(rows, rows[1:]):
+        for i in range(segments):
+            bm.faces.new((a[i], a[i + 1], b[i + 1], b[i]))
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for p in me.polygons:
+        p.use_smooth = True
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(obj)
+    me.materials.append(mat)
+    mod = obj.modifiers.new("cloth thickness", "SOLIDIFY")
+    mod.thickness = 0.008
+    return obj

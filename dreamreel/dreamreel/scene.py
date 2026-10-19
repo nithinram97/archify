@@ -109,16 +109,33 @@ class Scene:
         keyword arguments (s.cast(kid={"hair": "spiky", "top": "yellow"}))."""
         out = []
         for n in names:
-            spec = self.project.cast_spec(n) if self.project else None
+            base, _, count = str(n).partition("*")      # "smith*8": eight of them, smith_1 ... smith_8
+            spec = self.project.cast_spec(base.strip()) if self.project else None
             if spec is None:
-                raise ValueError(f"no cast member called {n!r}: create cast/{n}.toml")
-            out.append(self._add_actor(n, spec))
+                raise ValueError(f"no cast member called {base.strip()!r}: create cast/{base.strip()}.toml")
+            if not count:
+                out.append(self._add_actor(n, spec))
+                continue
+            out += self._add_copies(base.strip(), spec, int(count))
         for n, spec in specs.items():
             out.append(self._add_actor(n, spec))
         for i, c in enumerate(out):  # start somewhere sensible until placed
             if not keys._compat.fcurves(c.root):
                 c.root.location = (-1.0 + 2.0 * i / max(1, len(out) - 1), -0.5, 0) if len(out) > 1 else (0, -0.5, 0)
         return out[0] if len(out) == 1 else out
+
+    def _add_copies(self, base, spec, count):
+        """`count` identical copies of a character (clones, a squad, a crowd of twins): the same face
+        and body, keyed base_1 ... base_N and named "Name 1" ... "Name N"."""
+        display = spec.get("name", base.capitalize())
+        return [self._add_actor(f"{base}_{i}", dict(spec, name=f"{display} {i}", seed=spec.get("seed", base)))
+                for i in range(1, count + 1)]
+
+    def matching(self, pattern):
+        """The characters whose key matches a pattern ("smith_*"), or a list of names, in cast order."""
+        import fnmatch
+        pats = [pattern] if isinstance(pattern, str) else list(pattern)
+        return [c for k, c in self.actors.items() if any(fnmatch.fnmatch(k, p) or k == p for p in pats)]
 
     def _add_actor(self, key_name, spec):
         spec = dict(spec)

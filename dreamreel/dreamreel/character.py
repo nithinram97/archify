@@ -645,6 +645,14 @@ class Character(Plugin):
         self.mood = mood
         return self._end(t1, wait)
 
+    def flash(self, mood, at, hold=0.5, how_much=1.0):
+        """A moment of a feeling (the effort of a blow, a wince) that passes back into the mood they were in."""
+        from . import face
+        before = [(t, m, a) for t, m, a in getattr(self, "_moods", []) if t <= at]
+        back, amount = (before[-1][1], before[-1][2]) if before else ("neutral", 1.0)
+        face.apply(self, face.values(plugins.get("mood", mood), how_much), at, at + 0.08)
+        face.apply(self, face.values(plugins.get("mood", back), amount), at + hold, at + hold + 0.3)
+
     # ------------------------------------------------------------------ talking
     def say(self, line, mood=None, to=None, at=None, wait=True):
         """Speak a line: mouth, head and subtitles are animated; with a voice set up it's also heard.
@@ -842,12 +850,17 @@ class Character(Plugin):
         t = self._start(at)
         for arm in self.arms.values():
             hold(arm, "rotation_euler", t)
+        for leg in (getattr(self, "legs", None) or {}).values():   # a move keys a limb from where it is now,
+            hold(leg, "rotation_euler", t)                          # not from its rest pose back at 0 s
+        hold(self.hips, "location", t)
         self._hold_reach(t)
         hold(self.body, "rotation_euler", t)
         n_sounds = len(self.scene.sound_fx)
         with keys.recording() as curves:
             end = g().perform(self, t, target=target)
         effort = acting.effort_of(self, t, how)
+        if g.keeps_time:
+            effort = acting.Steady(effort)
         end = acting.shape(curves, t, end, effort, self.scene.exaggeration)
         tempo = effort.tempo()          # the gesture's sounds keep time with its retimed moves
         fx = self.scene.sound_fx

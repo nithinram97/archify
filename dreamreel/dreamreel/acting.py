@@ -22,6 +22,20 @@ from . import keys
 from .plugins import Param, Plugin
 
 
+class Steady:
+    """An effort with its timing taken out: shapes a move (anticipation, overshoot, size) without
+    speeding it up or slowing it down, for moves that have to meet someone else's."""
+
+    def __init__(self, effort):
+        self.effort = effort
+
+    def tempo(self):
+        return 1.0
+
+    def __getattr__(self, name):
+        return getattr(self.effort, name)
+
+
 class Effort:
     def __init__(self, weight=0.0, time=0.0, space=0.0, flow=0.0):
         self.weight, self.time, self.space, self.flow = (max(-1.0, min(1.0, float(v)))

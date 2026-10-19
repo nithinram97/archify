@@ -236,6 +236,15 @@ of a scene, cut away, come back), J and L cuts and split screens. Inside a scene
 speed ramps), freeze frames and jump cuts retime the animation itself, so slow motion is smooth,
 and screen effects fade, flash or dip the picture. Changing the edit never re-renders a scene.
 
+## Fights
+
+Strikes (jab, punch, hook, uppercut, kicks, spinning and flying kicks, sweeps) and reactions (blocks,
+dodges, flinches, knockdowns that throw a body through the air to land, lie and get up again) meet on
+the blow, with faces of effort and pain, the smack of the hit and the camera jolting. Whole fights,
+one against many, are staged the way stunt teams do it: a ring of attackers in their stances, coming in
+one or two at a time, each attack answered and countered, the pile-on and the hero bursting out of it,
+and bullet time. `cast = ["agent*8"]` brings eight identical copies of a character.
+
 ## Sound
 
 Scenes sound like what happens in them: footsteps on wood, carpet, concrete, grass or snow; the

@@ -93,6 +93,13 @@ MOODS = {
                     sweat=1.0, head_tilt=4),
     "bored": dict(brow_lift=-0.004, lids=0.6, frown=0.15, eyes=1.0, head_tilt=6),
     "loving": dict(brow_tilt=10, brow_lift=0.01, smile=0.8, squint=0.6, lids=0.3, blush=0.8, head_tilt=10),
+    # fighting: the effort of a blow, the pain of taking one, the calm before
+    "fierce": dict(brow_tilt=-28, brow_lift=-0.014, brow_squeeze=0.9, wide=0.85, teeth=1.0, mouth_open=0.18,
+                   squint=0.6, lid_slant=-0.7, head_tilt=6),
+    "pain": dict(brow_tilt=26, brow_lift=0.008, brow_squeeze=1.0, squint=1.0, lids=0.65, wide=0.8, teeth=0.7,
+                 mouth_open=0.45, eyes=0.85, head_tilt=-10),
+    "focused": dict(brow_tilt=-8, brow_squeeze=0.3, lids=0.2, squint=0.25, eyes=0.95, head_tilt=4),
+    "cold": dict(brow_tilt=-6, lids=0.3, smirk=0.25, eyes=0.9, head_tilt=-3),
 }
 for _n, _v in MOODS.items():
     Mood.define(_n, **_v)

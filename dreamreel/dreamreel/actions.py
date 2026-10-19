@@ -389,6 +389,88 @@ class SlowMotion(Action):
         s.slow_motion(float(seconds), float(speed), float(ramp), float(after))
 
 
+class Surround(Action):
+    scope = "scene"
+    label = "surround"
+    description = "Attackers walk to a ring round someone and face them"
+    sentence = "{attackers} surround {hero}"
+    params = [Param("hero", "character", label="Who"), Param("attackers", "text", default="*", label="Attackers (names or a pattern)"),
+              Param("radius", "number", default=1.8, min=0.8, max=6, step=0.1, label="Ring (m)"),
+              Param("enter_from", "number", default=0, min=0, max=30, step=0.5, label="Coming from (m away; 0: where they are)"),
+              Param("seed", "number", default=0, step=1, label="Variation")]
+
+    def run(self, s, who, hero=None, attackers="*", radius=1.8, enter_from=0, seed=0):
+        from . import fighting
+        hero, crowd = _fighters(s, hero or who, attackers)
+        s._end(None, fighting.surround(s, hero, crowd, s.clock, float(radius), int(seed), float(enter_from or 0) or None))
+
+
+class Brawl(Action):
+    scope = "scene"
+    label = "brawl"
+    description = "A choreographed fight, one against many: they come in one or two at a time, the hero answers"
+    sentence = "{hero} fights {attackers}"
+    params = [Param("hero", "character", label="Hero"), Param("attackers", "text", default="*", label="Attackers (names or a pattern)"),
+              Param("exchanges", "number", default=8, min=1, max=60, step=1, label="Exchanges"),
+              Param("pressure", "number", default=0.35, min=0, max=1, step=0.05, label="Pressure (overlap)"),
+              Param("doubles", "number", default=0.3, min=0, max=1, step=0.05, label="Two at once (share)"),
+              Param("coverage", "bool", default=True, label="Camera cuts on the action"),
+              Param("seed", "number", default=0, step=1, label="Variation")]
+
+    def run(self, s, who, hero=None, attackers="*", exchanges=8, pressure=0.35, doubles=0.3, coverage=True, seed=0):
+        from . import fighting
+        hero, crowd = _fighters(s, hero or who, attackers)
+        s._end(None, fighting.brawl(s, hero, crowd, s.clock, int(exchanges), int(seed), float(pressure), float(doubles),
+                                     bool(coverage)))
+
+
+class Burst(Action):
+    scope = "scene"
+    label = "burst"
+    description = "They all pile on the hero, who bursts out and throws them in every direction"
+    sentence = "{hero} bursts out of {attackers}"
+    params = [Param("hero", "character", label="Hero"), Param("attackers", "text", default="*", label="Attackers (names or a pattern)"),
+              Param("hold", "number", default=0.9, min=0.2, max=4, step=0.1, label="Buried for (s)"),
+              Param("coverage", "bool", default=True, label="Camera"), Param("seed", "number", default=0, step=1)]
+
+    def run(self, s, who, hero=None, attackers="*", hold=0.9, coverage=True, seed=0):
+        from . import fighting
+        hero, crowd = _fighters(s, hero or who, attackers)
+        s._end(None, fighting.burst(s, hero, crowd, s.clock, float(hold), int(seed), bool(coverage)))
+
+
+def _fighters(s, hero, attackers):
+    h = s.character(hero)
+    if h is None:
+        raise ValueError(f"no one called {hero!r} in the scene")
+    pats = attackers if isinstance(attackers, (list, tuple)) else [p.strip() for p in str(attackers).split(",")]
+    crowd = [c for c in s.matching(pats) if c is not h]
+    if not crowd:
+        raise ValueError(f"no attackers match {attackers!r}")
+    return h, crowd
+
+
+class BulletTime(Action):
+    scope = "scene"
+    label = "bullet time"
+    description = "Time all but stops while the camera circles the action (put the action after it)"
+    sentence = "bullet time round {of} for {seconds} s"
+    params = [Param("of", "character", label="Round"),
+              Param("seconds", "number", default=1.0, min=0.2, max=10, step=0.1, label="For (story seconds)"),
+              Param("speed", "number", default=0.12, min=0.02, max=1, step=0.01, label="Speed"),
+              Param("amount", "number", default=140, min=10, max=360, step=10, label="Circling (degrees)"),
+              Param("shot", "shot", default="full", label="Framing"),
+              Param("after", "number", default=0.0, min=0, max=30, step=0.1, label="Starting after (s)")]
+
+    def run(self, s, who, of=None, seconds=1.0, speed=0.12, amount=140, shot="full", after=0.0):
+        subject = of or who
+        if subject is None:
+            raise ValueError("bullet time needs someone to circle (of = ...)")
+        t = s.clock + float(after)
+        s.slow_motion(float(seconds), float(speed), 0.15, float(after))
+        s.cut.shot(shot or "full", of=subject, at=t, move="orbit_right", amount=float(amount), duration=float(seconds) + 0.2)
+
+
 class Sound(Action):
     scope = "scene"
     label = "sound"

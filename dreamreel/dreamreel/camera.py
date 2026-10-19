@@ -126,6 +126,7 @@ class Director:
         self.shots = []          # shots asked for (by beats or Python)
         self.final = []          # what gets keyed (after automatic coverage is merged in)
         self.manual = False      # True: no automatic coverage at all (stills, cast photos)
+        self.impulses = []       # (time, strength) of blows the camera feels (see impact)
 
     # ------------------------------------------------------------------ geometry helpers
     def _fov(self, lens):
@@ -646,6 +647,37 @@ class Director:
                 key(self.cam, "rotation_euler", t, (0, 0, math.radians(st.roll)), e)
                 key(cd.dof, "aperture_fstop", t, st.fstop, e)
                 key(cd.dof, "focus_distance", t, max(0.1, (st.focus - pos).length), e)
+        self._shake()
+
+    def impact(self, t, strength=0.5):
+        """The camera feels a blow at `t` (strength 0-1): a jolt that dies away in a few frames."""
+        self.impulses.append((float(t), max(0.0, min(1.5, float(strength)))))
+
+    def _shake(self):
+        if not self.impulses:
+            return
+        shaker = bpy.data.objects.new("camera.shaker", None)
+        self.scene.bscene.collection.objects.link(shaker)
+        self.aim.parent = shaker
+        fps, decay, hz = self.scene.fps, 0.28, 13.0
+        rng = random.Random(7)
+        kicks = [(t0, s, Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.6, 1))).normalized(),
+                  rng.uniform(0, 6.28)) for t0, s in sorted(self.impulses)]
+
+        def offset(t):
+            v = Vector()
+            for t0, s, d, ph in kicks:
+                if 0 <= t - t0 < decay:
+                    u = t - t0
+                    v += d * (0.06 * s * math.exp(-u * 11) * math.cos(2 * math.pi * hz * u + ph))
+            return v
+        frames = set()
+        for t0, *_ in kicks:
+            f0 = keys.CLOCK.frame(t0)
+            frames.update(range(f0 - 1, f0 + int(decay * fps) + 2))
+        for f in sorted(frames):
+            shaker.location = offset(keys.CLOCK.seconds(f))
+            shaker.keyframe_insert("location", frame=f)
 
     def describe(self):
         shots = self.final or sorted(self.shots, key=lambda s: s.at)

@@ -120,7 +120,9 @@ outfit = "female_elegantsuit01"   # female_elegantsuit01, female_sportsuit01, ma
 outfit_tint = "teal"        # optional: the outfit in another colour
 shoes = "shoes02"           # shoes01-06
 face = 0.5                  # how distinctive the face is (0-1); the same name always gives the same face
+seed = "twins"              # optional: the same seed gives the same person whatever the name
 height = 1.62               # metres
+extras = ["sunglasses", "long_coat"]   # things dreamreel makes for them (coat_color = "#101010")
 ```
 
 Realistic people walk, sit (knees bent, feet on the floor), gesture with bending elbows, perform
@@ -241,7 +243,7 @@ physics: they fall, bounce, roll, tip over and knock into each other, then stay 
 
 ```toml
 set = "kitchen"
-cast = ["mia", "tom"]
+cast = ["mia", "tom"]        # "agent*8" brings eight identical copies of cast/agent.toml: agent_1 ... agent_8
 time_of_day = "golden_hour"  # dawn, morning, day, golden_hour, sunset, dusk, night
 weather = "rain"             # clear, cloudy, overcast, fog, rain, snow, storm, windy
 weather_strength = 1.0       # 0.3 a little ... 2 a lot
@@ -314,8 +316,50 @@ lid_slant, smile, frown, wide, o, smirk, mouth_open, teeth, blush, tears, sweat,
 
 **Gestures**: wave, nod, shake_head, shrug, point, jump, cheer, facepalm, clap, think, bow, stomp
 (toys); roar, sniff, spin, tail_wag, flap, rear_up, croak, tongue (any body that has what it needs).
-Fighting: jab, punch, kick (give a `target`; a punch steps in until it lands), block, dodge, flinch (start
-these with the blow, `with_previous = true`, so the defence meets it).
+
+
+## Fights
+
+**Strikes** (give a `target`; they step in until they land): jab, punch, hook, uppercut, kick, spin_kick,
+flying_kick, sweep. **Reactions** (start them with the blow, `with_previous = true`, and they meet it
+whenever it lands): block, dodge, flinch, knocked_down (thrown through the air on to their back, lying a
+moment, getting up), get_up. **stance**: guard up, bouncing on the toes. Faces flash with effort
+(`fierce`) and `pain`; the moods `focused` and `cold` suit the moments before. Blows sound where they
+land and the camera feels them. A mood shapes a move but never changes when its blow lands.
+
+Whole fights, one against many, are staged with three beats, the way stunt teams do it (attackers wait
+in a ring in their stances and come in one or two at a time; every attack is answered with a block or
+a dodge and a counter; whoever is beaten is thrown out of the fight, gets up and comes again; the
+camera cuts on the blows):
+
+```toml
+[[beats]]
+do = "surround"          # they walk to a ring round the hero
+hero = "neo"
+attackers = "smith_*"    # names, or a pattern
+radius = 2.0
+enter_from = 7.0         # they start from a ring this far out (0: from where they are)
+
+[[beats]]
+do = "brawl"
+hero = "neo"
+attackers = "smith_*"
+exchanges = 8
+doubles = 0.3            # how often two come at once
+pressure = 0.35          # how hard they keep coming
+seed = 1                 # another seed, another fight
+
+[[beats]]
+do = "burst"             # they all pile on; the hero bursts out, throwing them every way
+hero = "neo"
+attackers = "smith_*"
+
+[[beats]]
+do = "bullet_time"       # time all but stops while the camera circles (put the action after it)
+of = "neo"
+seconds = 0.8
+speed = 0.25
+```
 
 ## Sound
 

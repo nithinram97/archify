@@ -62,6 +62,10 @@ Next, roughly in order:
 - Sets that span several rooms, with cuts between them.
 
 ## Film-making
+- (Done: fight choreography: strikes and reactions that meet, knockdowns, get-ups, stances, fight faces, camera shake,
+  bullet time, and surround / brawl / burst staging of one against many; identical clones with `name*N`.)
+- Fights with things: staffs, poles and chairs as weapons; bodies hitting walls, cars and each other.
+- Knockdowns driven by physics (ragdolls) for falls nobody has to choreograph.
 - Shot variety learnt from scene content (reaction shots, cutaways to props).
 - (Done: sound effects, footsteps, ambience and music ducking, see REFERENCE.md "Sound".)
 - Sounds placed in space (louder near the camera, panned left and right); pitch following slow motion.
