@@ -240,15 +240,17 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
     for m in cloth:
         m.show_viewport = True
     # tidy up: the simulation goes, its result stays on the skeletons
+    # (the joints go before the parts they join, and the world last: a joint let go of after its part is
+    # gone crashes Blender)
     rw.point_cache.frame_start, rw.point_cache.frame_end = 1, 250
-    if not had_world:
-        bpy.ops.rigidbody.world_remove()
-    for o in made:
+    for o in reversed(made):
         data = o.data if o.type == "MESH" and o.data and o.data.users == 1 and o.name.startswith("rag.") else None
         bpy.data.objects.remove(o)
         if data is not None:
             bpy.data.meshes.remove(data)
     bpy.data.collections.remove(coll)
+    if not had_world:
+        bpy.ops.rigidbody.world_remove()
     out = {}
     for c, parts in bodies.items():
         out[c] = _bake(c, track[c], now[c], bones_at[c], f0, settle)
