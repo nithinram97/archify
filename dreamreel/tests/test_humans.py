@@ -144,6 +144,40 @@ def fight():
     print(f"  fight: ok (jab {near:.2f} m from the face, kick {highest:.2f} m high)")
 
 
+def coat():
+    s = dr.Scene({"kind": "outdoor", "biome": "meadow", "trees": 0})
+    neo = s.cast(neo=dict(type="human", gender="male", extras=["long_coat"]))
+    neo.place((-1, 0), facing="right")
+    neo.walk_to((0.5, 0), speed="fast")
+    s.end_time = s.clock + 1.5
+    s.finish()
+    tails = next(m for m in neo.meshes if m.name.endswith("coat.tails"))
+    assert [m.type for m in tails.modifiers][:2] == ["ARMATURE", "CLOTH"], "skinned to the legs, then cloth"
+    sc = bpy.context.scene
+    dg = bpy.context.evaluated_depsgraph_get()
+
+    def hem():                              # the lowest ring, relative to the hips
+        me = tails.evaluated_get(dg).to_mesh()
+        pts = np.array([tuple(tails.matrix_world @ v.co) for v in me.vertices])
+        tails.evaluated_get(dg).to_mesh_clear()
+        low = pts[pts[:, 2] < pts[:, 2].min() + 0.03]
+        return low.mean(axis=0) - np.array(neo.root.matrix_world.translation)
+    rest = None
+    swing = 0.0
+    end = dr.keys.CLOCK.frame(s.length)
+    for f in range(1, end):                 # cloth needs every frame in turn
+        sc.frame_set(f)
+        dg = bpy.context.evaluated_depsgraph_get()
+        h = hem()
+        if rest is None:
+            rest = h
+        swing = max(swing, float(np.linalg.norm(h - rest)))
+    settled = float(np.linalg.norm(hem() - rest))
+    assert swing > 0.03, ("the tails swing as he walks", swing)
+    assert settled < 0.06, ("and hang again when he stops", settled)
+    print(f"  coat: ok (the tails swing {swing * 100:.0f} cm and settle within {settled * 100:.0f} cm)")
+
+
 def main():
     stand_in()
     if not humans.installed():
@@ -152,6 +186,7 @@ def main():
     recipes()
     person()
     fight()
+    coat()
     print("humans: all ok")
 
 
