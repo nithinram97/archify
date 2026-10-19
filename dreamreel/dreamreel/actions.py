@@ -468,7 +468,7 @@ class BulletTime(Action):
             raise ValueError("bullet time needs someone to circle (of = ...)")
         t = s.clock + float(after)
         s.slow_motion(float(seconds), float(speed), 0.15, float(after))
-        s.cut.shot(shot or "full", of=subject, at=t, move="orbit_right", amount=float(amount), duration=float(seconds) + 0.2)
+        s.cut.shot(shot or "full", of=subject, at=t, move="orbit_right", amount=float(amount))   # held until the next cut
 
 
 class Sound(Action):
