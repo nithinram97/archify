@@ -211,7 +211,10 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
                 twist = 0.4 if ax == "z" else 1.0          # little twist along the limb
                 setattr(rc, f"limit_ang_{ax}_lower", -math.radians(lim * twist))
                 setattr(rc, f"limit_ang_{ax}_upper", math.radians(lim * twist))
-    # run it until everyone is still
+    # run it until everyone is still (cloth sits it out: it's simulated when the film plays)
+    cloth = [m for o in bpy.data.objects for m in o.modifiers if m.type == "CLOTH" and m.show_viewport]
+    for m in cloth:
+        m.show_viewport = False
     track = {c: {name: [] for name in parts} for c, parts in bodies.items()}
     rest_at = {c: None for c in bodies}
     still = {c: 0 for c in bodies}
@@ -234,6 +237,8 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
                     rest_at[c] = f
         if all(r is not None for r in rest_at.values()):
             break
+    for m in cloth:
+        m.show_viewport = True
     # tidy up: the simulation goes, its result stays on the skeletons
     rw.point_cache.frame_start, rw.point_cache.frame_end = 1, 250
     if not had_world:
