@@ -316,6 +316,8 @@ class Director:
         subjects = [self.character(c) for c in s.subjects]
         times = [t0 + (t1 - t0) * k / 5 for k in range(6)] if t1 > t0 else [t0]
         st = s.state
+        if (st.pos - st.aim).length < 1.2:          # close shots: someone that close is in the shot, not in the way
+            return
 
         def clear(pos):
             return not any(self._people_in_way(pos, st.aim, subjects, tt) for tt in times)
@@ -326,6 +328,8 @@ class Director:
         el = math.atan2(off.z, flat.length) if flat.length > 1e-6 else math.pi / 2
         f0 = flat.normalized() if flat.length > 1e-6 else Vector((0, -1, 0))
         for k in (1.0, 0.8, 0.65, 0.5):
+            if dist * k < 1.0:
+                break
             for yaw in (0, 20, -20, 40, -40, 65, -65, 90, -90):
                 for rise in (0, 15, 30, 45):
                     if k == 1.0 and yaw == 0 and rise == 0:
@@ -727,8 +731,8 @@ class Director:
             for j, (t, st) in enumerate(track):
                 e = "cut" if j == len(track) - 1 else ease
                 pos = self._keep_inside(st.pos)
-                if j > 0 and s.kind not in ("custom", "pov", "cast"):
-                    pos = self.in_front(pos, st.aim)      # a move (an orbit, a pull-out) mustn't end up inside a wall
+                if s.kind not in ("custom", "pov", "cast"):
+                    pos = self.in_front(pos, st.aim)      # never inside a wall, wherever a move takes it
                 key(self.rig, "location", t, tuple(pos), e)
                 key(self.aim, "location", t, tuple(st.aim), e)
                 key(cd, "lens", t, st.lens, e)
