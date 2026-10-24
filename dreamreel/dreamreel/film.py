@@ -140,11 +140,14 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
     s = build(proj, path)
     _apply_quality(s, quality, percent)
     r = s.bscene.render
-    _compat.set_video_output(r)
-    r.ffmpeg.constant_rate_factor = "HIGH"
-    r.filepath = out
     print(f"[dreamreel] rendering {name}: {s.bscene.frame_end} frames", flush=True)
-    bpy.ops.render.render(animation=True)
+    if quality == "final":
+        _render_frames(proj, s, name, digest, out)
+    else:
+        _compat.set_video_output(r)
+        r.ffmpeg.constant_rate_factor = "HIGH"
+        r.filepath = out
+        bpy.ops.render.render(animation=True)
     meta = s.metadata()
     meta["size"] = [int(r.resolution_x * r.resolution_percentage / 100), int(r.resolution_y * r.resolution_percentage / 100)]
     meta["hash"] = digest
@@ -154,6 +157,38 @@ def render_scene(proj, path, quality="final", percent=None, force=False):
         json.dump(meta, f, indent=1)
     print(f"[dreamreel] {name}: rendered {os.path.relpath(out, proj.root)}")
     return meta
+
+
+def _render_frames(proj, s, name, digest, out):
+    """A final render goes frame by frame into renders/final/<scene>.frames/ and is then made into the
+    video, so if it's stopped (a closed laptop, a lost connection) it carries on from where it was:
+    frames already there for this version of the scene aren't rendered again."""
+    import shutil
+    import subprocess
+    sc, r = s.bscene, s.bscene.render
+    root = proj.renders("final", f"{name}.frames")
+    frames = os.path.join(root, digest[:12])
+    for old in os.listdir(root):                 # frames of an older version of the scene go
+        if old != digest[:12]:
+            shutil.rmtree(os.path.join(root, old), ignore_errors=True)
+    os.makedirs(frames, exist_ok=True)
+    done = sorted(f for f in os.listdir(frames) if f.endswith(".png"))
+    if done:                                     # the last one may have been cut off mid-write
+        os.remove(os.path.join(frames, done[-1]))
+        done = done[:-1]
+    first = sc.frame_start + len(done)
+    if done:
+        print(f"[dreamreel] {name}: {len(done)} frames already rendered, carrying on from frame {first}", flush=True)
+        if any(m.type == "CLOTH" for o in sc.objects for m in o.modifiers):
+            for f in range(sc.frame_start, first):  # cloth has to live through every frame before
+                sc.frame_set(f)
+    _compat.set_image_output(r)
+    r.use_overwrite, r.use_placeholder = False, False
+    r.filepath = os.path.join(frames, "####")
+    bpy.ops.render.render(animation=True)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", str(s.fps), "-start_number",
+                    str(sc.frame_start), "-i", os.path.join(frames, "%04d.png"), "-c:v", "libx264", "-crf", "16",
+                    "-pix_fmt", "yuv420p", out], check=True)
 
 
 def duck(strip, spans, amount, fade=6):
