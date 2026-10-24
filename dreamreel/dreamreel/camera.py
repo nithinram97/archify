@@ -308,6 +308,66 @@ class Director:
                 return True                                        # between the camera and the subject
         return False
 
+    CLOSE = ("extreme_close_up", "close_up", "medium_close")
+    HEADROOM = 0.84           # the top of a head stays below this much of the half-height above centre (8% margin)
+    FACE_ANGLE = 70.0         # degrees: in close shots the camera stays this near where the face points
+
+    def _face_dir(self, c, t):
+        """Where the face points at `t` (the body's heading turned by the neck), as a flat vector."""
+        h = c.heading(t)
+        if getattr(c, "neck", None) is not None:
+            h += value_at(c.neck, "rotation_euler", t)[2]
+        return Vector((math.sin(h), -math.cos(h)))
+
+    def _keep_framed(self, s, t0, t1):
+        """Over the whole of shot s (not only its first moment): close shots stay round the side the face
+        turns to, and nobody's head goes out of the top of the frame (tilt up a little, else pull back)."""
+        if s.kind in self.EXEMPT or not s.subjects or s.manual:
+            return
+        subjects = [c for c in (self.character(k) for k in s.subjects) if c is not None]
+        if not subjects:
+            return
+        times = [t0 + (t1 - t0) * k / 5 for k in range(6)] if t1 > t0 else [t0]
+        st = s.state
+        if s.kind in self.CLOSE and len(subjects) == 1:
+            c = subjects[0]
+            later = [tt for tt in times if tt >= t0 + 0.35 * (t1 - t0)] or times      # after any head turn
+            face = sum((self._face_dir(c, tt) for tt in later), Vector((0, 0)))
+            head = c.head_point(later[len(later) // 2])
+            to_cam = Vector((st.pos.x - head.x, st.pos.y - head.y))
+            if face.length > 1e-3 and to_cam.length > 1e-3:
+                face.normalize()
+                ang = math.degrees(face.angle_signed(to_cam.normalized()))
+                if abs(ang) > self.FACE_ANGLE:
+                    turn = math.radians(-math.copysign(abs(ang) - self.FACE_ANGLE + 10, ang))
+                    off = st.pos - st.aim
+                    rot = Matrix.Rotation(turn, 3, UP)
+                    s.state = st = st.copy(pos=st.aim + rot @ off)
+        _, v = self._fov(st.lens)
+        top = math.tan(v / 2) * self.HEADROOM
+
+        def worst(pos, aim):
+            fwd = (aim - pos).normalized()
+            right = fwd.cross(UP).normalized()
+            up = right.cross(fwd)
+            out = -1e9
+            for tt in times:
+                for c in subjects:
+                    p = c.head_point(tt) + Vector((0, 0, 1.6 * c.head_r)) - pos
+                    depth = p.dot(fwd)
+                    if depth > 0.1:
+                        out = max(out, p.dot(up) / depth)
+            return out
+        if worst(st.pos, st.aim) <= top:
+            return
+        dist = (st.pos - st.aim).length
+        for lift, back in ((0.04, 1.0), (0.08, 1.0), (0.08, 1.12), (0.1, 1.25), (0.12, 1.4), (0.12, 1.6)):
+            aim = st.aim + Vector((0, 0, lift * dist))
+            pos = aim + (st.pos - st.aim) * back
+            if worst(pos, aim) <= top:
+                s.state = st.copy(pos=self._keep_inside(pos), aim=aim)
+                return
+
     def _keep_clear_of_people(self, s, t0, t1):
         """Over the whole of shot s, nobody but its subjects should block it; if someone does (a crowd round
         a fight, people walking through), move the camera round, up or in until nobody does."""
@@ -721,6 +781,7 @@ class Director:
         for i, s in enumerate(shots):
             t0 = s.at
             t1 = (shots[i + 1].at if i + 1 < len(shots) else L) - spf
+            self._keep_framed(s, t0, t1)
             self._keep_clear_of_people(s, t0, t1)
             track = [(t0, s.state)]
             ease = "smooth"
@@ -736,10 +797,28 @@ class Director:
                 key(self.rig, "location", t, tuple(pos), e)
                 key(self.aim, "location", t, tuple(st.aim), e)
                 key(cd, "lens", t, st.lens, e)
+                # near enough that rain and dust right at the lens don't show, never so near it cuts into
+                # a small subject in a tight close-up
+                key(cd, "clip_start", t, max(0.02, min(0.35, 0.5 * (st.focus - pos).length)), e)
                 key(self.cam, "rotation_euler", t, (0, 0, math.radians(st.roll)), e)
                 key(cd.dof, "aperture_fstop", t, st.fstop, e)
                 key(cd.dof, "focus_distance", t, max(0.1, (st.focus - pos).length), e)
         self._shake()
+
+    def snap_to_frames(self):
+        """Put the camera's keys back on whole frames (time effects can move them between frames), so a
+        cut is always between two frames and the shutter never spans one."""
+        from . import _compat
+        for owner in (self.rig, self.aim, self.cam, self.cam.data):
+            for fc in _compat.fcurves(owner):
+                for kp in fc.keyframe_points:
+                    x = round(kp.co.x)
+                    if abs(x - kp.co.x) > 1e-4:
+                        d = x - kp.co.x
+                        kp.co.x = x
+                        kp.handle_left.x += d
+                        kp.handle_right.x += d
+                fc.update()
 
     def impact(self, t, strength=0.5):
         """The camera feels a blow at `t` (strength 0-1): a jolt that dies away in a few frames."""
