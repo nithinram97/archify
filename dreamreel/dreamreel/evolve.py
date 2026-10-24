@@ -37,10 +37,13 @@ similar classes as examples, and a starting point. Write one complete Python fil
 - no files, network or subprocesses: it builds and animates things in the Blender scene, nothing else
 Reply with the file in one ```python block, then a line or two on how it works."""
 
-JUDGE = """You check new dreamreel features. The picture is a still from a small test scene using the new
-{kind} "{name}". What was asked for: {intent}
-Does the picture show it working as asked (allow for a quick, flat-shaded preview)? Reply with JSON only:
-{{"pass": true or false, "notes": "what's wrong and what to change, if anything"}}"""
+JUDGE = """You check new dreamreel features. The picture shows the new {kind} "{name}" in a small test scene
+({what}; a quick flat-shaded preview). What was asked for: {intent}
+Judge it on: {rubric}
+Reply with JSON only: {{"pass": true or false, "notes": "what's wrong and what to change, if anything"}}"""
+
+WHAT = {"_turnaround": "four views round it", "_plan": "the camera's view and the set from above",
+        "_strip": "five frames across the move, left to right", "_still": "one still"}
 
 TRIAL_TIMEOUT = 600
 
@@ -159,23 +162,129 @@ def _trial_main():
             if warn:
                 msg += " (the scene's checks say: " + "; ".join(warn[:3]) + ")"
             if picture:
-                _still(s, picture)
+                LOOKS.get(kind, _still)(s, name, picture)
         print("@@TRIAL " + json.dumps({"ok": True, "message": msg}))
     except BaseException as e:      # noqa: BLE001 (every way it can fail is a note for the model)
         tb = traceback.format_exc().strip().splitlines()
         print("@@TRIAL " + json.dumps({"ok": False, "message": f"{type(e).__name__}: {e}\n" + "\n".join(tb[-8:])}))
 
 
-def _still(s, path):
-    import bpy
+def _setup_still(s, w=640, h=360):
     from . import _compat
     s.previz_settings()
     r = s.bscene.render
-    r.resolution_x, r.resolution_y, r.resolution_percentage = 640, 360, 100
+    r.resolution_x, r.resolution_y, r.resolution_percentage = w, h, 100
     _compat.set_image_output(r)
-    s.bscene.frame_set(max(1, int(s.length * s.fps * 0.6)))
-    r.filepath = path
+    return r
+
+
+def _render(s, path, frame):
+    import bpy
+    s.bscene.frame_set(max(1, int(frame)))
+    s.bscene.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    return path
+
+
+def _tile(paths, out, columns):
+    """Paste stills side by side (rows of `columns`) into one picture."""
+    import bpy
+    import numpy as np
+    imgs = []
+    for p in paths:
+        im = bpy.data.images.load(p)
+        w, h = im.size
+        px = np.empty(w * h * 4, dtype=np.float32)
+        im.pixels.foreach_get(px)
+        imgs.append(px.reshape(h, w, 4))
+        bpy.data.images.remove(im)
+    rows = -(-len(imgs) // columns)
+    h, w = imgs[0].shape[:2]
+    sheet = np.zeros((h * rows, w * columns, 4), dtype=np.float32)
+    sheet[..., 3] = 1
+    for i, im in enumerate(imgs):
+        r, c = divmod(i, columns)
+        sheet[(rows - 1 - r) * h:(rows - r) * h, c * w:(c + 1) * w] = im
+    o = bpy.data.images.new("sheet", sheet.shape[1], sheet.shape[0], alpha=True)
+    o.pixels.foreach_set(sheet.ravel())
+    o.filepath_raw, o.file_format = out, "PNG"
+    o.save()
+    bpy.data.images.remove(o)
+    for p in paths:
+        os.remove(p)
+    return out
+
+
+def _still(s, name, path):
+    """One hero still (a style, a time of day, weather)."""
+    _setup_still(s)
+    return _render(s, path, s.length * s.fps * 0.6)
+
+
+def _strip(s, name, path):
+    """Five frames across the move (start, a quarter, the peak, three quarters, settled)."""
+    _setup_still(s, 384, 384)
+    e = next((e for e in s.events if e.get("gesture") == name or e.get("kind") == name), None)
+    t0, t1 = (e["t0"], e["t1"]) if e else (0.0, s.length)
+    from . import keys
+    frames = [keys.CLOCK.frame(t0 + (t1 - t0) * k / 4) for k in range(5)]
+    return _tile([_render(s, f"{path}.{i}.png", f) for i, f in enumerate(frames)], path, 5)
+
+
+def _turnaround(s, name, path):
+    """Four views round it (front, three-quarter, side, back), as on a turntable."""
+    import math
+    from mathutils import Vector
+    _setup_still(s, 384, 384)
+    s.cut.manual = True
+    meshes = [o for o in s.bscene.objects if o.type == "MESH" and not o.hide_render and o.dimensions.length < 12]
+    them = [o for o in meshes if o.name.startswith(("it", name))] or meshes
+    pts = [o.matrix_world @ Vector(c) for o in them for c in o.bound_box]
+    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    mid, size = (lo + hi) / 2, max((hi - lo).length, 0.3)
+    out = []
+    for i, yaw in enumerate((0, 45, 90, 180)):
+        a = math.radians(yaw)
+        pos = mid + Vector((math.sin(a), -math.cos(a), 0.35)).normalized() * size * 1.6
+        s.cut.rig.animation_data_clear()
+        s.cut.aim.animation_data_clear()
+        s.cut.rig.location, s.cut.aim.location = pos, mid
+        out.append(_render(s, f"{path}.{i}.png", 1))
+    return _tile(out, path, 4)
+
+
+def _plan(s, name, path):
+    """The set as the camera sees it, and from above."""
+    _setup_still(s, 512, 320)
+    wide = _render(s, f"{path}.0.png", s.length * s.fps * 0.5)
+    s.cut.top_down(30, 22)
+    return _tile([wide, _render(s, f"{path}.1.png", 1)], path, 2)
+
+
+LOOKS = {"prop": _turnaround, "character": _turnaround, "hair": _turnaround, "extra": _turnaround,
+         "set": _plan, "biome": _plan, "scenery": _plan,
+         "style": _still, "time": _still, "weather": _still,
+         "gesture": _strip, "action": _strip, "move": _strip, "mood": _strip}
+
+RUBRIC = {
+    "prop": "1. a silhouette you'd recognise squinting; 2. secondary forms, not just raw boxes and cylinders; "
+            "3. standing on the ground, at a believable size",
+    "set": "1. a clear acting floor in the middle; 2. depth, and shapes that frame the shots; "
+           "3. nothing floating or stuck through anything else",
+    "style": "1. faces readable, neither crushed nor blown out; 2. the figure separates from the background; "
+             "3. the mood matches what was asked",
+    "gesture": "1. a clear anticipation and a peak pose that reads in silhouette; 2. no body parts through "
+               "each other, the head not cut off; 3. it ends in a balanced pose",
+}
+for _k in ("character", "hair", "extra"):
+    RUBRIC[_k] = RUBRIC["prop"]
+for _k in ("biome", "scenery"):
+    RUBRIC[_k] = RUBRIC["set"]
+for _k in ("time", "weather"):
+    RUBRIC[_k] = RUBRIC["style"]
+for _k in ("action", "move", "mood"):
+    RUBRIC[_k] = RUBRIC["gesture"]
 
 
 # a small scene for each kind of feature (anything else: registered and describable is enough)
@@ -328,7 +437,10 @@ def evolve(ai, root, kind, name, intent, base=None, rounds=3, look=False, replac
             progress(f"  {msg}")
             if look and picture and os.path.exists(picture):
                 progress(f"  asking {ai} whether it looks right ...")
-                verdict = _verdict(ai.ask(JUDGE.format(kind=kind, name=name, intent=intent),
+                look_fn = LOOKS.get(kind, _still)
+                judge = JUDGE.format(kind=kind, name=name, intent=intent, what=WHAT[look_fn.__name__],
+                                     rubric=RUBRIC.get(kind, "it does what was asked, visibly"))
+                verdict = _verdict(ai.ask(judge,
                                           [{"role": "user", "content": [{"image": picture},
                                                                         {"text": "Your verdict, as JSON."}]}]))
                 if not verdict.get("pass"):

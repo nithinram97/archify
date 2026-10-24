@@ -237,7 +237,8 @@ def _baked(fc, f0, f1):
 def overlap(curves, t0, t1, exaggeration=1.0):
     """Overlapping action: parts further down a chain (forearm after upper arm, hand after forearm)
     reach each key a moment after the parts they hang from, so a move flows down the limb instead of
-    the whole chain snapping together. Returns the new end time."""
+    the whole chain snapping together; tight in a realistic style, loose in a cartoony one (with the
+    square of `exaggeration`). Returns the new end time."""
     owners = getattr(curves, "owner", {})
     f0, f1 = keys.CLOCK.frame(t0), keys.CLOCK.frame(t1)
     deep = {fc: depth_of(owners[fc]) for fc in curves
@@ -247,22 +248,27 @@ def overlap(curves, t0, t1, exaggeration=1.0):
     top = min(deep.values())
     end = f1
     for fc, d in deep.items():
-        lag = min(MOST_LAG, (d - top) * LAG_PER_LEVEL * exaggeration) * keys.CLOCK.fps / 24.0
+        lag = min(MOST_LAG, (d - top) * LAG_PER_LEVEL * exaggeration ** 2) * keys.CLOCK.fps / 24.0
         if lag > 0.05:
             end = max(end, _shift(fc, f0, f1, dx=lag))
     return keys.CLOCK.seconds(end)
 
 
-def unmirror(curves, t0, t1, late=1, frames=UNMIRROR_FRAMES, amount=UNMIRROR_AMOUNT):
+def unmirror(curves, t0, t1, late=1, frames=UNMIRROR_FRAMES, amount=UNMIRROR_AMOUNT, exaggeration=1.0):
     """Break the mirror in a two-sided move: the `late` side (+1 left, -1 right) moves a few frames
-    after the other and a little less far. One-sided moves are left alone. Returns the new end time."""
+    after the other and a little less far: more in a broad, cartoony style, less in a realistic one
+    (with the square of `exaggeration`), and never more than a quarter of the move, so a quick move
+    doesn't come apart into two. One-sided moves are left alone. Returns the new end time."""
+    e2 = exaggeration ** 2
+    frames *= e2
+    amount = 1.0 - (1.0 - amount) * e2
     owners = getattr(curves, "owner", {})
     f0, f1 = keys.CLOCK.frame(t0), keys.CLOCK.frame(t1)
     sides = {fc: side_of(_name(owners.get(fc), fc)) for fc in curves if not _baked(fc, f0, f1)}
     if not ({1, -1} <= set(sides.values())):
         return t1
     end = f1
-    dx = frames * keys.CLOCK.fps / 24.0
+    dx = min(frames * keys.CLOCK.fps / 24.0, 0.25 * (f1 - f0))
     for fc, side in sides.items():
         if side == late:
             end = max(end, _shift(fc, f0, f1, dx=dx, scale=amount))

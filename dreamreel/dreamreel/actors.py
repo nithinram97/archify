@@ -403,9 +403,10 @@ class ClipActor(Character):
                 curves.add(fc)
                 curves.owner[fc] = self.rig.pose.bones[bone]
         span = (keys.CLOCK.seconds(1), keys.CLOCK.seconds(frames[-1][0] + 8))
-        acting.overlap(curves, *span)
+        e = self.scene.exaggeration
+        acting.overlap(curves, *span, e)
         if gesture not in SYMMETRIC_POSES:
-            acting.unmirror(curves, *span, late=self.late_side)
+            acting.unmirror(curves, *span, late=self.late_side, exaggeration=e)
         return act
 
     def animate_steps(self, path, n_steps, step_t, run):

@@ -145,3 +145,46 @@ class DeadReaction(Lint):
                 out.append(f"dead reaction: {c.name} is in the {s.label} shot from {_fmt(t0)} to {_fmt(t1)} and "
                            f"never reacts (a look, a nod, a change of feeling)")
         return out
+
+
+class FootSlide(Lint):
+    label = "Sliding feet"
+    description = "A foot that should be planted on the ground slides along it (skating)."
+    settings = {"speed": 0.15, "drift": 0.02}        # m/s while planted; metres in one contact before it counts
+
+    def check(self, scene):
+        from . import handling
+        bodies = [c for c in scene.actors.values() if c.foot_points()]
+        if not bodies:
+            return []
+        step = 2 / scene.fps
+        times = [i * step for i in range(int(scene.length / step) + 1)]
+        tracks = {c: [] for c in bodies}
+        for t in times:
+            handling.evaluate(scene, t)
+            for c in bodies:
+                tracks[c].append(c.foot_points())
+        out = []
+        for c, track in tracks.items():
+            skip = [tuple(getattr(c, "_down", ()) or ())] + getattr(c, "contacts", [])
+            for i in range(len(track[0])):
+                zs = sorted(p[i].z for p in track)
+                planted = zs[len(zs) // 10] * 1.15 + 0.01        # an ankle at rest, give or take
+                run, drift = [], 0.0
+                for k in range(1, len(times) + 1):
+                    ok = k < len(times) and track[k][i].z <= planted and track[k - 1][i].z <= planted and \
+                        not any(len(w) == 2 and w[0] <= times[k] <= w[1] for w in skip)
+                    if ok:
+                        a, b = track[k - 1][i], track[k][i]
+                        d = ((b.x - a.x) ** 2 + (b.y - a.y) ** 2) ** 0.5
+                        ok = d / step > self.opts["speed"]
+                    if ok:
+                        run.append(times[k])
+                        drift += d
+                        continue
+                    if run and drift > self.opts["drift"]:
+                        foot = ("left", "right")[i] if len(track[0]) == 2 else f"number {i + 1}"
+                        out.append(f"foot slide: {c.name}'s {foot} foot slides "
+                                   f"{drift * 100:.0f} cm while planted from {_fmt(run[0] - step)} to {_fmt(run[-1])}")
+                    run, drift = [], 0.0
+        return out

@@ -889,7 +889,7 @@ class Character(Plugin):
         if not g.keeps_time:                # moves that must meet someone else's keep their exact timing
             end = acting.overlap(curves, t, end, self.scene.exaggeration)
             if not g.symmetric:
-                end = acting.unmirror(curves, t, end, late=self.late_side)
+                end = acting.unmirror(curves, t, end, late=self.late_side, exaggeration=self.scene.exaggeration)
         tempo = effort.tempo()          # the gesture's sounds keep time with its retimed moves
         fx = self.scene.sound_fx
         fx[n_sounds:] = [(t + (ts - t) * tempo, f, v, n) for ts, f, v, n in fx[n_sounds:]]
@@ -1287,6 +1287,19 @@ class Character(Plugin):
             key(self.body, "scale", t, (1, 1, 1))
             key(self.body, "scale", t + 0.9, (1.012, 1.012, 1.02))
             t += 1.9
+
+    def foot_points(self):
+        """Where this body's feet are now, in the world (for the foot-slide check): ankle bones on a
+        skeleton, foot targets on a creature; [] if the feet can't slide on their own (a toy's are fixed
+        to its legs)."""
+        rig, roles = getattr(self, "rig", None), getattr(self, "roles", None) or {}
+        if rig is not None and roles:
+            return [rig.matrix_world @ rig.pose.bones[roles[r]].head for r in ("l_ankle", "r_ankle")
+                    if r in roles and roles[r] in rig.pose.bones]
+        feet = getattr(self, "feet", None)
+        if isinstance(feet, dict):
+            return [o.matrix_world.translation.copy() for o in feet.values()]
+        return []
 
     def sway_parts(self):
         """What drifts while the body is "still": (part, (forward, sideways, twist) in degrees, seconds

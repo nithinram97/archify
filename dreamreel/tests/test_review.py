@@ -66,7 +66,8 @@ def main():
         cli.main(["review", "010", "--apply"])
         system, messages = model.asked[0]
         parts = messages[0]["content"]
-        assert "supervisor" in system and sum("image" in x for x in parts) == 2, "it saw the frames"
+        assert "supervisor" in system and sum("image" in x for x in parts) >= 3, "it saw the frames"
+        assert any("Both sides of every cut" in x.get("text", "") for x in parts), "and both sides of each cut"
         assert '"events"' in parts[0]["text"] and "Mia" in parts[0]["text"], "and the timeline"
         notes = json.load(open(p.renders("previz", f"{name}.review.json")))
         assert [i["severity"] for i in notes["issues"]] == [2, 1], "worst first"

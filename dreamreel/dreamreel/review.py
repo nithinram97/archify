@@ -85,14 +85,64 @@ def parse_json(text):
         raise ReviewError(f"the reviewer's notes weren't JSON: {text[:300]!r}")
 
 
-def review(ai, video, timeline, fps=4.0, workdir=None, progress=print):
-    """Notes on a rendered scene from an AI model that can see: {summary, issues: [...]}."""
+def moments(video, out, times, columns=4, width=360, fps=24):
+    """One sheet of the frames at `times` (each stamped), e.g. both sides of every cut."""
+    d = tempfile.mkdtemp(prefix="dreamreel-moments-")
+    try:
+        for i, t in enumerate(times):
+            stamp = f"drawtext=text='{t:.2f}s':x=6:y=6:fontsize=18:fontcolor=yellow:box=1:boxcolor=black@0.6"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{max(0.0, t):.3f}", "-i", video,
+                            "-frames:v", "1", "-vf", f"scale={width}:-2,{stamp}", os.path.join(d, f"m_{i:03d}.png")],
+                           check=True)
+        rows = -(-len(times) // columns)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", "1", "-i", os.path.join(d, "m_%03d.png"),
+                        "-vf", f"tile={columns}x{rows}", "-frames:v", "1", out], check=True)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    return out
+
+
+def _fight_windows(timeline, pad=0.25):
+    """Where blows and falls happen ([(start, end)], merged): looked at closer."""
+    from . import fighting, plugins
+    out = []
+    for e in timeline.get("events", []):
+        if e.get("kind") != "gesture":
+            continue
+        try:
+            g = plugins.get("gesture", e.get("gesture"))
+        except ValueError:
+            continue
+        if issubclass(g, (fighting.Strike, fighting.Reaction)):
+            a, b = e["t"] - pad, (e.get("end") or e["t"]) + pad
+            if out and a <= out[-1][1]:
+                out[-1][1] = max(out[-1][1], b)
+            else:
+                out.append([a, b])
+    return out
+
+
+def review(ai, video, timeline, fps=4.0, workdir=None, progress=print, burst_fps=8.0):
+    """Notes on a rendered scene from an AI model that can see: {summary, issues: [...]}. It sees the
+    whole scene at `fps`, both sides of every cut (where a shutter or a match goes wrong in one frame),
+    and the blows and falls at `burst_fps` (where a pose drops or a contact misses between samples)."""
     workdir = workdir or tempfile.mkdtemp(prefix="dreamreel-review-")
-    pics = sheets(video, workdir, fps=fps)
-    progress(f"  {len(pics)} sheets of frames at {fps:g} per second")
+    pics = [(p, t0, t1, f"Frames from {t0:g}s to {t1:g}s") for p, t0, t1 in sheets(video, workdir, fps=fps)]
+    cuts = [r["t"] for r in timeline.get("events", []) if r.get("kind") == "cut" and r["t"] > 0]
+    vid_fps = int(timeline.get("fps") or 24)
+    if cuts:
+        both = [t for c in cuts for t in (c - 1.0 / vid_fps, c)]
+        p = moments(video, os.path.join(workdir, "cuts.png"), both, columns=4, fps=vid_fps)
+        pics.append((p, min(both), max(both), "Both sides of every cut (the last frame of a shot, then the first "
+                                                "of the next)"))
+    for i, (a, b) in enumerate(_fight_windows(timeline)):
+        for p, t0, t1 in sheets(video, os.path.join(workdir, f"burst_{i + 1}"), fps=burst_fps, start=max(0.0, a), end=b):
+            pics.append((p, t0, t1, f"The fight from {t0:g}s to {t1:g}s, {burst_fps:g} frames a second"))
+    progress(f"  {len(pics)} sheets of frames: the scene at {fps:g} per second, {len(cuts)} cuts, "
+             f"{len(_fight_windows(timeline))} stretches of fighting at {burst_fps:g}")
     content = [{"text": "The scene's timeline (times in seconds):\n" + json.dumps(timeline, default=str)}]
-    for path, t0, t1 in pics:
-        content.append({"text": f"Frames from {t0:g}s to {t1:g}s:"})
+    for path, t0, t1, what in pics:
+        content.append({"text": what + ":"})
         content.append({"image": path})
     content.append({"text": "Your notes, as JSON."})
     progress(f"  asking {ai} ...")
