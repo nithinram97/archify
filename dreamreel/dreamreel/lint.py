@@ -67,7 +67,8 @@ def _fmt(t):
 # ---------------------------------------------------------------------- the checks
 class Overlap(Lint):
     label = "Overlapping characters"
-    description = "Two characters standing inside each other."
+    description = "Two characters standing inside each other (not counting blows, falls and pile-ons, where "\
+                  "bodies are meant to meet)."
 
     def check(self, scene):
         out, seen = [], set()
@@ -75,7 +76,7 @@ class Overlap(Lint):
         for t in [i * 0.5 for i in range(int(scene.length * 2))]:
             for i, a in enumerate(names):
                 for b in names[i + 1:]:
-                    if (a.name, b.name) in seen:
+                    if (a.name, b.name) in seen or a.touching(t) or b.touching(t):
                         continue
                     if a.visible(t) and b.visible(t) and (a.position(t) - b.position(t)).length < 0.35 * max(a.H, b.H):
                         seen.add((a.name, b.name))

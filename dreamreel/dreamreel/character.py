@@ -413,6 +413,14 @@ class Character(Plugin):
         import zlib
         return 1 if zlib.crc32(self.name.encode()) % 2 else -1
 
+    def contact(self, t0, t1):
+        """Mark a stretch where this body is meant to touch others (a blow, a fall, a pile-on), so the
+        overlap check leaves it be."""
+        self.contacts = getattr(self, "contacts", []) + [(float(t0), float(t1))]
+
+    def touching(self, t):
+        return any(t0 <= t <= t1 for t0, t1 in getattr(self, "contacts", []))
+
     def noted(self, kind, t):
         """Remember a small act (a look, a turn, a feeling) for the checks that read a scene's acting."""
         self.acts = getattr(self, "acts", []) + [(float(t), kind)]
@@ -885,6 +893,8 @@ class Character(Plugin):
         tempo = effort.tempo()          # the gesture's sounds keep time with its retimed moves
         fx = self.scene.sound_fx
         fx[n_sounds:] = [(t + (ts - t) * tempo, f, v, n) for ts, f, v, n in fx[n_sounds:]]
+        if g.contact:
+            self.contact(t, end)
         self.scene._event("gesture", self, t, end, gesture=gesture, how=how)
         return self._end(end, wait)
 

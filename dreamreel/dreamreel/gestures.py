@@ -30,6 +30,7 @@ class Gesture(Plugin):
     needs = ()            # body capabilities it needs: "arms", "tail", "wings", "rear", ...
     keeps_time = False    # True: the mood shapes it but never changes its timing (moves that must meet others)
     symmetric = False     # True: both sides must move exactly together (hands that meet in a clap)
+    contact = False       # True: bodies are meant to touch during it (a blow and its reaction)
 
     @classmethod
     def describe_extra(cls):

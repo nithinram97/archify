@@ -128,6 +128,7 @@ class Strike(Gesture):
     the target and calls `strike`, which keys the move with its blow landing at `t + impact`."""
     abstract = True
     keeps_time = True
+    contact = True
     uses_target = True
     impact = IMPACT
     power = 0.5           # 0 a tap ... 1 sends them flying (the choreographer reads it)
@@ -380,6 +381,7 @@ class Reaction(Gesture):
     given, is who threw it."""
     abstract = True
     keeps_time = True
+    contact = True
     impact = IMPACT
 
     capture = None        # the captured move to play instead (fightmoves.py), for bodies with a skeleton
@@ -578,6 +580,8 @@ def knock_down(c, hit, attacker=None, distance=1.4, height=0.3, lie=1.0, get_up=
             key(c.legs[s], "rotation_euler", land + 0.15, (_deg(-8 * s), 0, 0))
     down = land + 0.45 + lie
     c._down = (hit, down)
+    c.noted("fall", hit)
+    c.contact(hit, down)
     if not get_up:
         return land + 0.45
     return get_up_from_floor(c, down)
@@ -619,8 +623,10 @@ def fall_together(falls, hit, lie=1.0, get_up=True):
     out = {}
     for c, info in res.items():
         rest = info["rest"]
+        c.contact(hit, rest + 0.3)              # thrown through whoever is in the way
         c.scene.sound("thud", at=min(rest, hit + 0.6), volume=0.8)
         c._down = (hit, rest + lie)
+        c.noted("fall", hit)
         if not get_up or c not in chosen:
             out[c] = rest
             scene._end(c, rest, False)
@@ -628,6 +634,7 @@ def fall_together(falls, hit, lie=1.0, get_up=True):
         m = chosen[c]
         out[c] = c.perform_clip(fightmoves.clip(m["trial"]), rest + lie, speed=GET_UP_SPEED, start=m["start"],
                                 end=m["end"], blend=0.45)
+        c.noted("get up", rest + lie)
         c.scene.sound("cloth", at=rest + lie + 0.2, volume=0.4)
         scene._end(c, out[c], False)
     return out
@@ -801,6 +808,13 @@ def surround(scene, hero, attackers, t=None, radius=1.8, seed=0, enter_from=None
         free.remove(p)
         a.walk_to((p.x, p.y), at=t + rng.uniform(0, 0.4), wait=False, facing=hero.key)
         done = max(done, a.busy)
+    # the hero tracks them as they close in: a look (or a turn) at whoever arrives next
+    hero.feel("focused", at=t + 0.2)
+    arriving = sorted(attackers, key=lambda a: a.busy)
+    tt, i = t + 0.5, 0
+    while tt < done - 0.4 and i < len(arriving):
+        hero.look_at(arriving[i].key, at=tt)
+        tt, i = tt + rng.uniform(0.9, 1.4), i + max(1, len(arriving) // 4)
     return done
 
 
@@ -995,6 +1009,8 @@ def burst(scene, hero, attackers, t=None, hold_s=0.9, seed=0, coverage=True):
         q = c + d * rng.uniform(0.42, 0.6)
         a.walk_to((q.x, q.y), at=t + rng.uniform(0, 0.35), wait=False, speed="run", facing=hero.key)
         arrive = max(arrive, a.busy)
+    for a in [hero] + attackers:              # a pile-on: bodies on bodies until they're thrown off
+        a.contact(t, arrive + hold_s + 0.6)
     for a in attackers:                       # grabbing hold
         if a.arms:
             for s in (1, -1):
