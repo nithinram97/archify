@@ -92,6 +92,15 @@ class Style(Plugin):
     edge = 0.08                         # how soft the edge between two tones is
     samples = 48
     exaggeration = 1.0                  # how far acting is pushed (1 = natural; toon styles push it)
+    # the camera and the grade
+    ambient = 1.0                       # how much bounce light fills indoor shadows (lower: more contrast)
+    rim = 0.7                           # a light behind whoever is in each shot, tracing their outline (0: none)
+    grade = None                        # (lift, gamma, gain) colours: e.g. teal shadows and warm highlights
+    bloom = 0.0                         # a glow round the brightest highlights (0: none; 0.3 subtle)
+    lens = 0.0                          # lens distortion and colour fringing at the edges (0.005: subtle)
+    motion_blur = 0.0                   # the shutter (0: off; 0.5 a film camera's)
+    vignette = 0.0                      # how much the edges of the frame fall off (0: none; 0.3 a lens's)
+    separation = 0.0                    # how much less the key light lights the set than the people (0-1)
 
     @classmethod
     def describe_extra(cls):
@@ -204,10 +213,43 @@ class Style(Plugin):
                 if not any(m.type == "STEPPED" for m in fc.modifiers):
                     m = fc.modifiers.new("STEPPED")
                     m.frame_step = self.steps
+        if self.separation > 0:
+            self.separate(scene)
         self.render_settings(scene.bscene)
         film = getattr(scene, "film", {}) or {}
         if film.get("samples") and hasattr(scene.bscene.eevee, "taa_render_samples"):
             scene.bscene.eevee.taa_render_samples = int(film["samples"])     # fewer: faster, noisier
+
+    def separate(self, scene):
+        """Light the people more than the set, the way a film crew flags the key off the walls: the key
+        lights only the cast, and a weaker copy of it lights everything else (Blender's light linking)."""
+        key = next((o for o in scene.bscene.objects if o.type == "LIGHT" and o.name.split(".")[0] == "key"), None)
+        roots = {c.root for c in scene.actors.values()}
+        if key is None or not roots:
+            return
+
+        def top(o):
+            while o.parent is not None:
+                o = o.parent
+            return o
+        people = bpy.data.collections.new("dr people")
+        for o in scene.bscene.objects:
+            if o.type == "MESH" and top(o) in roots:
+                people.objects.link(o)
+        if not people.objects:
+            bpy.data.collections.remove(people)
+            return
+        room_key = key.copy()
+        room_key.data = key.data.copy()
+        room_key.name = "key for the set"
+        room_key.data.energy = key.data.energy * (1.0 - self.separation)
+        scene.bscene.collection.objects.link(room_key)
+        rest = bpy.data.collections.new("dr not people")
+        for o in scene.bscene.objects:
+            if o.type == "MESH" and top(o) not in roots:
+                rest.objects.link(o)
+        key.light_linking.receiver_collection = people
+        room_key.light_linking.receiver_collection = rest
 
     def render_settings(self, sc):
         try:
@@ -218,6 +260,66 @@ class Style(Plugin):
         sc.view_settings.exposure = self.exposure
         if hasattr(sc.eevee, "taa_render_samples"):
             sc.eevee.taa_render_samples = self.samples
+        sc.render.use_motion_blur = self.motion_blur > 0
+        if self.motion_blur > 0:
+            sc.render.motion_blur_shutter = self.motion_blur
+        self.compositor(sc)
+
+    def compositor(self, sc):
+        """The film's grade after rendering: bloom, the lens, and the colour grade (Blender's compositor)."""
+        if not (self.bloom or self.lens or self.grade or self.vignette) or not hasattr(sc, "compositing_node_group"):
+            return
+        ng = bpy.data.node_groups.new("dreamreel grade", "CompositorNodeTree")
+        ng.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        src = ng.nodes.new("CompositorNodeRLayers").outputs["Image"]
+        if self.bloom:
+            g = ng.nodes.new("CompositorNodeGlare")
+            g.inputs["Type"].default_value = "Fog Glow"
+            g.inputs["Quality"].default_value = "High"
+            g.inputs["Highlights Threshold"].default_value = 1.6      # lamps and glints, not a pale wall
+            g.inputs["Strength"].default_value = self.bloom
+            ng.links.new(src, g.inputs["Image"])
+            src = g.outputs["Image"]
+        if self.lens:
+            d = ng.nodes.new("CompositorNodeLensdist")
+            d.inputs["Distortion"].default_value = self.lens
+            d.inputs["Dispersion"].default_value = 2 * self.lens
+            d.inputs["Fit"].default_value = True
+            ng.links.new(src, d.inputs["Image"])
+            src = d.outputs["Image"]
+        if self.grade:
+            cb = ng.nodes.new("CompositorNodeColorBalance")
+            cb.inputs["Type"].default_value = "Lift/Gamma/Gain"
+            for part, color in zip(("Lift", "Gamma", "Gain"), self.grade):
+                cb.inputs[f"Color {part}"].default_value = (*color, 1)
+            ng.links.new(src, cb.inputs["Image"])
+            src = cb.outputs["Image"]
+        if self.vignette:              # a soft ellipse: 1 in the middle, falling to 1 - vignette at the corners
+            frame = ng.nodes.new("ShaderNodeMath")     # zeros the size of the picture: masks with no image
+            frame.operation = "MULTIPLY"               # input come out as a single value
+            frame.inputs[1].default_value = 0.0
+            ng.links.new(src, frame.inputs[0])
+            mask = ng.nodes.new("CompositorNodeEllipseMask")
+            mask.inputs["Size"].default_value = (0.95, 0.95)
+            ng.links.new(frame.outputs[0], mask.inputs["Mask"])
+            blur = ng.nodes.new("CompositorNodeBlur")
+            blur.inputs["Size"].default_value = (sc.render.resolution_x * 0.12, sc.render.resolution_x * 0.12)
+            ng.links.new(mask.outputs["Mask"], blur.inputs["Image"])
+            fall = ng.nodes.new("ShaderNodeMath")
+            fall.operation = "MULTIPLY_ADD"
+            fall.inputs[1].default_value = self.vignette
+            fall.inputs[2].default_value = 1.0 - self.vignette
+            ng.links.new(blur.outputs["Image"], fall.inputs[0])
+            mul = ng.nodes.new("ShaderNodeMix")
+            mul.data_type, mul.blend_type = "RGBA", "MULTIPLY"
+            ins = {i.identifier: i for i in mul.inputs}       # several sockets share a name: go by identifier
+            ins["Factor_Float"].default_value = 1.0
+            ng.links.new(src, ins["A_Color"])
+            ng.links.new(fall.outputs[0], ins["B_Color"])
+            src = next(o for o in mul.outputs if o.identifier == "Result_Color")
+        ng.links.new(src, ng.nodes.new("NodeGroupOutput").inputs[0])
+        sc.compositing_node_group = ng
+        sc.render.use_compositing = True
 
     def previz(self, sc):
         """The fast previz shows outlines too."""
@@ -351,6 +453,9 @@ class Noir(Style):
     view = ("AgX", "AgX - Greyscale")
     exposure = 0.5
     samples = 96
+    ambient = 0.35
+    rim = 1.2                     # noir lives on rim light
+    bloom = 0.25                  # and on highlights that bleed
 
     def adjust_light(self, light):
         light.key = 1.6
@@ -363,6 +468,37 @@ class Noir(Style):
         light.sun_energy *= 1.3
         light.practicals *= 1.5
 
+    def separate(self, scene):
+        """Light the people more than the set, the way a film crew flags the key off the walls: the key
+        lights only the cast, and a weaker copy of it lights everything else (Blender's light linking)."""
+        key = next((o for o in scene.bscene.objects if o.type == "LIGHT" and o.name.split(".")[0] == "key"), None)
+        roots = {c.root for c in scene.actors.values()}
+        if key is None or not roots:
+            return
+
+        def top(o):
+            while o.parent is not None:
+                o = o.parent
+            return o
+        people = bpy.data.collections.new("dr people")
+        for o in scene.bscene.objects:
+            if o.type == "MESH" and top(o) in roots:
+                people.objects.link(o)
+        if not people.objects:
+            bpy.data.collections.remove(people)
+            return
+        room_key = key.copy()
+        room_key.data = key.data.copy()
+        room_key.name = "key for the set"
+        room_key.data.energy = key.data.energy * (1.0 - self.separation)
+        scene.bscene.collection.objects.link(room_key)
+        rest = bpy.data.collections.new("dr not people")
+        for o in scene.bscene.objects:
+            if o.type == "MESH" and top(o) not in roots:
+                rest.objects.link(o)
+        key.light_linking.receiver_collection = people
+        room_key.light_linking.receiver_collection = rest
+
     def render_settings(self, sc):
         super().render_settings(sc)
         try:
@@ -374,8 +510,19 @@ class Noir(Style):
 class Realistic(Style):
     description = "Real materials and light: photo-scanned surfaces on everything, real skies (see materials.py)"
     exaggeration = 0.8
-    view = ("AgX", "AgX - Base Contrast")
+    view = ("AgX", "AgX - Medium High Contrast")
     samples = 96
+    ambient = 0.75
+    rim = 1.0
+    grade = ((0.92, 0.96, 1.0), (1.0, 1.0, 1.0), (1.05, 1.02, 0.95))   # teal shadows, warm highlights
+    bloom = 0.3
+    lens = 0.004
+    motion_blur = 0.5
+    vignette = 0.3
+    separation = 0.45
+
+    def adjust_light(self, light):
+        light.fill = 0.7              # shadows that stay shadows: the key shapes faces
 
     def finish(self, scene):
         from . import materials
@@ -404,6 +551,3 @@ class Realistic(Style):
         nt.links.new(coord.outputs["Object"], noise.inputs["Vector"])
         nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
         nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
-
-    def adjust_light(self, light):
-        light.fill = 0.7

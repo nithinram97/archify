@@ -480,6 +480,8 @@ class Scene:
         polys = sum(len(o.data.polygons) for o in sc.objects if o.type == "MESH" and not o.hide_render)
         sh.show_shadows = polys < 150000
         sh.show_cavity = False
+        sc.render.use_compositing = False     # the grade, bloom and motion blur are for the final film
+        sc.render.use_motion_blur = False
         self.style.previz(sc)
         for o in bpy.data.objects:      # fog volumes and the like only show in the final render
             if o.get("dr_final_only"):
@@ -496,9 +498,11 @@ class Scene:
             return
         self._finished = True
         L = self.length
+        alive = float(((self.film or {}).get("acting") or {}).get("alive", 1.0))
         for c in self.actors.values():
             c.prepare(L)
             c._alive(L)
+            c.sway(alive)
         self.environment.animate(L)
         if self.set is not None:
             self.set.animate(L)
@@ -506,6 +510,8 @@ class Scene:
         for c in self.actors.values():
             acting.follow_through(c, L, self.exaggeration)
         self.cut.build()
+        from . import lint
+        self.environment.rim(lint.shots(self), self.style.rim)
         if self.warps:
             self._apply_warps()
         self.bscene.frame_start = 1
