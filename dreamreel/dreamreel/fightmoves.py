@@ -20,7 +20,7 @@ from mathutils import Matrix, Vector
 
 CACHE = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "motions", "cmu")
 BASE = "http://mocap.cs.cmu.edu/subjects"
-VERSION = 4
+VERSION = 5
 
 # which recordings, and what to look for in each
 SOURCES = {
@@ -154,11 +154,11 @@ def segment(trial, what):
         # from just before the head comes up off the floor to just after they're standing
         head = [f["head"].z + f["_hips"].z - c.floor for f in F]
         stand = sorted(head)[int(0.95 * len(head))]
-        up = next((i for i, h in enumerate(head) if h > 0.92 * stand), len(head) - 1)
+        up = next((i for i, h in enumerate(head) if h > 0.85 * stand), len(head) - 1)
         low = max((i for i in range(up) if head[i] < 0.3 * stand), default=0)
         moves.append(dict(trial=trial, kind="get_up_face_down" if "get_up_face_down" in what else "get_up", side=0,
                           at=max(0.0, low / fps - 0.3), start=max(0.0, low / fps - 0.3),
-                          end=min(c.length, up / fps + 0.5)))
+                          end=min(c.length, up / fps + 0.3)))
     if "stance" in what:
         # stretches with the guard up and no blow thrown: a fighter's stance, bouncing and circling
         busy = set()

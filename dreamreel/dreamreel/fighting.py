@@ -26,6 +26,8 @@ from .gestures import Gesture, _aim
 from .keys import hold, key, value_at
 
 IMPACT = 0.38          # seconds from the start of a move to the blow landing (unless the move says otherwise)
+WAIT_FOR_UP = 1.2      # the most a brawl waits, after the hero's last move, for the last of them to get up
+GET_UP_SPEED = 1.25    # captured get-ups are people getting up; fighters scramble up
 
 
 def _deg(d):
@@ -624,7 +626,8 @@ def fall_together(falls, hit, lie=1.0, get_up=True):
             scene._end(c, rest, False)
             continue
         m = chosen[c]
-        out[c] = c.perform_clip(fightmoves.clip(m["trial"]), rest + lie, start=m["start"], end=m["end"], blend=0.45)
+        out[c] = c.perform_clip(fightmoves.clip(m["trial"]), rest + lie, speed=GET_UP_SPEED, start=m["start"],
+                                end=m["end"], blend=0.45)
         c.scene.sound("cloth", at=rest + lie + 0.2, volume=0.4)
         scene._end(c, out[c], False)
     return out
@@ -958,8 +961,9 @@ class Brawl:
                 t, last_double = self.double(t, n), n
             else:
                 t = self.exchange(t, n)
-        # over when the hero is done and everyone is back on their feet (some still walking back)
-        end = max([t, self.hero.busy] + list(self.up.values()))
+        # over when the hero is done and everyone is nearly back on their feet (no long wait for the last
+        # one: they get up while whatever comes next begins)
+        end = max(t, self.hero.busy, min(max(self.up.values(), default=0.0), self.hero.busy + WAIT_FOR_UP))
         self.settle(end)
         return end
 
