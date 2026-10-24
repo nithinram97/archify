@@ -384,6 +384,79 @@ def cmd_generate(a):
     _cast_model(p, a, glb, kind)
 
 
+def cmd_review(a):
+    """Notes on a rendered scene from an AI model that can see; with --fix a revised scene (review.py)."""
+    import difflib
+    import json
+    from . import ai, film, review
+    p = _project()
+    path = p.scene_path(a.scene)
+    name = os.path.splitext(os.path.basename(path))[0]
+    found = [q for q in ((a.quality,) if a.quality else ("final", "previz")) if os.path.exists(p.renders(q, f"{name}.mp4"))]
+    if not found:
+        raise SystemExit(f"render {name} first: dreamreel previz {name} (or dreamreel render)")
+    quality = max(found, key=lambda q: os.path.getmtime(p.renders(q, f"{name}.mp4")))   # the newest
+    video = p.renders(quality, f"{name}.mp4")
+    try:
+        model = ai.configured(a.provider, a.model, a.url)
+        print(f"reviewing renders/{quality}/{name}.mp4 with {model}")
+        timeline = film.build(p, path).timeline()
+        notes = review.review(model, video, timeline, fps=a.fps, workdir=p.renders(quality, f"{name}.review"))
+        out = p.renders(quality, f"{name}.review.json")
+        with open(out, "w") as f:
+            json.dump(notes, f, indent=1)
+        print(f"\n{notes.get('summary', '')}")
+        for i in notes["issues"]:
+            who = f" {i['who']}:" if i.get("who") else ""
+            print(f"  {float(i.get('start', 0)):5.1f}-{float(i.get('end', 0)):5.1f}s{who} {i.get('defect')}\n"
+                  f"               fix: {i.get('fix')}")
+        print(f"notes saved in {os.path.relpath(out, p.root)}")
+        if not (a.fix or a.apply) or not notes["issues"]:
+            return
+        lang = "py" if path.endswith(".py") else "toml"
+        ref_path = os.path.join(p.root, "REFERENCE.md")
+        if not os.path.exists(ref_path):
+            ref_path = os.path.join(HERE, "templates", "REFERENCE.md")
+        with open(ref_path) as f:
+            reference = f.read()
+        with open(path) as f:
+            before = f.read()
+        dest = review.proposed_path(path)
+
+        def builds(text):
+            with open(dest, "w") as f:
+                f.write(text)
+            film.build(p, dest)
+        text, account = review.propose(model, before, notes, reference, lang=lang, check=builds)
+        with open(dest, "w") as f:
+            f.write(text)
+        sys.stdout.writelines(difflib.unified_diff(before.splitlines(True), text.splitlines(True),
+                                                   f"scenes/{os.path.basename(path)}", os.path.relpath(dest, p.root)))
+        print(f"\n{account}\nthe revised scene builds: {os.path.relpath(dest, p.root)}")
+        if a.apply:
+            kept = review.apply(path, dest)
+            print(f"applied; the old scene is in {os.path.relpath(kept, p.root)}")
+        else:
+            print(f"use it with: dreamreel review {a.scene} --fix --apply (or copy it over yourself)")
+    except (ai.AIError, review.ReviewError) as e:
+        raise SystemExit(str(e))
+
+
+def cmd_evolve(a):
+    """Have an AI model write a new feature class, try it in a test scene and keep it if it works (evolve.py)."""
+    from . import ai, evolve
+    p = _project()
+    try:
+        model = ai.configured(a.provider, a.model, a.url)
+        print(f"growing a {a.kind} called {a.name!r} with {model} (up to {a.rounds} rounds"
+              f"{', looking at it' if a.look else ''})")
+        path = evolve.evolve(model, p.root, a.kind, a.name, a.intent, base=a.base, rounds=a.rounds, look=a.look,
+                             replace=a.replace)
+    except (ai.AIError, evolve.EvolveError) as e:
+        raise SystemExit(str(e))
+    print(f"kept {os.path.relpath(path, p.root)}: the film loads it like any extension (read it: an AI wrote it)")
+
+
 def _cast_model(p, a, glb, kind):
     """A cast file for a new model character (or how to use a new prop)."""
     rel = os.path.relpath(glb, p.root).replace(os.sep, "/")
@@ -950,6 +1023,32 @@ def main(argv=None):
                     help="make the shape from --image with TripoSG on a booster, painted from the picture")
     ge.add_argument("--rig", action="store_true", help="rig it with UniRig on a booster (any creature)")
     ge.set_defaults(fn=cmd_generate)
+
+    ev = sub.add_parser("evolve", help="have an AI model write a new feature (gesture, prop, style...), "
+                                       "tried in a test scene and kept only if it works")
+    ev.add_argument("kind", help="gesture, prop, mood, character, style, shot, move, lint, extra, ... "
+                                 "(dreamreel plugins lists them)")
+    ev.add_argument("name")
+    ev.add_argument("intent", help="what it should do or look like")
+    ev.add_argument("--from", dest="base", help="grow it from this existing one (e.g. --from wave)")
+    ev.add_argument("--look", action="store_true", help="also judge a still of it (a model that can see)")
+    ev.add_argument("--rounds", type=int, default=3, help="tries to get it right")
+    ev.add_argument("--replace", action="store_true", help="replace extensions/NAME.py (the old one is kept)")
+    ev.add_argument("--provider", help="anthropic, openai, gemini, openrouter, ollama, lmstudio, custom")
+    ev.add_argument("--model", help="the provider's model name")
+    ev.add_argument("--url", help="endpoint for a custom (OpenAI-compatible) provider")
+    ev.set_defaults(fn=cmd_evolve)
+
+    rv = sub.add_parser("review", help="notes on a rendered scene from an AI model that can see; --fix rewrites it")
+    rv.add_argument("scene")
+    rv.add_argument("--fps", type=float, default=4.0, help="frames per second it looks at (more: finer, costlier)")
+    rv.add_argument("--quality", choices=("previz", "final"), help="which render (default: the newest)")
+    rv.add_argument("--fix", action="store_true", help="also write a revised scene that addresses the notes")
+    rv.add_argument("--apply", action="store_true", help="use the revised scene (the old one goes to scenes/.history/)")
+    rv.add_argument("--provider", help="anthropic, openai, gemini, openrouter, ollama, lmstudio, custom")
+    rv.add_argument("--model", help="the provider's model name")
+    rv.add_argument("--url", help="endpoint for a custom (OpenAI-compatible) provider")
+    rv.set_defaults(fn=cmd_review)
 
     rg = sub.add_parser("rig", help="rig a model with UniRig on a booster (people, animals, creatures)")
     rg.add_argument("file", help="the model, e.g. models/dragon.glb")
