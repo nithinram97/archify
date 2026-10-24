@@ -167,6 +167,7 @@ def _render_frames(proj, s, name, digest, out):
     import subprocess
     sc, r = s.bscene, s.bscene.render
     root = proj.renders("final", f"{name}.frames")
+    os.makedirs(root, exist_ok=True)               # (a name with a dot isn't taken for a folder)
     frames = os.path.join(root, digest[:12])
     for old in os.listdir(root):                 # frames of an older version of the scene go
         if old != digest[:12]:
