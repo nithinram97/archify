@@ -21,7 +21,7 @@ import random
 
 from mathutils import Vector
 
-from . import _compat
+from . import _compat, plugins
 from .gestures import Gesture, _aim
 from .keys import hold, key, value_at
 
@@ -47,9 +47,68 @@ def guard(c, t, ease="smooth"):
 
 
 def rest(c, t):
-    """Arms down and the hands open again."""
+    """Arms down and the hands open again (unless the fight goes on: see keep_fighting)."""
     c.arms_rest(t)
     c.fist(t, 0)
+    c._rests = getattr(c, "_rests", []) + [t]
+
+
+GUARD_BETWEEN = 2.5     # a fighter whose next fight beat is this near keeps the guard up instead of resting
+IDLE_GAP = 0.6          # a gap this long between a fighter's beats is filled with a stance
+
+
+def _fight_events(scene):
+    out = []
+    for e in scene.events:
+        if e["kind"] != "gesture":
+            continue
+        try:
+            g = plugins.get("gesture", e["gesture"])
+        except ValueError:
+            continue
+        if issubclass(g, (Strike, Reaction)):
+            out.append(e)
+    return out
+
+
+def keep_fighting(scene):
+    """Once the whole fight is known (when the scene is finished): nobody in it drops out of it. A
+    fighter's hands come down after a blow only if no fight beat of theirs follows soon; a fighter with
+    nothing to do between beats stands in a stance watching the fight, not at rest; and anyone else
+    there watches it."""
+    fights = _fight_events(scene)
+    if not fights:
+        return
+    w0, w1 = min(e["t0"] for e in fights), max(e["t1"] for e in fights)
+    fighters = {e["who"] for e in fights}
+    for c in fighters:
+        mine = sorted(e["t0"] for e in fights if e["who"] is c)
+        for t in getattr(c, "_rests", []):          # guard up between exchanges
+            if c.arms and any(t <= t2 <= t + GUARD_BETWEEN for t2 in mine):
+                guard(c, t)
+        busy = sorted((e["t0"], e["t1"]) for e in scene.events if e["who"] is c)
+        if getattr(c, "_down", None):
+            busy.append(tuple(c._down))
+            busy.sort()
+        t = w0
+        for b0, b1 in busy + [(w1, w1)]:
+            if b0 - t >= IDLE_GAP and t < w1:
+                stance(c, t + 0.05, min(b0, w1) - 0.05, captured=False)
+                _watch(scene, c, t + 0.1, fights)
+            t = max(t, b1)
+    for c in scene.actors.values():                  # bystanders watch
+        if c not in fighters and c.visible(w0):
+            _watch(scene, c, w0 + 0.2, fights)
+
+
+def _watch(scene, c, t, fights):
+    """Look at whoever is fighting nearest `t`."""
+    active = [e for e in fights if e["who"] is not c and e["t0"] - 0.5 <= t <= e["t1"] + 0.5]
+    if not active:
+        active = sorted((e for e in fights if e["who"] is not c), key=lambda e: abs(e["t0"] - t))[:1]
+    if active:
+        target = min(active, key=lambda e: (e["who"].position(t) - c.position(t)).length)["who"]
+        c.look_at(target.key, at=t)
 
 
 def step(c, t0, t1, t2, metres, direction=None):
@@ -591,7 +650,7 @@ def _push(c, attacker, t, distance, height):
     """The velocity a blow gives a body: away from the attacker, and up, enough to carry it `distance`."""
     d = Flinch.away(c, t, attacker)
     speed = 0.8 + 1.0 * distance                     # a hard punch: 2-3 m/s; the burst: 3-4
-    return Vector((d.x * speed, d.y * speed, 0.6 + 2.0 * height))
+    return Vector((d.x * speed, d.y * speed, 0.3 + 1.0 * height))    # back and down, not up like a balloon
 
 
 def fall_together(falls, hit, lie=1.0, get_up=True):
@@ -688,10 +747,11 @@ class GetUp(Gesture):
 
 
 # ---------------------------------------------------------------------- stance
-def stance(c, t0, t1, bounce=0.02, lean=6, period=0.55):
+def stance(c, t0, t1, bounce=0.02, lean=6, period=0.55, captured=True):
     """A fighter's stance from t0 to t1: guard up, knees soft, bouncing on the balls of the feet (captured
-    boxers' footwork for bodies with a skeleton)."""
-    if hasattr(c, "perform_clip") and t1 - t0 > 0.8:
+    boxers' footwork for bodies with a skeleton, unless `captured` is off: a captured clip replaces
+    everything after it, so a stance put into a gap afterwards is made by hand)."""
+    if captured and hasattr(c, "perform_clip") and t1 - t0 > 0.8:
         from . import fightmoves
         rng = random.Random(f"{c.key}/stance/{round(t0, 2)}")
         t, done = t0, False

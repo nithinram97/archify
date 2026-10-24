@@ -499,11 +499,13 @@ class Scene:
             return
         self._finished = True
         L = self.length
+        from . import fighting
+        fighting.keep_fighting(self)
         alive = float(((self.film or {}).get("acting") or {}).get("alive", 1.0))
         for c in self.actors.values():
             c.prepare(L)
             c._alive(L)
-            c.sway(alive)
+            c.sway(alive * self.exaggeration ** 2)      # still bodies drift less in a realistic style
         self.environment.animate(L)
         if self.set is not None:
             self.set.animate(L)
@@ -512,9 +514,11 @@ class Scene:
             acting.follow_through(c, L, self.exaggeration)
         self.cut.build()
         from . import lint
-        self.environment.rim(lint.shots(self), self.style.rim)
+        self.environment.rim(lint.shots(self), self.style.rim, cast=self.cast_meshes()[0])
+        self.environment.face_fill(lint.shots(self), self.style.face_fill, cast=self.cast_meshes()[0])
         if self.warps:
             self._apply_warps()
+            self.cut.snap_to_frames()
         self.bscene.frame_start = 1
         self.bscene.frame_end = keys.CLOCK.frame(self.length) - 1   # time effects may have changed it
         self.style.finish(self)
@@ -568,6 +572,25 @@ class Scene:
         warnings = self.check()
         lines += [f"  WARNING: {w}" for w in warnings]
         return "\n".join(lines)
+
+    def cast_meshes(self):
+        """Two collections, for lights that should light only the cast or only the set (light linking):
+        (every mesh of the characters, every other mesh). (None, None) with nobody in the scene."""
+        if getattr(self, "_cast_meshes", None) is None:
+            roots = {c.root for c in self.actors.values()}
+
+            def top(o):
+                while o.parent is not None:
+                    o = o.parent
+                return o
+            meshes = [o for o in self.bscene.objects if o.type == "MESH"]
+            if not any(top(o) in roots for o in meshes):
+                return None, None
+            people, rest = bpy.data.collections.new("dr people"), bpy.data.collections.new("dr not people")
+            for o in meshes:
+                (people if top(o) in roots else rest).objects.link(o)
+            self._cast_meshes = (people, rest)
+        return self._cast_meshes
 
     def timeline(self):
         """The scene as data: length, events, camera cuts and warnings (for `check --json`)."""

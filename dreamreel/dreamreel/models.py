@@ -582,6 +582,9 @@ ARKIT_NAMES = set(_arkit_drive(1.0)) | {
     "mouthLeft", "mouthRight", "mouthPressLeft", "mouthPressRight", "mouthRollLower", "mouthRollUpper", "tongueOut"}
 
 
+IN_PLACE_TRAVEL = 0.15     # metres a move played in place may still travel (its own footwork)
+
+
 class ModelCharacter(Character):
     """A character from a 3D model file, rigged or not (see models.py)."""
     name = "model"
@@ -783,6 +786,9 @@ class ModelCharacter(Character):
         J = self._joint
         legs = (J("l_hip") - J("l_knee")).length + (J("l_knee") - J("l_ankle")).length
         s = legs / clip.leg_length                       # the clip's body to this one's (by leg length)
+        # the clip's floor is its lowest ankle; this body's ankles stand that far above the ground
+        ankle_up = min((self._rig_in_root @ self.rig.data.bones[self.roles[r]].head_local).z
+                       for r in ("l_ankle", "r_ankle"))
         solver = _RigPose(self)
         cons = [c for pb in self.rig.pose.bones for c in pb.constraints]
         t_end = t0 + nf / fps
@@ -805,6 +811,16 @@ class ModelCharacter(Character):
             hold(pb, "rotation_quaternion", t0 - blend)
             hold(pb, "location", t0 - blend)
         heading = H0
+
+        def travel(p):
+            d = Matrix.Rotation(-hs0, 3, "Z") @ Vector((p["hips"].x - hips0.x, p["hips"].y - hips0.y, 0)) * s
+            if mirror:
+                d.x = -d.x
+            return Matrix.Rotation(H0, 3, "Z") @ d
+        # in place: the body still sways over its planted feet (pinning the hips would drag the feet), but
+        # what the whole move travels beyond a step is taken out, spread thinly over it
+        net = travel(clip.at(start + nf / fps * speed)) if in_place else Vector()
+        excess = net * max(0.0, 1.0 - IN_PLACE_TRAVEL / net.length) if net.length > IN_PLACE_TRAVEL else Vector()
         for i in range(nf + 1):
             p = clip.at(start + i / fps * speed)
             if mirror:
@@ -815,6 +831,7 @@ class ModelCharacter(Character):
             local = {}
             for r, v in p.items():
                 q = R @ (v - base) * s
+                q.z += ankle_up
                 local[r] = Vector((-q.x, q.y, q.z)) if mirror else q
             t = t0 + i / fps
             for name, (rot, loc) in solver.solve(local).items():
@@ -822,14 +839,8 @@ class ModelCharacter(Character):
                 key(bones[name], "location", t, tuple(loc), "linear")
             dh = (hs - hs0) * (-1 if mirror else 1)
             heading = H0 + dh
-            if in_place:
-                pos = loc0.copy()
-            else:
-                d = Matrix.Rotation(-hs0, 3, "Z") @ Vector((p["hips"].x - hips0.x, p["hips"].y - hips0.y, 0)) * s
-                if mirror:
-                    d.x = -d.x
-                d = Matrix.Rotation(H0, 3, "Z") @ d
-                pos = loc0 + Vector((d.x, d.y, 0))
+            d = travel(p) - excess * (i / max(1, nf))
+            pos = loc0 + Vector((d.x, d.y, 0))
             if drift is not None:
                 u = min(1.0, (i / fps) / max(1e-3, drift_until or (nf / fps)))
                 u = u * u * (3 - 2 * u)
