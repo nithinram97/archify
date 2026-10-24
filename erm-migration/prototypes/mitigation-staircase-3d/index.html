@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #0b1220; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+  #wrap { position: relative; width: 1600px; height: 1000px; }
+  .lane { color: #f1f5f9; font-size: 14px; font-weight: 600; white-space: nowrap; background: rgba(11,18,32,0.8); padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); }
+  .lane b { color: #94a3b8; font-weight: 500; margin-right: 6px; }
+  .tag { margin-left: 6px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+  .step { color: #e2e8f0; font-size: 12px; white-space: nowrap; background: rgba(15,23,42,0.88); padding: 3px 8px; border-radius: 5px; border-left: 3px solid #22c55e; }
+  .step.late { border-left-color: #f59e0b; }
+  .step.over { border-left-color: #ef4444; }
+  .step.plan { border-left-color: #a5b4fc; color: #c7d2fe; }
+  .tick { color: #64748b; font-size: 12px; white-space: nowrap; }
+  .axis { color: #94a3b8; font-size: 13px; font-weight: 600; letter-spacing: 1px; white-space: nowrap; }
+  .today { color: #f8fafc; font-size: 13px; font-weight: 600; background: #be185d; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  #title { position: absolute; left: 36px; top: 28px; color: #f1f5f9; }
+  #title h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  #title p { margin: 6px 0 0; color: #94a3b8; font-size: 15px; }
+  #legend { position: absolute; left: 36px; bottom: 30px; color: #cbd5e1; font-size: 14px; background: rgba(15,23,42,0.88); border: 1px solid #1e293b; border-radius: 10px; padding: 14px 18px; line-height: 1.9; }
+  .sw { display: inline-block; width: 26px; margin-right: 10px; vertical-align: middle; }
+  #card { position: absolute; right: 36px; top: 110px; width: 320px; color: #e2e8f0; background: rgba(15,23,42,0.93); border: 1px solid #334155; border-radius: 12px; padding: 18px 20px; font-size: 14px; line-height: 1.55; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+  #card .id { color: #f472b6; font-weight: 600; font-size: 13px; }
+  #card h2 { margin: 2px 0 10px; font-size: 18px; }
+  #card .row { display: flex; justify-content: space-between; border-top: 1px solid #1e293b; padding: 6px 0; }
+  #card .row span:first-child { color: #94a3b8; }
+  #card .gap { margin: 10px 0 4px; padding: 10px 12px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; color: #fecaca; }
+  #hint { position: absolute; right: 36px; bottom: 30px; color: #64748b; font-size: 13px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="wrap">
+  <div id="title"><h1>Mitigation staircase · plan vs actual</h1><p>Sample data · each step is a mitigation action · height = criticality · left to right = time</p></div>
+  <div id="legend">
+    <div><svg class="sw" height="14"><rect x="1" y="1" width="24" height="12" fill="#ef4444"/></svg>Actual criticality (colour = level)</div>
+    <div><svg class="sw" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#a5b4fc" stroke-width="2" stroke-dasharray="4 3"/></svg>Planned staircase</div>
+    <div><svg class="sw" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#22c55e" stroke-width="3"/></svg>Target criticality</div>
+    <div><svg class="sw" height="14"><rect x="10" y="0" width="5" height="14" fill="#be185d"/></svg>Today</div>
+  </div>
+  <div id="card">
+    <div class="id">Selected · #R-2041</div>
+    <h2>Supplier capacity</h2>
+    <div class="row"><span>Criticality today</span><span><b style="color:#f59e0b">11</b> (plan: 7)</span></div>
+    <div class="row"><span>Target</span><span>5 by Nov 2026</span></div>
+    <div class="row"><span>Mitigations done</span><span>2 of 4 (1 late)</span></div>
+    <div class="gap"><b>4 points behind plan.</b> Capacity audit is 4 months overdue; the target date is at risk.</div>
+  </div>
+  <div id="hint">Drag to orbit · hover a step for the action · click a risk to open it</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const W = 1600, H = 1000;
+const wrap = document.getElementById('wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+wrap.prepend(renderer.domElement);
+const labels = new CSS2DRenderer(); labels.setSize(W, H);
+Object.assign(labels.domElement.style, { position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+wrap.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1220');
+const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 200);
+camera.position.set(3.2, 19, 23);
+camera.lookAt(2.9, 0.6, -4.6);
+scene.add(new THREE.HemisphereLight('#e2e8f0', '#0b1220', 1.15));
+const key = new THREE.DirectionalLight('#ffffff', 1.6); key.position.set(-6, 18, 14); scene.add(key);
+
+const label = (html, cls, pos) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; const o = new CSS2DObject(d); o.position.copy(pos); scene.add(o); return o; };
+const dashed = (pts, color, opacity = 1) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color, dashSize: 0.22, gapSize: 0.14, transparent: true, opacity })); l.computeLineDistances(); scene.add(l); return l; };
+
+// Scales: months from Jan 2025 (0) to Dec 2026 (24); criticality 0..16.
+const MX = 0.62, SY = 0.2, X0 = -6.5;
+const xOf = m => X0 + m * MX, yOf = s => s * SY;
+const TODAY = 17; // Jun 2026
+const level = s => s >= 12 ? '#ef4444' : s >= 8 ? '#f59e0b' : s >= 4 ? '#eab308' : '#22c55e';
+const LANE_D = 1.2, laneZ = k => -k * 4.0;
+
+// Back wall with criticality bands, and a floor
+const wallZ = laneZ(2) - LANE_D;
+[[0, 4, '#22c55e'], [4, 8, '#eab308'], [8, 12, '#f59e0b'], [12, 16, '#ef4444']].forEach(([a, b, c]) => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(24 * MX, (b - a) * SY), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.09 }));
+  m.position.set(xOf(12), yOf((a + b) / 2), wallZ); scene.add(m);
+});
+for (const s of [0, 4, 8, 12, 16]) {
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(xOf(0), yOf(s), wallZ), new THREE.Vector3(xOf(24), yOf(s), wallZ)]),
+    new THREE.LineBasicMaterial({ color: '#1e3a5f' })));
+  label(String(s), 'tick', new THREE.Vector3(xOf(0) - 0.45, yOf(s), wallZ));
+}
+label('CRITICALITY', 'axis', new THREE.Vector3(xOf(0) - 0.4, yOf(19.5), wallZ));
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24 * MX + 1, -wallZ + 2.2), new THREE.MeshBasicMaterial({ color: '#0f1a2e' }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(xOf(12), -0.01, wallZ / 2 + 1.1); scene.add(floor);
+const QUARTERS = ['Q1 25', 'Q2 25', 'Q3 25', 'Q4 25', 'Q1 26', 'Q2 26', 'Q3 26', 'Q4 26'];
+QUARTERS.forEach((q, k) => {
+  const x = xOf(k * 3);
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, 0, 1.2), new THREE.Vector3(x, 0, wallZ)]), new THREE.LineBasicMaterial({ color: '#16243b' })));
+  label(q, 'tick', new THREE.Vector3(xOf(k * 3 + 1.5), 0, 1.45));
+});
+
+// Today plane
+const todayPlane = new THREE.Mesh(new THREE.PlaneGeometry(-wallZ + 2.2, yOf(17)), new THREE.MeshBasicMaterial({ color: '#be185d', transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+todayPlane.rotation.y = Math.PI / 2; todayPlane.position.set(xOf(TODAY), yOf(8.5), wallZ / 2 + 1.1); scene.add(todayPlane);
+scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(xOf(TODAY), 0, 1.2), new THREE.Vector3(xOf(TODAY), yOf(17), 1.2)]), new THREE.LineBasicMaterial({ color: '#ec4899' })));
+label('Today · Jun 2026', 'today', new THREE.Vector3(xOf(TODAY), yOf(17.6), 1.2));
+
+// Sample risks. Steps: [month, criticality after the step, action, status]; start = criticality in Jan 2025.
+const risks = [
+  { id: 'R-2041', title: 'Supplier capacity', start: 14, target: 5, targetM: 22, status: ['behind plan', '#ef4444'],
+    plan:   [[4, 11, 'Second source qualified'], [8, 9, 'Buffer stock'], [12, 7, 'Capacity audit'], [19, 5, 'Long-term agreement']],
+    actual: [[6, 12, 'Second source qualified', 'late'], [11, 11, 'Buffer stock', 'done']],
+    overdue: [[12, 'Capacity audit']] },
+  { id: 'R-1003', title: 'Cybersecurity', start: 16, target: 4, targetM: 18, status: ['target reached', '#22c55e'],
+    plan:   [[3, 12], [7, 9], [11, 6], [16, 4]],
+    actual: [[3, 12, '', 'done'], [6, 9, '', 'done'], [11, 6, '', 'done'], [15, 4, '', 'done']], overdue: [] },
+  { id: 'R-2051', title: 'Test campaign slip', start: 12, target: 3, targetM: 21, status: ['on track', '#22c55e'],
+    plan:   [[5, 9], [10, 6], [15, 5], [20, 3]],
+    actual: [[5, 9, '', 'done'], [10, 6, '', 'done'], [16, 5, '', 'done']], overdue: [] },
+];
+const SELECTED = 'R-2041';
+
+risks.forEach((r, k) => {
+  const z = laneZ(k), sel = r.id === SELECTED;
+  // Actual: one block per interval up to today.
+  const marks = [[0, r.start], ...r.actual.map(([m, s]) => [m, s])];
+  marks.forEach(([m, s], i) => {
+    const end = i + 1 < marks.length ? marks[i + 1][0] : TODAY;
+    const w = (end - m) * MX, h = yOf(s), c = new THREE.Color(level(s));
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w - 0.03, h, LANE_D),
+      new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: sel ? 0.35 : 0.2, roughness: 0.5, transparent: !sel, opacity: sel ? 1 : 0.75 }));
+    box.position.set(xOf(m) + w / 2, h / 2, z - LANE_D / 2); scene.add(box);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: '#0b1220', transparent: true, opacity: 0.5 }));
+    edges.position.copy(box.position); scene.add(edges);
+  });
+  // Plan: dashed staircase along the front-top edge of the lane, from start to target.
+  const pz = z + 0.02, pts = [new THREE.Vector3(xOf(0), yOf(r.start), pz)];
+  let cur = r.start;
+  for (const [m, s] of r.plan) { pts.push(new THREE.Vector3(xOf(m), yOf(cur), pz), new THREE.Vector3(xOf(m), yOf(s), pz)); cur = s; }
+  pts.push(new THREE.Vector3(xOf(24), yOf(cur), pz));
+  dashed(pts, '#a5b4fc', sel ? 1 : 0.6);
+  // Target line and target date marker
+  const targetLine = new THREE.Mesh(new THREE.BoxGeometry(24 * MX, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: '#22c55e', transparent: true, opacity: sel ? 0.95 : 0.5 }));
+  targetLine.position.set(xOf(12), yOf(r.target), z + 0.03); scene.add(targetLine);
+  const flag = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.36, 16), new THREE.MeshBasicMaterial({ color: '#22c55e' }));
+  flag.position.set(xOf(r.targetM), yOf(r.target) + 0.22, z + 0.03); flag.rotation.z = Math.PI; scene.add(flag);
+  // Lane label
+  const [txt, col] = r.status;
+  label(`<b>${r.id}</b>${r.title}<span class="tag" style="background:${col}22;color:${col};border:1px solid ${col}66">${txt}</span>`,
+    'lane', new THREE.Vector3(xOf(0) - 2.2, 0.1, z - LANE_D / 2));
+
+  if (sel) {
+    const halo = new THREE.Mesh(new THREE.BoxGeometry(24 * MX + 0.3, 0.04, LANE_D + 0.3), new THREE.MeshBasicMaterial({ color: '#f472b6', transparent: true, opacity: 0.85 }));
+    halo.position.set(xOf(12), 0.02, z - LANE_D / 2); scene.add(halo);
+    for (const [m, s, a, st] of r.actual) label(st === 'late' ? `✓ ${a} · 2 mo late` : `✓ ${a}`, 'step' + (st === 'late' ? ' late' : ''), new THREE.Vector3(xOf(m), yOf(s) + 0.42, z + 0.1));
+    for (const [m, a] of r.overdue) label(`✗ ${a} · overdue`, 'step over', new THREE.Vector3(xOf(m) + 0.4, yOf(7) - 0.35, z + 0.6));
+    label('Plan: Long-term agreement', 'step plan', new THREE.Vector3(xOf(20.5), yOf(5) - 0.35, z + 0.6));
+    // Gap between plan and actual today
+    dashed([new THREE.Vector3(xOf(TODAY), yOf(11), z + 0.05), new THREE.Vector3(xOf(TODAY), yOf(7), z + 0.05)], '#ef4444', 1);
+  }
+});
+
+renderer.render(scene, camera);
+labels.render(scene, camera);
+window.__done = true;
+</script>
+</body>
+</html>

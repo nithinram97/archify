@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #0b1220; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+  #wrap { position: relative; width: 1600px; height: 1000px; }
+  .label { color: #e6edf7; font-size: 13px; background: rgba(11,18,32,0.72); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.25); white-space: nowrap; }
+  .label.root { font-size: 15px; font-weight: 600; border-color: rgba(99,179,237,0.6); }
+  .label b { color: #94a3b8; font-weight: 500; margin-right: 6px; }
+  #title { position: absolute; left: 36px; top: 28px; color: #f1f5f9; }
+  #title h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  #title p { margin: 6px 0 0; color: #94a3b8; font-size: 15px; }
+  #legend { position: absolute; left: 36px; bottom: 30px; color: #cbd5e1; font-size: 14px; background: rgba(15,23,42,0.85); border: 1px solid #1e293b; border-radius: 10px; padding: 14px 18px; line-height: 1.9; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+  #card { position: absolute; right: 36px; top: 110px; width: 300px; color: #e2e8f0; background: rgba(15,23,42,0.92); border: 1px solid #334155; border-radius: 12px; padding: 18px 20px; font-size: 14px; line-height: 1.55; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+  #card .id { color: #f472b6; font-weight: 600; font-size: 13px; }
+  #card h2 { margin: 4px 0 10px; font-size: 18px; }
+  #card .row { display: flex; justify-content: space-between; border-top: 1px solid #1e293b; padding: 6px 0; }
+  #card .row span:first-child { color: #94a3b8; }
+  #card .btn { margin-top: 12px; text-align: center; background: #d81b60; border-radius: 6px; padding: 7px 0; font-weight: 600; }
+  #hint { position: absolute; right: 36px; bottom: 30px; color: #64748b; font-size: 13px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="wrap">
+  <div id="title"><h1>Risk tree · 3D explore view</h1><p>Sample data · Parent → child links across 4 levels · size = criticality score</p></div>
+  <div id="legend">
+    <div><span class="dot" style="background:#ef4444"></span>Critical (12–16)</div>
+    <div><span class="dot" style="background:#f59e0b"></span>Major (8–11)</div>
+    <div><span class="dot" style="background:#eab308"></span>Moderate (4–7)</div>
+    <div><span class="dot" style="background:#22c55e"></span>Minor (0–3)</div>
+    <div><span class="dot" style="background:#60a5fa"></span>Opportunity</div>
+  </div>
+  <div id="card">
+    <div class="id">Risk ID : #R-2041</div>
+    <h2>Supplier capacity shortfall</h2>
+    <div class="row"><span>Criticality</span><span style="color:#ef4444;font-weight:600">14 / 16</span></div>
+    <div class="row"><span>Parent</span><span>#R-1001 Supply chain</span></div>
+    <div class="row"><span>Children</span><span>3 linked</span></div>
+    <div class="row"><span>Trend</span><span>▲ +2 since last quarter</span></div>
+    <div class="btn">Open in edit drawer</div>
+  </div>
+  <div id="hint">Drag to orbit · scroll to zoom · click a node to open it</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const W = 1600, H = 1000;
+const wrap = document.getElementById('wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+wrap.prepend(renderer.domElement);
+const labels = new CSS2DRenderer();
+labels.setSize(W, H);
+Object.assign(labels.domElement.style, { position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+wrap.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1220');
+scene.fog = new THREE.Fog('#0b1220', 34, 62);
+const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 200);
+camera.position.set(0, 17, 33);
+camera.lookAt(0, -0.5, 0);
+
+scene.add(new THREE.HemisphereLight('#cbd5e1', '#0b1220', 1.1));
+const key = new THREE.DirectionalLight('#ffffff', 1.6); key.position.set(8, 20, 12); scene.add(key);
+const rim = new THREE.PointLight('#60a5fa', 60, 40); rim.position.set(-12, 6, -8); scene.add(rim);
+
+// Ground grid
+const grid = new THREE.GridHelper(60, 40, '#1e3a5f', '#14233a');
+grid.position.y = -5.2; scene.add(grid);
+
+// Sample hierarchy: [label, score, type, children]
+const data = ['ERM dashboard · Programme X', 0, 'root', [
+  ['R-1001 Supply chain', 13, 'risk', [
+    ['R-2041 Supplier capacity', 14, 'risk', [['R-3101 Castings delay', 12, 'risk', []], ['R-3102 Second source', 6, 'risk', []], ['R-3103 Logistics', 4, 'risk', []]]],
+    ['R-2042 Raw material price', 9, 'risk', [['R-3104 Titanium', 10, 'risk', []]]],
+    ['O-2043 Supplier consolidation', 7, 'opp', []],
+  ]],
+  ['R-1002 Certification', 10, 'risk', [
+    ['R-2051 Test campaign slip', 11, 'risk', [['R-3201 Rig availability', 8, 'risk', []]]],
+    ['R-2052 Documentation gaps', 5, 'risk', []],
+  ]],
+  ['R-1003 Cybersecurity', 15, 'risk', [
+    ['R-2061 Legacy access model', 13, 'risk', [['R-3301 Shared accounts', 9, 'risk', []], ['R-3302 Print exports', 3, 'risk', []]]],
+    ['R-2062 Third-party tools', 7, 'risk', []],
+    ['R-2063 Awareness', 2, 'risk', []],
+  ]],
+  ['O-1004 Industrial ramp-up', 8, 'opp', [
+    ['O-2071 Automation', 9, 'opp', [['O-3401 Robotic drilling', 6, 'opp', []]]],
+    ['R-2072 Skills shortage', 11, 'risk', []],
+  ]],
+]];
+
+const colorFor = (score, type) => type === 'root' ? '#93c5fd' : type === 'opp' ? '#60a5fa'
+  : score >= 12 ? '#ef4444' : score >= 8 ? '#f59e0b' : score >= 4 ? '#eab308' : '#22c55e';
+
+// Radial layered layout: each subtree gets an angular slice proportional to its leaf count.
+const leaves = n => n[3].length ? n[3].reduce((s, c) => s + leaves(c), 0) : 1;
+const LEVEL_Y = [6.2, 2.6, -0.8, -4.2];
+const LEVEL_R = [0, 5, 8.6, 12];
+const nodes = [];
+function layout(n, depth, a0, a1, parent) {
+  const a = (a0 + a1) / 2;
+  const pos = new THREE.Vector3(Math.cos(a) * LEVEL_R[depth], LEVEL_Y[depth], Math.sin(a) * LEVEL_R[depth]);
+  const node = { label: n[0], score: n[1], type: n[2], depth, pos, parent };
+  nodes.push(node);
+  let start = a0;
+  const total = leaves(n);
+  for (const c of n[3]) {
+    const span = (a1 - a0) * leaves(c) / total;
+    layout(c, depth + 1, start, start + span, node);
+    start += span;
+  }
+}
+layout(data, 0, -Math.PI * 0.98, Math.PI * 0.98, null);
+
+const selected = 'R-2041 Supplier capacity';
+const selectedNode = nodes.find(n => n.label === selected);
+// Turn the tree so the selected branch faces the camera (+z), slightly left of centre.
+{
+  const delta = (Math.PI / 2 + 0.35) - Math.atan2(selectedNode.pos.z, selectedNode.pos.x);
+  for (const n of nodes) {
+    const r = Math.hypot(n.pos.x, n.pos.z), a = Math.atan2(n.pos.z, n.pos.x) + delta;
+    n.pos.set(Math.cos(a) * r, n.pos.y, Math.sin(a) * r);
+  }
+}
+const isOnPath = n => { for (let p = selectedNode; p; p = p.parent) if (p === n) return true; return n.parent === selectedNode; };
+
+for (const n of nodes) {
+  const radius = n.type === 'root' ? 0.9 : 0.32 + n.score / 16 * 0.55;
+  const color = new THREE.Color(colorFor(n.score, n.type));
+  const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: n === selectedNode ? 0.9 : 0.35, roughness: 0.35, metalness: 0.15 });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 32), mat);
+  mesh.position.copy(n.pos); scene.add(mesh);
+
+  // Soft halo
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.6, 32, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: n === selectedNode ? 0.28 : 0.08, depthWrite: false }));
+  halo.position.copy(n.pos); scene.add(halo);
+
+  if (n === selectedNode) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.9, 0.05, 16, 80), new THREE.MeshBasicMaterial({ color: '#f472b6' }));
+    ring.position.copy(n.pos); ring.rotation.x = Math.PI / 2.4; scene.add(ring);
+  }
+
+  // Drop line to the grid for depth cues
+  const drop = new THREE.Line(new THREE.BufferGeometry().setFromPoints([n.pos, new THREE.Vector3(n.pos.x, -5.2, n.pos.z)]),
+    new THREE.LineBasicMaterial({ color: '#1e3a5f', transparent: true, opacity: 0.5 }));
+  scene.add(drop);
+
+  // Curved link to parent
+  if (n.parent) {
+    const p = n.parent.pos, c = n.pos;
+    const mid = p.clone().lerp(c, 0.5); mid.y += 0.8;
+    const curve = new THREE.QuadraticBezierCurve3(p, mid, c);
+    const hot = isOnPath(n) && isOnPath(n.parent);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, hot ? 0.07 : 0.035, 8, false),
+      new THREE.MeshBasicMaterial({ color: hot ? '#f472b6' : '#475569', transparent: true, opacity: hot ? 0.95 : 0.6 }));
+    scene.add(tube);
+  }
+
+  // Labels for root, level 1 and the selected branch
+  if (n.depth <= 1 || isOnPath(n)) {
+    const div = document.createElement('div');
+    div.className = 'label' + (n.type === 'root' ? ' root' : '');
+    const [id, ...rest] = n.label.split(' ');
+    div.innerHTML = n.type === 'root' ? n.label : `<b>${id}</b>${rest.join(' ')}`;
+    const obj = new CSS2DObject(div);
+    obj.position.copy(n.pos).add(new THREE.Vector3(0, radius + 0.55, 0));
+    scene.add(obj);
+  }
+}
+
+renderer.render(scene, camera);
+labels.render(scene, camera);
+window.__done = true;
+</script>
+</body>
+</html>

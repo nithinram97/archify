@@ -1,0 +1,33 @@
+# A room with no front wall (the camera side), like a sitcom set.
+kind = "room"
+scale = "people"       # life-size furniture for people (toy: for toy figures)
+size = "medium"        # small, medium, large
+walls = "mint"
+floor = "wood"         # wood, tiles, carpet, concrete, or a colour
+
+# Furniture goes in named places:
+#   back-left   back    back-right
+#   left        center  right
+#   front-left  front   front-right
+[[props]]
+type = "door"
+place = "back-left"
+
+[[props]]
+type = "window"
+place = "back"
+
+[[props]]
+type = "counter"
+place = "back-right"
+items = ["cookie-jar"]
+
+[[props]]
+type = "table"
+place = "center"
+chairs = 2               # makes the seats "chair" (left) and "chair-2" (right)
+items = ["plate", "cup"]
+
+[[props]]
+type = "plant"
+place = "left"
