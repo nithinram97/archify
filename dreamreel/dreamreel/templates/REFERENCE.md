@@ -301,8 +301,12 @@ lightning and wind in the trees. Slow motion slows the rain too.
 carefully, sneakily, wildly, gently, firmly. Without it, the character's current mood decides how
 they move: an angry wave is quick, big and sharp; a sad walk is slow, with small steps. Every gesture
 anticipates (a small counter-move first) and follows through (overshoots and settles); long hair,
-ponytails, floppy ears and antennae swing and settle; jumps squash and stretch. `exaggeration` in
-film.toml (0.5 subtle ... 1 natural ... 2 very cartoony) pushes all of it; each style has its own default.
+ponytails, floppy ears and antennae swing and settle; jumps squash and stretch. Within a move the
+forearm trails the upper arm and the hand trails the forearm (overlapping action), and two-handed moves
+are never mirror images: one side (always the same one for a character) comes a touch later and a
+touch smaller. Between moves nobody is ever quite still: the trunk shifts its weight and the head
+drifts (`[acting] alive = 0.5` in film.toml for less, `0` for none). `exaggeration` in film.toml (0.5
+subtle ... 1 natural ... 2 very cartoony) pushes all of it; each style has its own default.
 
 **Where / target / facing**: a spot or seat name, a character, or `camera`, `left`, `right`, `back`.
 
@@ -477,6 +481,19 @@ scene file gives that scene its own (flashbacks, dreams, a film within the film)
 | noir | black and white, a low hard side light, deep shadows |
 | realistic | real materials on everything (photo-scanned wood, plaster, brick, fabric, fur, skin...), real skies |
 
+Every style also sets the camera and grade: a rim light behind whoever is in each shot (moved at every
+cut, so it always traces their outline), and for `realistic` and `noir` a film grade (teal shadows,
+warm highlights), bloom on bright highlights, a little lens distortion, a vignette, motion blur, and
+more light on the cast than on the walls behind them. A style of your own sets any of them:
+
+```python
+class Dusk(dr.styles.Realistic):
+    rim = 1.5                     # 0: no rim light
+    grade = ((0.9, 0.95, 1.05), (1, 1, 1), (1.1, 1.0, 0.9))   # lift, gamma, gain colours
+    bloom, lens, vignette, motion_blur = 0.4, 0.0, 0.4, 0.5
+    ambient, separation = 0.6, 0.5   # bounce light indoors; how much less the key lights the set
+```
+
 In the realistic look each surface is given the real material it is made of, worked out from what
 it is (a floor, a wall, a pack's "Bark", a person's trousers, a dog). To say what something is made
 of yourself, give its material a `dr_material` property (in Blender, or `mat["dr_material"] = "leather"`
@@ -542,13 +559,49 @@ layout = "side_by_side"        # or "top_bottom"
 `dreamreel check` prints the edit list and the film's length. Transitions never re-render scenes,
 so trying a different one is quick.
 
+## Checks: directing before rendering
+
+`dreamreel check` builds every scene and reads it the way a director would, before anything is
+rendered. Besides errors and characters standing inside each other, it warns about:
+
+- **static camera**: a shot that holds over 10 s with no camera move and no cut
+- **radio play**: three lines in a row with nobody doing anything (no gesture, move, look or change of feeling)
+- **dead reaction**: someone in a shot over 4 s who isn't speaking and never reacts
+
+Each check is a class (`class X(dr.Lint)` with `check(self, scene)` returning sentences), so a film can
+add its own in `extensions/`. Tune or silence them in film.toml:
+
+```toml
+[check]
+ignore = ["radio_play"]
+static_camera_seconds = 14      # <check>_<setting>
+dead_reaction_seconds = 6
+```
+
+## AI notes and new features
+
+With an AI model set up (`[ai]` in film.toml, or `--provider`/`--model`; any that can see pictures,
+including free local ones):
+
+- `dreamreel review 010` cuts the rendered scene into sheets of frames stamped with their times and
+  shows them, with the timeline, to the model as an animation supervisor: twinning, sliding or floating
+  feet, robotic timing, poses, staging, light. The notes go in `renders/<quality>/<scene>.review.json`.
+  `--fix` asks for a revised scene that addresses them; it must build (a broken one goes back to the
+  model with the error) and waits in `scenes/.proposed/`. `--apply` uses it and keeps the old scene in
+  `scenes/.history/`.
+- `dreamreel evolve gesture moonwalk "glides backwards while the feet walk forwards"` has the model write
+  a new class from its parent's source (`--from wave` to grow it from an existing one). The draft is
+  tried in a test scene for its kind in a separate process; what fails goes back to the model, and
+  `--look` also has it judge a still. Only a class that works reaches `extensions/` (`--replace` keeps
+  the old one in `extensions/.history/`). The code is the model's and runs on your computer: read it.
+
 ## Commands
 
 | | |
 |---|---|
 | `dreamreel new DIR [--example]` | new project |
 | `dreamreel studio [DIR]` | the app, in your browser |
-| `dreamreel check [scene]` | timelines, warnings and errors, without rendering |
+| `dreamreel check [scene]` | timelines, warnings and errors, without rendering (see "Checks") |
 | `dreamreel cast [names]` | picture of the cast |
 | `dreamreel plan SET [--view]` | map of a set with its spots (or a picture of it) |
 | `dreamreel still SCENE T [T ...]` | frames at those seconds (`--percent`, `--previz`) |
@@ -557,6 +610,8 @@ so trying a different one is quick.
 | `dreamreel plugins [kind] [-v]` | every feature and its settings |
 | `dreamreel extend KIND NAME` | start a new feature as a class in `extensions/` |
 | `dreamreel generate NAME --prompt/--image` | make a character (or `--prop`) with the AI modeller |
+| `dreamreel review SCENE [--fix [--apply]]` | an AI model watches the render and gives notes; `--fix` rewrites the scene |
+| `dreamreel evolve KIND NAME "what it does"` | an AI model writes a new feature, tried in a test scene, kept if it works |
 | `dreamreel kit` | the modelling kit model recipes are written in |
 | `dreamreel assets [--download] [--pack P]` | free asset packs: Quaternius 3D (people, animals, furniture...), humans, materials, sounds, fights |
 | `dreamreel voices` | how to set up voices |

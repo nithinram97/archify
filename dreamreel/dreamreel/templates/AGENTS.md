@@ -43,11 +43,13 @@ each one's settings. That list is the truth; use only names from it.
    ```
    Scene beats (pauses, captions, camera shots) have no `who`.
 4. **Check.** `dreamreel check` prints each scene's timeline in about a second, with warnings (people
-   overlapping) and errors naming the beat. Fix until clean.
+   overlapping, a static camera, radio play, dead reactions) and errors naming the beat. Fix until
+   clean: give listeners reactions, give speakers something to do, cut or move the camera.
 5. **Look.** `dreamreel contact <scene>` renders a sheet of frames; look at it. Check framing,
    facing, expressions, feet on the ground. `dreamreel still <scene> <seconds>` for one moment.
 6. **Previz, then render.** `dreamreel previz`, then `dreamreel render`. Only changed scenes re-render.
-7. **Notes.** Change the smallest thing that answers a note, check, show new frames.
+7. **Notes.** Change the smallest thing that answers a note, check, show new frames. With an AI model
+   set up, `dreamreel review <scene>` gives a supervisor's notes on the render to work from.
 
 ## Creatures: any body
 

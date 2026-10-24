@@ -66,13 +66,16 @@ Next, roughly in order:
 - (Done: fight choreography: strikes and reactions that meet, knockdowns, get-ups, stances, fight faces, camera shake,
   bullet time, and surround / brawl / burst staging of one against many; identical clones with `name*N`.)
 - Fights with things: staffs, poles and chairs as weapons; bodies hitting walls, cars and each other.
-- Knockdowns driven by physics (ragdolls) for falls nobody has to choreograph.
 - Shot variety learnt from scene content (reaction shots, cutaways to props).
 - (Done: sound effects, footsteps, ambience and music ducking, see REFERENCE.md "Sound".)
 - Sounds placed in space (louder near the camera, panned left and right); pitch following slow motion.
 - Cloud voice engines as plugins; multi-language voices and subtitles.
 
 ## Tooling
+- (Done: a director's checks in `dreamreel check`; `dreamreel review`, an AI supervisor's notes on a render
+  and a revised scene; `dreamreel evolve`, new feature classes written by an AI model, tried and kept only
+  if they work.) Next: review that runs after every render on its own, reviews that compare two versions
+  of a scene, and evolve for whole families (a set of gestures for a character).
 - (Done: an MCP server, `dreamreel mcp`, so any AI assistant can direct a film.)
 - dreamreel studio (done in 0.1): next, an "Ask the AI director" panel that takes notes in plain
   words, drag-and-drop blocking on the floor plan, and a one-click installer with no terminal.

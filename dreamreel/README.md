@@ -128,7 +128,8 @@ overcast, fog, rain, snow, storms with lightning, wind in the trees).
 ## Acting, not just moving
 
 Movement follows the classic principles of animation: gestures anticipate and follow through, jumps
-squash and stretch, long hair and floppy ears swing and settle. Every gesture and walk is shaped by
+squash and stretch, long hair and floppy ears swing and settle, a hand trails the arm that moves it, two
+hands never move as mirror images, and nobody is ever quite still. Every gesture and walk is shaped by
 the character's mood or by a manner you give it (`how = "nervously"`), using the four Laban effort
 qualities (weight, time, space, flow), so an angry wave and a sad wave are different performances.
 Characters pick things up, carry them, hand them over and put them down, and can grab small
@@ -236,6 +237,16 @@ of a scene, cut away, come back), J and L cuts and split screens. Inside a scene
 speed ramps), freeze frames and jump cuts retime the animation itself, so slow motion is smooth,
 and screen effects fade, flash or dip the picture. Changing the edit never re-renders a scene.
 
+## A director's eye, and features that grow
+
+`dreamreel check` reads every scene before anything is rendered and says what a director would: a
+shot that sits still too long, three lines in a row with nobody doing anything, a listener made of
+wood. With an AI model that can see (any provider, or a free local one), `dreamreel review` watches
+the rendered scene frame by frame like an animation supervisor and gives notes with times, and
+`--fix` rewrites the scene to answer them (only a version that builds is kept). And when a film needs
+something dreamreel doesn't have, `dreamreel evolve gesture moonwalk "..."` has the model write it as
+a new class, tries it in a test scene, sends what breaks back, and keeps it only when it works.
+
 ## Fights
 
 Strikes (jab, punch, hook, uppercut, kicks, spinning and flying kicks, sweeps) and reactions (blocks,
@@ -274,7 +285,9 @@ style where procedural animation looks intentional instead of stiff. One line in
 (`style = "toon"`) changes the look of the whole film, and a scene can have its own (a noir
 flashback, a storybook dream): toy, toon, anime, clay (animated on twos, like stop-motion), paper
 cut-out (on threes), storybook, noir and realistic. Styles change materials, outlines, light and
-colour, never the staging, so trying one costs a re-render and nothing else.
+colour, never the staging, so trying one costs a re-render and nothing else. Every shot gets a rim
+light behind whoever is in it, and the realistic and noir looks add a film grade, bloom, lens, a
+vignette and motion blur, with more light on the people than on the walls behind them.
 
 In the **realistic** look everything is made of what it really is: floorboards, painted doors,
 plaster walls, granite worktops, brick and concrete buildings, asphalt roads, grass, bark, rock,
