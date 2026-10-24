@@ -407,9 +407,14 @@ class Character(Plugin):
         key(self.root, "rotation_euler", t, (0, 0, h), ease)
         return h
 
+    def noted(self, kind, t):
+        """Remember a small act (a look, a turn, a feeling) for the checks that read a scene's acting."""
+        self.acts = getattr(self, "acts", []) + [(float(t), kind)]
+
     def turn_to(self, target, at=None, wait=True):
         """Turn the whole body towards a character, mark or direction ("camera", "left", ...)."""
         t = self._start(at)
+        self.noted("turn", t)
         p = self.position(t)
         h = self._facing_value(target, p, t)
         hold(self.root, "rotation_euler", t)
@@ -421,6 +426,7 @@ class Character(Plugin):
     def look_at(self, target, at=None, wait=False):
         """Turn just the head towards a character or mark (up to 70 degrees); the body stays."""
         t = self._start(at)
+        self.noted("look", t)
         p = self.position(t)
         q = self._point(target, t)
         rel = _wrap(heading_to(q.x - p.x, q.y - p.y) - self.heading(t))
@@ -640,6 +646,7 @@ class Character(Plugin):
         t = self._start(at)
         amount = float(how_much if how_much is not None else 1.0)
         self._moods = sorted(getattr(self, "_moods", []) + [(t, mood, amount)], key=lambda x: x[0])
+        self.noted("feel", t)
         t1 = t + 0.25
         face.apply(self, face.values(m, amount), t, t1)
         self.mood = mood
@@ -648,6 +655,7 @@ class Character(Plugin):
     def flash(self, mood, at, hold=0.5, how_much=1.0):
         """A moment of a feeling (the effort of a blow, a wince) that passes back into the mood they were in."""
         from . import face
+        self.noted("flash", at)
         before = [(t, m, a) for t, m, a in getattr(self, "_moods", []) if t <= at]
         back, amount = (before[-1][1], before[-1][2]) if before else ("neutral", 1.0)
         face.apply(self, face.values(plugins.get("mood", mood), how_much), at, at + 0.08)
@@ -660,10 +668,12 @@ class Character(Plugin):
         to: who they're talking to (they look at them, and the camera uses it for over-the-shoulder shots).
         """
         t = self._start(at)
+        acts = getattr(self, "acts", [])
         if to is not None:
             self.look_at(to, at=t, wait=False)
         if mood:
             self.feel(mood, at=t, wait=False)
+        self.acts = acts                 # part of speaking, not acting while speaking (see lint.RadioPlay)
         speech = self.scene.voices.speak(self, line, mood=mood or self.mood)
         t0 = t + 0.15
         if speech is not None:

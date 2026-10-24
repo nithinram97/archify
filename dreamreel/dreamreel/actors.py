@@ -745,6 +745,7 @@ class ClipActor(Character):
             from . import face
             face.apply(self, face.values(m, float(how_much if how_much is not None else 1.0)), t, t + 0.25)
         self._moods = sorted(getattr(self, "_moods", []) + [(t, mood, float(how_much or 1.0))], key=lambda x: x[0])
+        self.noted("feel", t)
         hold(self.neck, "rotation_euler", t)
         cur = value_at(self.neck, "rotation_euler", t)
         key(self.neck, "rotation_euler", t + 0.3, (math.radians(getattr(m, "head_tilt", 0.0)) * 0.8, cur[1], cur[2]))

@@ -590,17 +590,9 @@ class Scene:
                 "cards": [c[0] for c in self.cards], "time_of_day": self.time_of_day, "weather": self.weather}
 
     def check(self):
-        """Things that will probably look wrong."""
-        out = []
-        names = list(self.actors.values())
-        for t in [i * 0.5 for i in range(int(self.length * 2))]:
-            for i, a in enumerate(names):
-                for b in names[i + 1:]:
-                    if a.visible(t) and b.visible(t) and (a.position(t) - b.position(t)).length < 0.35 * max(a.H, b.H):
-                        out.append(f"{a.name} and {b.name} overlap at {t:.1f}s")
-                        break
-        seen = set()
-        return [w for w in out if not (w.split(" at ")[0] in seen or seen.add(w.split(" at ")[0]))]
+        """Things that will probably look wrong (every check in lint.py, and the film's own)."""
+        from . import lint
+        return lint.run(self)
 
     def metadata(self):
         return {

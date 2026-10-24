@@ -24,6 +24,25 @@ who = "bolt"
 do = "walk_to"
 where = "cake"
 
+# they watch him come in
+[[beats]]
+who = "mia"
+do = "look_at"
+target = "bolt"
+with_previous = true
+
+[[beats]]
+who = "biscuit"
+do = "look_at"
+target = "bolt"
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "feel"
+mood = "surprised"
+with_previous = true
+
 [[beats]]
 who = "bolt"
 do = "turn_to"
