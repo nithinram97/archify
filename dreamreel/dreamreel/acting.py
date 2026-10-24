@@ -177,6 +177,96 @@ def shape(curves, t0, t1, effort, exaggeration=1.0):
     return keys.CLOCK.seconds(end_frame)
 
 
+LAG_PER_LEVEL = 0.6       # frames a part trails the part it hangs from (overlapping action)
+MOST_LAG = 3.0
+UNMIRROR_FRAMES = 2.5     # one side of a two-handed move comes a little after the other...
+UNMIRROR_AMOUNT = 0.92    # ... and a little smaller: people are never quite symmetrical
+
+
+def depth_of(owner):
+    """How many parts up a part hangs from (a pose bone's parents, or an object's)."""
+    d, o = 0, owner
+    while getattr(o, "parent", None) is not None:
+        d, o = d + 1, o.parent
+    return d
+
+
+def side_of(name):
+    """+1 for a left part, -1 for a right one, 0 for neither, from its name: arm.L, Arm_L, hand_l,
+    mixamorig:LeftArm, Left_Hand..."""
+    import re
+    if re.search(r"Left|(^|[._:\-\s])left([._:\-\s]|$)|[._\-](L|l)$|[._\-](L|l)[._\-]", name):
+        return 1
+    if re.search(r"Right|(^|[._:\-\s])right([._:\-\s]|$)|[._\-](R|r)$|[._\-](R|r)[._\-]", name):
+        return -1
+    return 0
+
+
+def _name(owner, fc):
+    return getattr(owner, "name", None) or fc.data_path
+
+
+def _shift(fc, f0, f1, dx=0.0, scale=1.0):
+    """Move a curve's keys between f0 and f1 (after the first) later by dx frames, their change from the
+    start scaled by `scale`; never past a later key."""
+    pts = sorted((kp for kp in fc.keyframe_points if f0 - 0.01 <= kp.co.x <= f1 + 0.01), key=lambda kp: kp.co.x)
+    if len(pts) < 2:
+        return f1
+    later = [kp.co.x for kp in fc.keyframe_points if kp.co.x > f1 + 0.01]
+    if later:
+        dx = max(0.0, min(dx, min(later) - pts[-1].co.x - 1.0))
+    base = pts[0].co.y
+    for kp in pts[1:]:
+        y = base + (kp.co.y - base) * scale
+        ddx, ddy = dx, y - kp.co.y
+        kp.co = (kp.co.x + ddx, y)
+        kp.handle_left = (kp.handle_left.x + ddx, kp.handle_left.y + ddy)
+        kp.handle_right = (kp.handle_right.x + ddx, kp.handle_right.y + ddy)
+    fc.update()
+    return pts[-1].co.x
+
+
+def _baked(fc, f0, f1):
+    """A curve keyed nearly every frame (motion capture, physics): it has its own overlap and asymmetry."""
+    n = sum(1 for kp in fc.keyframe_points if f0 - 0.01 <= kp.co.x <= f1 + 0.01)
+    return n > 6 and n > 0.5 * (f1 - f0)
+
+
+def overlap(curves, t0, t1, exaggeration=1.0):
+    """Overlapping action: parts further down a chain (forearm after upper arm, hand after forearm)
+    reach each key a moment after the parts they hang from, so a move flows down the limb instead of
+    the whole chain snapping together. Returns the new end time."""
+    owners = getattr(curves, "owner", {})
+    f0, f1 = keys.CLOCK.frame(t0), keys.CLOCK.frame(t1)
+    deep = {fc: depth_of(owners[fc]) for fc in curves
+            if fc in owners and "rotation" in fc.data_path and not _baked(fc, f0, f1)}
+    if not deep:
+        return t1
+    top = min(deep.values())
+    end = f1
+    for fc, d in deep.items():
+        lag = min(MOST_LAG, (d - top) * LAG_PER_LEVEL * exaggeration) * keys.CLOCK.fps / 24.0
+        if lag > 0.05:
+            end = max(end, _shift(fc, f0, f1, dx=lag))
+    return keys.CLOCK.seconds(end)
+
+
+def unmirror(curves, t0, t1, late=1, frames=UNMIRROR_FRAMES, amount=UNMIRROR_AMOUNT):
+    """Break the mirror in a two-sided move: the `late` side (+1 left, -1 right) moves a few frames
+    after the other and a little less far. One-sided moves are left alone. Returns the new end time."""
+    owners = getattr(curves, "owner", {})
+    f0, f1 = keys.CLOCK.frame(t0), keys.CLOCK.frame(t1)
+    sides = {fc: side_of(_name(owners.get(fc), fc)) for fc in curves if not _baked(fc, f0, f1)}
+    if not ({1, -1} <= set(sides.values())):
+        return t1
+    end = f1
+    dx = frames * keys.CLOCK.fps / 24.0
+    for fc, side in sides.items():
+        if side == late:
+            end = max(end, _shift(fc, f0, f1, dx=dx, scale=amount))
+    return keys.CLOCK.seconds(end)
+
+
 def follow_through(c, length, exaggeration=1.0):
     """Bake a damped spring onto each of a character's dangly parts: they lag behind the body when
     it starts, stops, turns, nods or jumps, and then settle (follow-through, overlapping action)."""

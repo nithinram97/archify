@@ -24,7 +24,7 @@ import math
 import bpy
 from mathutils import Matrix, Vector
 
-from . import keys, plugins, quaternius, shapes
+from . import _compat, keys, plugins, quaternius, shapes
 from .character import Character
 from .gestures import Gesture
 from .keys import hold, key, value_at
@@ -230,6 +230,7 @@ GESTURE_POSES = {
              [(6, _clap, 1), (10, _clap, 0), (14, _clap, 1), (18, _clap, 0), (22, _clap, 1), (26, _clap, 0)]),
     "bow": (["Abdomen", "Torso"], [(10, _bow, 0), (24, _bow, 0)]),
 }
+SYMMETRIC_POSES = {"clap"}      # both hands have to arrive together
 
 
 class ClipActor(Character):
@@ -393,6 +394,18 @@ class ClipActor(Character):
         P.rest()
         P.keyed(act, frames[-1][0] + 8, bones)  # and settles back
         self.rig.animation_data.action = None
+        # the hand-posed keys come out perfectly mirrored and in step: loosen them like a real body
+        from . import acting
+        curves = keys.Recorded()
+        for fc in _compat.fcurves(act):
+            bone = fc.data_path.split('"')[1] if '"' in fc.data_path else None
+            if bone in self.rig.pose.bones:
+                curves.add(fc)
+                curves.owner[fc] = self.rig.pose.bones[bone]
+        span = (keys.CLOCK.seconds(1), keys.CLOCK.seconds(frames[-1][0] + 8))
+        acting.overlap(curves, *span)
+        if gesture not in SYMMETRIC_POSES:
+            acting.unmirror(curves, *span, late=self.late_side)
         return act
 
     def animate_steps(self, path, n_steps, step_t, run):

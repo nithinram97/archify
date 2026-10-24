@@ -407,6 +407,12 @@ class Character(Plugin):
         key(self.root, "rotation_euler", t, (0, 0, h), ease)
         return h
 
+    @property
+    def late_side(self):
+        """The side of this body that's a touch behind the other in two-handed moves (always the same one)."""
+        import zlib
+        return 1 if zlib.crc32(self.name.encode()) % 2 else -1
+
     def noted(self, kind, t):
         """Remember a small act (a look, a turn, a feeling) for the checks that read a scene's acting."""
         self.acts = getattr(self, "acts", []) + [(float(t), kind)]
@@ -872,6 +878,10 @@ class Character(Plugin):
         if g.keeps_time:
             effort = acting.Steady(effort)
         end = acting.shape(curves, t, end, effort, self.scene.exaggeration)
+        if not g.keeps_time:                # moves that must meet someone else's keep their exact timing
+            end = acting.overlap(curves, t, end, self.scene.exaggeration)
+            if not g.symmetric:
+                end = acting.unmirror(curves, t, end, late=self.late_side)
         tempo = effort.tempo()          # the gesture's sounds keep time with its retimed moves
         fx = self.scene.sound_fx
         fx[n_sounds:] = [(t + (ts - t) * tempo, f, v, n) for ts, f, v, n in fx[n_sounds:]]
@@ -1267,6 +1277,33 @@ class Character(Plugin):
             key(self.body, "scale", t, (1, 1, 1))
             key(self.body, "scale", t + 0.9, (1.012, 1.012, 1.02))
             t += 1.9
+
+    def sway_parts(self):
+        """What drifts while the body is "still": (part, (forward, sideways, twist) in degrees, seconds
+        per drift). The trunk shifts its weight slowly, the head a little quicker."""
+        return [(self.body, (0.7, 0.9, 1.2), 4.0), (getattr(self, "neck", None), (1.0, 0.8, 1.5), 2.6)]
+
+    def sway(self, amount=1.0):
+        """Weight shifts and small drifts of the trunk and head for the whole scene, added on top of the
+        acting (noise on the curves, so every move and pose underneath stays as it was): a body is never
+        perfectly still. Captured motion plays without it (its controls are off while it plays)."""
+        from . import _compat
+        if amount <= 0:
+            return
+        for part, degrees, seconds in self.sway_parts():
+            if part is None:
+                continue
+            if not any(fc.data_path == "rotation_euler" for fc in _compat.fcurves(part)):
+                part.keyframe_insert("rotation_euler", frame=1)
+            for fc in _compat.fcurves(part):
+                if fc.data_path != "rotation_euler" or any(m.type == "NOISE" for m in fc.modifiers):
+                    continue
+                strength = math.radians(degrees[fc.array_index]) * amount * 1.5
+                for blend in ("ADD", "SUBTRACT"):    # two noises against each other: centred on the pose
+                    m = fc.modifiers.new("NOISE")
+                    m.blend_type, m.strength = blend, strength
+                    m.scale = seconds * keys.CLOCK.fps * self.rng.uniform(0.8, 1.25)
+                    m.phase = self.rng.uniform(0, 100)
 
 
 # where the features go, as fractions of the face scale (x across, z up from the head centre)

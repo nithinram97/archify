@@ -29,6 +29,7 @@ class Gesture(Plugin):
     uses_target = False   # True if the gesture points at or turns to its target
     needs = ()            # body capabilities it needs: "arms", "tail", "wings", "rear", ...
     keeps_time = False    # True: the mood shapes it but never changes its timing (moves that must meet others)
+    symmetric = False     # True: both sides must move exactly together (hands that meet in a clap)
 
     @classmethod
     def describe_extra(cls):
@@ -137,6 +138,7 @@ class Facepalm(Gesture):
 class Clap(Gesture):
     needs = ("arms",)
     description = "Clap hands"
+    symmetric = True          # the hands have to meet
 
     def perform(self, c, t, target=None):
         for i in range(4):

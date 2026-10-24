@@ -47,11 +47,19 @@ def _path(target, prop):
 RECORDING = []    # stacks of key records while a gesture is being performed (see acting.py)
 
 
+class Recorded(set):
+    """The curves keyed inside a recording, and what each one moves (`owner[fc]`: an object or a pose bone)."""
+
+    def __init__(self):
+        super().__init__()
+        self.owner = {}
+
+
 class recording:
     """Collect every curve keyed inside the block: `with keys.recording() as rec: ...`."""
 
     def __enter__(self):
-        self.curves = set()
+        self.curves = Recorded()
         RECORDING.append(self.curves)
         return self.curves
 
@@ -77,6 +85,7 @@ def key(target, prop, at, value, ease="smooth", index=-1):
         if fc.data_path == full and (index < 0 or fc.array_index == index):
             for rec in RECORDING:
                 rec.add(fc)
+                rec.owner.setdefault(fc, target)
             for kp in fc.keyframe_points:
                 if abs(kp.co[0] - frame) < 0.5:
                     kp.interpolation = interp
