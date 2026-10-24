@@ -97,6 +97,23 @@ def _rigid(objs, kind):
     bpy.ops.rigidbody.objects_add(type=kind)
 
 
+def _ground(scene, p):
+    st = getattr(scene, "set", None)
+    return st.ground_height(p.x, p.y) if st is not None and hasattr(st, "ground_height") else 0.0
+
+
+def _segment_gap(p0, p1, q0, q1):
+    """The closest distance between two line segments (sampled finely enough for body parts)."""
+    best = 1e9
+    for i in range(9):
+        a = p0.lerp(p1, i / 8)
+        d, u = q1 - q0, 0.0
+        if d.length_squared > 1e-9:
+            u = max(0.0, min(1.0, (a - q0).dot(d) / d.length_squared))
+        best = min(best, (a - (q0 + d * u)).length)
+    return best
+
+
 def knock_down(scene, falls, t, most=3.0, settle=None):
     """Simulate bodies knocked down at time t: `falls` is [(character, push velocity Vector)]. Bakes each
     fall onto its skeleton and returns {character: {rest: time, on_back, heading, where}}. `settle(c, axis,
@@ -118,7 +135,11 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
         J, J1 = now[c], before[c]
         parts = {}
         for name, a, b, r, mass, _ in PARTS:
-            o = _capsule(f"rag.{c.name}.{name}", J[a], J[b], r * c.H, coll)
+            rr = r * c.H
+            g = _ground(scene, J["hips"])
+            # never starting in the floor: the floor would fire it into the air
+            ea, eb = (Vector((v.x, v.y, max(v.z, g + rr + 0.003))) for v in (J[a], J[b]))
+            o = _capsule(f"rag.{c.name}.{name}", ea, eb, rr, coll)
             made.append(o)
             v = ((J[a] + J[b]) - (J1[a] + J1[b])) / 2 * fps + Vector(push) * TAKES.get(name, 1.0)
             parts[name] = (o, mass * 75.0 * (c.H / 1.75) ** 3, v)
@@ -148,7 +169,7 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
         coll.objects.link(s)
         made.append(s)
         solid.append(s)
-    ground = scene.set.ground_height(centres[0].x, centres[0].y) if scene.set and hasattr(scene.set, "ground_height") else 0.0
+    ground = _ground(scene, centres[0])
     fme = bpy.data.meshes.new("rag.floor")
     fme.from_pydata([(-60, -60, ground), (60, -60, ground), (60, 60, ground), (-60, 60, ground)], [], [(0, 1, 2, 3)])
     floor = bpy.data.objects.new("rag.floor", fme)
@@ -211,6 +232,31 @@ def knock_down(scene, falls, t, most=3.0, settle=None):
                 twist = 0.4 if ax == "z" else 1.0          # little twist along the limb
                 setattr(rc, f"limit_ang_{ax}_lower", -math.radians(lim * twist))
                 setattr(rc, f"limit_ang_{ax}_upper", math.radians(lim * twist))
+    # parts of one body that start out touching but aren't joined (forearms against the chest in a
+    # guard) would blast each other apart: they ignore each other
+    joined = {frozenset((a, b)) for a, b, _, _ in JOINTS}
+    for c, parts in bodies.items():
+        J = now[c]
+        seg = {name: (J[a], J[b], r * c.H) for name, a, b, r, _, _ in PARTS}
+        names = list(seg)
+        for i, m in enumerate(names):
+            for n in names[i + 1:]:
+                if frozenset((m, n)) in joined:
+                    continue
+                (a0, a1, ra), (b0, b1, rb) = seg[m], seg[n]
+                if _segment_gap(a0, a1, b0, b1) < ra + rb + 0.01:
+                    e = bpy.data.objects.new(f"rag.{c.name}.apart.{m}.{n}", None)
+                    coll.objects.link(e)
+                    made.append(e)
+                    vl = bpy.context.view_layer
+                    for o in vl.objects:
+                        o.select_set(False)
+                    e.select_set(True)
+                    vl.objects.active = e
+                    bpy.ops.rigidbody.constraint_add(type="GENERIC")
+                    rc = e.rigid_body_constraint
+                    rc.object1, rc.object2 = parts[m][0], parts[n][0]
+                    rc.disable_collisions = True              # no limits: they only stop colliding
     # run it until everyone is still (cloth sits it out: it's simulated when the film plays)
     cloth = [m for o in bpy.data.objects for m in o.modifiers if m.type == "CLOTH" and m.show_viewport]
     for m in cloth:
