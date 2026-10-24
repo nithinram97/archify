@@ -387,28 +387,62 @@ class Environment:
         obj.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat("-Z", "Y").to_euler()
         return obj
 
-    def rim(self, shots, strength=1.0):
+    def rim(self, shots, strength=1.0, cast=None):
         """A light behind whoever is in each shot, from the far side of the camera and a little to one side:
         it traces their outline and lifts them off the background. Moved at every cut. `shots`:
         [(shot, start, end)]."""
-        L = self.light
         if strength <= 0 or not shots:
             return None
-        if self.outdoor:          # in daylight the sun and sky already do it
-            energy = 900 * max(0.0, 1.0 - L.sun_energy / 3.2) * strength
-        else:
-            energy = 1400 * L.room * strength
+        energy = self._shot_light_energy() * strength      # in daylight the sun and sky already do it
         if energy < 15:
             return None
         ceil = getattr(self.set, "ceiling_h", None) if self.set is not None else None
         obj = self._area("rim light", (0, 0, 3), energy, "#dce8ff", 1.6)
         obj.visible_camera = False
+        if cast is not None:                # it outlines the people; on the ground it's just glare
+            obj.light_linking.receiver_collection = cast
         for s, t0, _t1 in shots:
             aim, cam = Vector(s.state.aim), Vector(s.state.pos)
             back = Vector((aim.x - cam.x, aim.y - cam.y, 0))
             back = back.normalized() if back.length > 1e-3 else Vector((0, 1, 0))
             side = Vector((-back.y, back.x, 0)) * 0.9
             pos = aim + back * 2.4 + side + Vector((0, 0, 1.5))
+            if ceil:
+                pos.z = min(pos.z, ceil - 0.2)
+            keys.key(obj, "location", t0, tuple(pos), "cut")
+            keys.key(obj, "rotation_euler", t0, tuple((aim - pos).to_track_quat("-Z", "Y").to_euler()), "cut")
+        return obj
+
+    def _shot_light_energy(self):
+        """How strong lights that follow the shots are here: none in daylight, full at night and indoors."""
+        L = self.light
+        if self.outdoor:
+            return 900 * max(0.0, 1.0 - L.sun_energy / 3.2)
+        return 1400 * L.room
+
+    def face_fill(self, shots, strength=1.0, cast=None):
+        """A soft light from beside the camera onto whoever is in each shot, so faces read when it's dark
+        (night, dusk, a storm, a dim room): a crew's eye light. 30 degrees off the line from the camera to
+        them, a little above, 15-20% of the rim light, and lighting only the cast (light linking). Moved
+        at every cut; off in daylight."""
+        if strength <= 0 or not shots:
+            return None
+        energy = 0.18 * self._shot_light_energy() * strength
+        if energy < 5:
+            return None
+        ceil = getattr(self.set, "ceiling_h", None) if self.set is not None else None
+        obj = self._area("face light", (0, 0, 2), energy, "#ffe9d2", 1.0)
+        obj.visible_camera = False
+        if cast is not None:
+            obj.light_linking.receiver_collection = cast
+        for s, t0, _t1 in shots:
+            aim, cam = Vector(s.state.aim), Vector(s.state.pos)
+            back = Vector((cam.x - aim.x, cam.y - aim.y, 0))
+            dist = max(0.8, back.length)
+            back = back.normalized() if back.length > 1e-3 else Vector((0, -1, 0))
+            a = math.radians(30)
+            off = Vector((back.x * math.cos(a) - back.y * math.sin(a), back.x * math.sin(a) + back.y * math.cos(a), 0))
+            pos = aim + off * min(dist, 2.5) + Vector((0, 0, 0.45))
             if ceil:
                 pos.z = min(pos.z, ceil - 0.2)
             keys.key(obj, "location", t0, tuple(pos), "cut")

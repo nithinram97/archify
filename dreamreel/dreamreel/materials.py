@@ -706,6 +706,36 @@ def _owners(scene):
     return owners
 
 
+WET = ("asphalt", "paving", "concrete", "ground", "gravel", "sand", "rock", "brick", "brick_pale", "roof", "tiles",
+       "granite")
+WET_DARKEN = 0.62     # water in the pores of stone and asphalt holds light in: wet ground is darker
+
+
+def wet(scene, amount=1.0):
+    """In rain, the ground and the walls get darker, as wet stone and asphalt do (and stay below the
+    bloom, so a wet street doesn't outshine the people on it)."""
+    k = 1.0 - (1.0 - WET_DARKEN) * amount
+    for mat in bpy.data.materials:
+        if mat.get("dr_kind") not in WET or mat.get("dr_wet") or not mat.use_nodes:
+            continue
+        nt = mat.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        sock = bsdf.inputs["Base Color"]
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type, mix.blend_type = "RGBA", "MULTIPLY"
+        ins = {i.identifier: i for i in mix.inputs}
+        ins["Factor_Float"].default_value = 1.0
+        ins["B_Color"].default_value = (k, k, k, 1)
+        if sock.links:
+            nt.links.new(sock.links[0].from_socket, ins["A_Color"])
+        else:
+            ins["A_Color"].default_value = tuple(sock.default_value)
+        nt.links.new(next(o for o in mix.outputs if o.identifier == "Result_Color"), sock)
+        mat["dr_wet"] = True
+
+
 def realise_scene(scene, download=True):
     """Give every surface in the scene its real material. Each (material, kind) pair becomes one
     new material, so a material shared by things made of different stuff (a pack's "White" on a

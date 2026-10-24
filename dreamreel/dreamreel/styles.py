@@ -95,6 +95,7 @@ class Style(Plugin):
     # the camera and the grade
     ambient = 1.0                       # how much bounce light fills indoor shadows (lower: more contrast)
     rim = 0.7                           # a light behind whoever is in each shot, tracing their outline (0: none)
+    face_fill = 0.6                     # a soft light from beside the camera so faces read at night (0: none)
     grade = None                        # (lift, gamma, gain) colours: e.g. teal shadows and warm highlights
     bloom = 0.0                         # a glow round the brightest highlights (0: none; 0.3 subtle)
     lens = 0.0                          # lens distortion and colour fringing at the edges (0.005: subtle)
@@ -224,30 +225,14 @@ class Style(Plugin):
         """Light the people more than the set, the way a film crew flags the key off the walls: the key
         lights only the cast, and a weaker copy of it lights everything else (Blender's light linking)."""
         key = next((o for o in scene.bscene.objects if o.type == "LIGHT" and o.name.split(".")[0] == "key"), None)
-        roots = {c.root for c in scene.actors.values()}
-        if key is None or not roots:
-            return
-
-        def top(o):
-            while o.parent is not None:
-                o = o.parent
-            return o
-        people = bpy.data.collections.new("dr people")
-        for o in scene.bscene.objects:
-            if o.type == "MESH" and top(o) in roots:
-                people.objects.link(o)
-        if not people.objects:
-            bpy.data.collections.remove(people)
+        people, rest = scene.cast_meshes()
+        if key is None or people is None:
             return
         room_key = key.copy()
         room_key.data = key.data.copy()
         room_key.name = "key for the set"
         room_key.data.energy = key.data.energy * (1.0 - self.separation)
         scene.bscene.collection.objects.link(room_key)
-        rest = bpy.data.collections.new("dr not people")
-        for o in scene.bscene.objects:
-            if o.type == "MESH" and top(o) not in roots:
-                rest.objects.link(o)
         key.light_linking.receiver_collection = people
         room_key.light_linking.receiver_collection = rest
 
@@ -263,6 +248,9 @@ class Style(Plugin):
         sc.render.use_motion_blur = self.motion_blur > 0
         if self.motion_blur > 0:
             sc.render.motion_blur_shutter = self.motion_blur
+            # the shutter opens at each frame rather than around it, so no frame's exposure reaches back
+            # across a cut into the shot before (cuts are on whole frames)
+            sc.render.motion_blur_position = "START"
         self.compositor(sc)
 
     def compositor(self, sc):
@@ -455,6 +443,7 @@ class Noir(Style):
     samples = 96
     ambient = 0.35
     rim = 1.2                     # noir lives on rim light
+    face_fill = 0.35              # and on faces half in shadow
     bloom = 0.25                  # and on highlights that bleed
 
     def adjust_light(self, light):
@@ -468,34 +457,43 @@ class Noir(Style):
         light.sun_energy *= 1.3
         light.practicals *= 1.5
 
+    def no_blur_across_cuts(self, scene):
+        """The shutter is open around each frame, so the first frame of a shot would also catch the
+        camera where it was in the shot before and smear the two together. On those frames it closes."""
+        from . import _compat
+        cuts = set()
+        for fc in _compat.fcurves(scene.cut.rig):
+            if fc.data_path != "location":
+                continue
+            pts = sorted(fc.keyframe_points, key=lambda kp: kp.co.x)
+            for a, b in zip(pts, pts[1:]):
+                if a.interpolation == "CONSTANT" and abs(b.co.y - a.co.y) > 1e-4:
+                    cuts.add(int(round(b.co.x)))
+        sc = scene.bscene
+        r = sc.render
+        for f in sorted(cuts):
+            for frame, value in ((f - 1, self.motion_blur), (f, 0.0), (f + 1, self.motion_blur)):
+                r.motion_blur_shutter = value
+                r.keyframe_insert("motion_blur_shutter", frame=frame)
+        if sc.animation_data and sc.animation_data.action:
+            for fc in _compat.fcurves(sc):
+                if fc.data_path.endswith("motion_blur_shutter"):
+                    for kp in fc.keyframe_points:
+                        kp.interpolation = "CONSTANT"
+        r.motion_blur_shutter = self.motion_blur
+
     def separate(self, scene):
         """Light the people more than the set, the way a film crew flags the key off the walls: the key
         lights only the cast, and a weaker copy of it lights everything else (Blender's light linking)."""
         key = next((o for o in scene.bscene.objects if o.type == "LIGHT" and o.name.split(".")[0] == "key"), None)
-        roots = {c.root for c in scene.actors.values()}
-        if key is None or not roots:
-            return
-
-        def top(o):
-            while o.parent is not None:
-                o = o.parent
-            return o
-        people = bpy.data.collections.new("dr people")
-        for o in scene.bscene.objects:
-            if o.type == "MESH" and top(o) in roots:
-                people.objects.link(o)
-        if not people.objects:
-            bpy.data.collections.remove(people)
+        people, rest = scene.cast_meshes()
+        if key is None or people is None:
             return
         room_key = key.copy()
         room_key.data = key.data.copy()
         room_key.name = "key for the set"
         room_key.data.energy = key.data.energy * (1.0 - self.separation)
         scene.bscene.collection.objects.link(room_key)
-        rest = bpy.data.collections.new("dr not people")
-        for o in scene.bscene.objects:
-            if o.type == "MESH" and top(o) not in roots:
-                rest.objects.link(o)
         key.light_linking.receiver_collection = people
         room_key.light_linking.receiver_collection = rest
 
@@ -514,6 +512,7 @@ class Realistic(Style):
     samples = 96
     ambient = 0.75
     rim = 1.0
+    face_fill = 1.0
     grade = ((0.92, 0.96, 1.0), (1.0, 1.0, 1.0), (1.05, 1.02, 0.95))   # teal shadows, warm highlights
     bloom = 0.3
     lens = 0.004
@@ -528,6 +527,8 @@ class Realistic(Style):
         from . import materials
         materials.soften(scene)
         materials.realise_scene(scene)
+        if getattr(scene, "weather", None) in ("rain", "storm"):
+            materials.wet(scene, float(getattr(scene, "weather_strength", None) or 1.0))
         materials.real_sky(scene)
         super().finish(scene)
 
