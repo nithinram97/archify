@@ -452,7 +452,7 @@ class Director:
         c = self.character(c)
         head = c.head_point(t)
         loc, _, hz = c.where_at(t)
-        feet_z = loc.z + hz
+        feet_z = loc.z + hz - getattr(c, "hip_z", 0.0)     # off the ground only as far as the hips are raised
         H, hr, L = c.height(), c.head_r, c.length()
         table = {
             "extreme_close_up": (1.5 * hr, head.z + 0.12 * hr, 85, 2.0),

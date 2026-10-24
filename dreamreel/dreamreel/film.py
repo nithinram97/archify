@@ -75,6 +75,10 @@ def still(proj, path, times, percent=50, quality="final", out_dir=None):
     _apply_quality(s, quality, percent)
     r = s.bscene.render
     _compat.set_image_output(r)
+    for o in s.bscene.objects:      # cloth needs every frame before the one shown: in a single frame it
+        for m in o.modifiers:       # hangs as it's skinned (the film itself plays it frame by frame)
+            if m.type == "CLOTH":
+                m.show_render = m.show_viewport = False
     out = []
     for t in times:
         s.bscene.frame_set(keys.CLOCK.frame(t))
@@ -193,7 +197,7 @@ def assemble(proj, metas, quality="final", subtitles=True, edit=None):
     by_name = {m["name"]: m for m in metas}
     if edit is None:
         edit = proj.edit_list()
-        if len(metas) == 1 and len(edit) != 1:      # rendering one scene on its own
+        if len(metas) == 1 and [e.get("scene") for e in edit] != [metas[0]["name"]]:   # one scene on its own
             edit = [{"scene": metas[0]["name"]}]
     clips = []
     cursor = 1

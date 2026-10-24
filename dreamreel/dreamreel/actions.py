@@ -185,10 +185,12 @@ class DoGesture(Action):
     label = "does"
     description = "Body language: wave, shrug, cheer..."
     sentence = "{who} does {gesture}"
-    params = [Param("gesture", "gesture", required=True, default="wave"), Param("target", "target", label="At"), HOW]
+    params = [Param("gesture", "gesture", required=True, default="wave"), Param("target", "target", label="At"), HOW,
+              Param("wait", "bool", default=True, label="Wait for it",
+                    help="off: the next beat starts at once, and this plays on under it (a fall, a long stance)")]
 
-    def run(self, s, who, gesture, target=None, how=None):
-        who.do(gesture, target=target, how=how)
+    def run(self, s, who, gesture, target=None, how=None, wait=True):
+        who.do(gesture, target=target, how=how, wait=bool(wait))
 
 
 class Perform(Action):

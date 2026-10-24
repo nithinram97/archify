@@ -179,7 +179,8 @@ class Scene:
             who.busy = max(who.busy, end)
         self.end_time = max(self.end_time, end)
         if self._group is not None:
-            self._group["end"] = max(self._group["end"], end)
+            if wait:            # a beat that doesn't wait plays on under what follows, in a group too
+                self._group["end"] = max(self._group["end"], end)
         elif wait:
             self.clock = max(self.clock, end)
 

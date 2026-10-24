@@ -140,6 +140,8 @@ def shape(curves, t0, t1, effort, exaggeration=1.0):
     settle_frames = max(2, int(round(0.28 * keys.CLOCK.fps * tempo)))
     end_frame = f0 + (f1 - f0) * tempo
     for fc in curves:
+        if fc.data_path.endswith("influence"):   # a switch between controls and captured motion: not a move
+            continue
         pts = [kp for kp in fc.keyframe_points if f0 - 0.01 <= kp.co.x <= f1 + 0.01]
         if len(pts) < 2:
             continue

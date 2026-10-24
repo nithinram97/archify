@@ -20,7 +20,7 @@ from mathutils import Matrix, Vector
 
 CACHE = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "motions", "cmu")
 BASE = "http://mocap.cs.cmu.edu/subjects"
-VERSION = 5
+VERSION = 6
 
 # which recordings, and what to look for in each
 SOURCES = {
@@ -31,7 +31,6 @@ SOURCES = {
     "144_05": ("kicks",), "144_09": ("kicks",), "143_24": ("kicks",), "135_04": ("kicks",),
     "144_07": ("blocks",), "144_26": ("blocks",),
     "139_09": ("ducks",),
-    "88_06": ("spin_kick",), "87_01": ("spin_kick",),
     "90_05": ("flying_kick",), "90_06": ("flying_kick",),
     "139_18": ("get_up",), "140_08": ("get_up",), "140_01": ("get_up_face_down",),
 }
@@ -117,9 +116,16 @@ def segment(trial, what):
     L = c.leg_length
     moves = []
 
+    head = [f["head"].z + f["_hips"].z - c.floor for f in F]
+    standing = sorted(head)[int(0.9 * len(head))]
+
     def add(kind, side, i, **kw):
         before, after = WINDOW.get(kind, (0.6, 0.6))
         at = i / fps
+        if "kick" in kind:      # a kicker stays up: a head near the floor is a cartwheel or a fall, not a kick
+            i0, i1 = max(0, int((at - before) * fps)), min(len(head), int((at + after) * fps))
+            if min(head[i0:i1]) < 0.6 * standing:
+                return
         moves.append(dict(trial=trial, kind=kind, side=side, at=at, start=max(0.0, at - before),
                           end=min(c.length, at + after), **kw))
     if "punches" in what or "blocks" in what:
