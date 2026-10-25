@@ -340,6 +340,11 @@ use), played bone by bone and timed so the captured blow lands exactly on the be
 the first time a fight needs them (`dreamreel assets --pack fights` fetches them all). When they're
 **knocked down** they fall as ragdolls (real physics: they crumple, hit the ground and anything in the
 way, and lie however they landed), then get up with a captured get-up that starts from how they lie.
+Their feet stay where they're put: turning on the spot is stepping round (a step for every 60°, the
+planted foot fixed to the ground, the other lifting), someone too far away to reach walks in before
+the blow, and the feet step into the stance a captured move starts from and out of the one it ends in.
+Give a body time to turn: a beat that needs it facing the other way at once can't step, and the
+foot-slide check (below) says where.
 A `long_coat` is cloth: its tails swing and flare in a spin kick and hang again after
 (`coat_cloth = false` keeps it stiff, which renders faster when scrubbing).
 
@@ -434,7 +439,7 @@ handheld = true
 |---|---|
 | `shot` (framing) | establishing, wide, group, full, medium_wide, medium, medium_close, close_up, extreme_close_up, two_shot (of, other), over_shoulder (of = past whom, other = onto whom), pov (through of's eyes, looking at other), insert (of = a prop or thing on a table, e.g. `cookie-jar`) |
 | `angle` | eye_level, high, low, birds_eye, worms_eye (kept even when furniture is in the way) |
-| `side` | auto, front, three_quarter, profile, back |
+| `side` | auto, front, three_quarter, profile, back (with `other` too: measured from the line between them) |
 | `move` | static, push_in, pull_out, pan_left, pan_right, tilt_up, tilt_down, truck_left, truck_right, crane_up, crane_down, orbit_left, orbit_right, follow, zoom_in, zoom_out, dolly_zoom, rack_focus |
 | `amount` | how much the move does (degrees for pans, tilts and orbits; metres for trucks and cranes; a share of the distance for push and pull; a lens factor for zooms) |
 | `to` | pan to someone or something; rack focus onto them |
@@ -444,6 +449,12 @@ handheld = true
 | `duration` | seconds before the automatic camera takes over again |
 
 Faces get headroom and lead room (space on the side they're looking towards) automatically.
+Every shot of a pair stays on one side of the line between them. A fight's `two_shot` (full) is the
+exception that makes the rule work: `of` is the hero, and each exchange is shot from the side their body
+faces (a passing head turn doesn't count), turned a little toward the foe so their face is seen
+three-quarters on; the rest of the exchange keeps that side. Someone standing between the camera and
+the subject moves the camera round, up or in; they're checked as their body is posed at each moment of
+the shot (an arm thrown out blocks, someone lying on the floor under the view doesn't).
 
 ## Motion library: `motions/`
 

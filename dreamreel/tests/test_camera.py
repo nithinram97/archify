@@ -120,6 +120,26 @@ def main():
         off = math.degrees(h.forward(1.0).angle(to_cam.normalized()))
         assert 20 < off < 80, ("the hero's open three-quarter side", hero, off)
     print("  the line and the hero's side: ok")
+
+    # someone in the way is their body as posed, not a cylinder: standing in the line of sight blocks it
+    # (the camera moves), lying on the ground under it doesn't (the camera stays)
+    for lying in (False, True):
+        s = dr.Scene({"kind": "outdoor", "biome": "meadow", "trees": 0})
+        mia, tom = s.cast(mia={}, tom={})
+        mia.place((0, 2), facing="camera")
+        tom.place((0, 0), facing="mia")
+        if lying:
+            keys.key(tom.hips, "location", 0.0, (0, 0, 0.12))
+            keys.key(tom.body, "rotation_euler", 0.0, (math.radians(-90), 0, 0))
+        s.wait(2)
+        head = mia.head_point(0.0)
+        asked = Vector((0, -3, head.z))
+        s.cut.add("medium", 0.0, [mia], asked, head)
+        s.cut.manual = True
+        s.finish()
+        moved = (s.cut.final[0].state.pos - asked).length
+        assert (moved < 0.01) == lying, ("lying under the line of sight" if lying else "standing in it", moved)
+    print("  people in the way, as posed: ok")
     print("OK")
 
 

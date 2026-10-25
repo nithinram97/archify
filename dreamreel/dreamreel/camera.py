@@ -300,25 +300,57 @@ class Director:
     # ------------------------------------------------------------------ people in the way, over a whole shot
     EXEMPT = ("over_shoulder", "group", "wide", "establishing", "custom", "pov", "cast", "insert")
 
-    def _people_in_way(self, pos, aim, subjects, t):
+    def _people_in_way(self, pos, aim, subjects, t, meshes=False, reach=False):
         """Whether someone other than the subjects stands between the camera and its aim at time t, or
-        the camera is inside them. People are taken as upright cylinders (it's fast: no scene update)."""
+        the camera is inside them. People are taken as upright cylinders (fast: no scene update); with
+        `meshes` (the scene showing time t), a cylinder that might be in the way is checked against the
+        body itself, posed as it is then (a cylinder misses an arm thrown out, and blocks the gap under one).
+        `reach` alone: the wider cylinders, unchecked (could anyone be in the way?)."""
         for c in self.scene.actors.values():
             if c in subjects or not c.visible(t):
                 continue
             p = c.position(t)
-            H, r = c.height(), 0.13 * c.height() + 0.03      # shoulder-wide
+            H = c.height()
+            r = (0.45 if meshes or reach else 0.13) * H + 0.03      # arm's reach round them, or shoulder-wide
             z0 = value_at(c.root, "location", t)[2]
             d = Vector(aim) - Vector(pos)
             flat = Vector((d.x, d.y))
             q = Vector((pos.x - p.x, pos.y - p.y))
-            if q.length < r + 0.15 and z0 - 0.1 < pos.z < z0 + H + 0.1:
+            if q.length < 0.13 * H + 0.18 and z0 - 0.1 < pos.z < z0 + H + 0.1:
                 return True                                        # inside them
             if flat.length < 1e-6:
                 continue
             u = max(0.0, min(1.0, -q.dot(flat) / flat.length_squared))
-            if (q + flat * u).length < r and z0 < pos.z + d.z * u < z0 + H and u < 0.97:
-                return True                                        # between the camera and the subject
+            if (q + flat * u).length < r and z0 - 0.1 < pos.z + d.z * u < z0 + H + 0.1 and u < 0.97:
+                if not meshes or self._body_between(pos, subjects, c, t):
+                    return True                                    # between the camera and the subject
+        return False
+
+    def _body_between(self, pos, subjects, c, t):
+        """Whether c's body (its meshes as posed now) hides a subject's head or chest, or the aim, from
+        `pos`. Rain, mist and the like, things only in the final render and hidden things don't hide."""
+        dg = bpy.context.evaluated_depsgraph_get()
+        pos = Vector(pos)
+        goals = []
+        for sub in subjects:
+            head = sub.head_point(t)
+            goals += [head, head - Vector((0, 0, 0.3 * sub.height()))]
+        for goal in goals:
+            d = goal - pos
+            L = d.length
+            if L < 0.2:
+                continue
+            dirn, origin, left = d / L, pos + d / L * 0.02, L - 0.12
+            for _ in range(16):
+                hit, loc, _n, _i, obj, _m = self.scene.bscene.ray_cast(dg, origin, dirn, distance=left)
+                if not hit:
+                    break
+                if self._top(obj) is c.root and not (obj.hide_render or obj.get("dr_fx") or obj.get("dr_final_only")):
+                    return True
+                step = (loc - origin).length + 0.005
+                origin, left = loc + dirn * 0.005, left - step
+                if left <= 0:
+                    break
         return False
 
     CLOSE = ("extreme_close_up", "close_up", "medium_close")
@@ -383,7 +415,9 @@ class Director:
 
     def _keep_clear_of_people(self, s, t0, t1):
         """Over the whole of shot s, nobody but its subjects should block it; if someone does (a crowd round
-        a fight, people walking through), move the camera round, up or in until nobody does."""
+        a fight, people walking through), move the camera round, up or in until nobody does. Bodies are
+        checked as they're posed at each moment (the scene is shown at each, and every place the camera
+        might go is tried there)."""
         if s.kind in self.EXEMPT or not s.subjects or len(self.scene.actors) <= len(s.subjects):
             return
         subjects = [self.character(c) for c in s.subjects]
@@ -391,7 +425,6 @@ class Director:
         st = s.state
         if (st.pos - st.aim).length < 1.2:          # close shots: someone that close is in the shot, not in the way
             return
-
         hero = s.open_to
 
         def faces(pos):         # a fight shot never goes round behind its hero to see past someone
@@ -401,14 +434,11 @@ class Director:
             to_cam = Vector((pos.x, pos.y)) - hero.position(tt)
             return to_cam.length < 1e-3 or hero.forward(tt).dot(to_cam.normalized()) > 0.1
 
-        def clear(pos):
-            return not any(self._people_in_way(pos, st.aim, subjects, tt) for tt in times)
-        if clear(st.pos):
-            return
         off = st.pos - st.aim
         dist, flat = off.length, Vector((off.x, off.y, 0))
         el = math.atan2(off.z, flat.length) if flat.length > 1e-6 else math.pi / 2
         f0 = flat.normalized() if flat.length > 1e-6 else Vector((0, -1, 0))
+        cands = [st.pos]
         for k in (1.0, 0.8, 0.65, 0.5):
             if dist * k < 1.0:
                 break
@@ -419,9 +449,25 @@ class Director:
                     e = min(math.radians(80), el + math.radians(rise))
                     f = Matrix.Rotation(math.radians(yaw), 3, UP) @ f0
                     cand = self._keep_inside(st.aim + Vector((f.x * math.cos(e), f.y * math.cos(e), math.sin(e))) * dist * k)
-                    if faces(cand) and clear(cand) and self.clear_view(st.aim, cand):
-                        s.state = st.copy(pos=cand)
-                        return
+                    if faces(cand):
+                        cands.append(cand)
+        if not any(self._people_in_way(st.pos, st.aim, subjects, tt, reach=True) for tt in times):
+            return                                   # nobody within reach of the line of sight
+        from . import handling
+        blocked = set()
+        for tt in times:
+            handling.evaluate(self.scene, tt)
+            for i, cand in enumerate(cands):
+                if i not in blocked and self._people_in_way(cand, st.aim, subjects, tt, meshes=True):
+                    blocked.add(i)
+            if 0 in blocked and len(blocked) == len(cands):
+                break
+        if 0 not in blocked:
+            return
+        for i, cand in enumerate(cands):
+            if i not in blocked and self.clear_view(st.aim, cand):
+                s.state = st.copy(pos=cand)
+                return
 
     def in_front(self, pos, aim, margin=0.3):
         """`pos`, or if a wall (not a character) is between it and `aim`, just in front of the wall."""
