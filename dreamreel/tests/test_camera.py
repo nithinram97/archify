@@ -101,6 +101,25 @@ def main():
     face_dir = mia.forward(0.5)
     to_cam = shot.state.pos - mia.head_point(0.5)
     assert face_dir.x * to_cam.x + face_dir.y * to_cam.y > 0, ("a close-up sees the face", face_dir, to_cam)
+
+    # the 180-degree line: an over-the-shoulder named one way round and a two-shot named the other way
+    # round are on the same side; a fight two-shot shows its hero's face three-quarters on
+    import math
+    for hero, foe in (("mia", "tom"), ("tom", "mia")):
+        s, mia, tom = scene()
+        s.cut.shot("over_shoulder", of=foe, other=hero, at=0.0)
+        s.cut.shot("full_two_shot", of=hero, other=foe, at=1.0)
+        s.wait(2)
+        s.finish()
+        h, f = s.character(hero), s.character(foe)
+        line = f.position(1.0) - h.position(1.0)
+        n = Vector((-line.y, line.x))
+        sides = [n.dot(Vector((sh.state.pos.x, sh.state.pos.y)) - h.position(1.0)) for sh in s.cut.final[-2:]]
+        assert sides[0] * sides[1] > 0, ("both shots on one side of the line", hero, sides)
+        to_cam = Vector((s.cut.final[-1].state.pos.x, s.cut.final[-1].state.pos.y)) - h.position(1.0)
+        off = math.degrees(h.forward(1.0).angle(to_cam.normalized()))
+        assert 20 < off < 80, ("the hero's open three-quarter side", hero, off)
+    print("  the line and the hero's side: ok")
     print("OK")
 
 

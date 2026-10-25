@@ -80,6 +80,7 @@ class Shot:
         self.moves = []          # [(CameraMove instance, {params})]
         self.duration = None     # seconds, or None: until the next shot
         self.manual = False
+        self.open_to = None      # a fight's hero, whose face this shot keeps (see Director.hero_side)
 
     # older names
     @property
@@ -98,6 +99,7 @@ class Shot:
         s = Shot(self.kind, at, self.subjects, self.state.pos, self.state.aim, self.state.lens, self.state.fstop,
                  self.label, self.state.roll, self.state.focus)
         s.moves = list(self.moves)
+        s.open_to = self.open_to
         return s
 
 
@@ -178,13 +180,24 @@ class Director:
             return Vector((0, -1))
         n = Vector((-d.y, d.x)).normalized()
         pair = tuple(sorted((a.name, b.name)))
-        chosen = self.scene._line_sides.get(pair)
-        if chosen is None:
-            chosen = n if n.y < 0 or (abs(n.y) < 1e-3 and n.x > 0) else -n
-            self.scene._line_sides[pair] = chosen.copy() if a.name < b.name else -chosen
-            return chosen
-        stored = chosen if a.name < b.name else -chosen
+        stored = self.scene._line_sides.get(pair)
+        if stored is None:      # a side is a half of the world, whichever of the two is named first
+            stored = n if n.y < 0 or (abs(n.y) < 1e-3 and n.x > 0) else -n
+            self.scene._line_sides[pair] = stored.copy()
         return n if n.dot(stored) >= 0 else -n
+
+    OPEN_ANGLE = 30.0     # degrees a fight two-shot turns from side-on toward the foe, onto the hero's face
+
+    def hero_side(self, hero, foe, t, ahead=0.8):
+        """The side of the line to shoot a fight from: the side the hero's body faces over the next moments
+        (after a turn has finished, never a passing head turn), and then kept for the rest of the exchange.
+        If he faces straight down the line, the side already in use stays."""
+        side = self._side(hero, foe, t)
+        face = sum((hero.forward(t + ahead * k / 4) for k in range(5)), Vector((0, 0)))
+        if face.length > 1e-3 and face.normalized().dot(side) < -0.25:
+            side = -side
+            self.scene._line_sides[tuple(sorted((hero.name, foe.name)))] = side.copy()
+        return side
 
     line_side = _side
 
@@ -379,6 +392,15 @@ class Director:
         if (st.pos - st.aim).length < 1.2:          # close shots: someone that close is in the shot, not in the way
             return
 
+        hero = s.open_to
+
+        def faces(pos):         # a fight shot never goes round behind its hero to see past someone
+            if hero is None:
+                return True
+            tt = times[len(times) // 2]
+            to_cam = Vector((pos.x, pos.y)) - hero.position(tt)
+            return to_cam.length < 1e-3 or hero.forward(tt).dot(to_cam.normalized()) > 0.1
+
         def clear(pos):
             return not any(self._people_in_way(pos, st.aim, subjects, tt) for tt in times)
         if clear(st.pos):
@@ -397,7 +419,7 @@ class Director:
                     e = min(math.radians(80), el + math.radians(rise))
                     f = Matrix.Rotation(math.radians(yaw), 3, UP) @ f0
                     cand = self._keep_inside(st.aim + Vector((f.x * math.cos(e), f.y * math.cos(e), math.sin(e))) * dist * k)
-                    if clear(cand) and self.clear_view(st.aim, cand):
+                    if faces(cand) and clear(cand) and self.clear_view(st.aim, cand):
                         s.state = st.copy(pos=cand)
                         return
 
@@ -565,15 +587,25 @@ class Director:
         name = label or f"{size}({c.name})" + ("" if angle == "eye_level" else f" {angle.replace('_', ' ')}")
         return self._add(size, t, [c], pos, aim, lens, fstop, name, focus=head)
 
-    def frame_group(self, people, t, kind="two_shot", angle="eye_level", lens=None, label=None, size="medium"):
-        """Frame several characters from the side of the line (the first two set the line)."""
+    def frame_group(self, people, t, kind="two_shot", angle="eye_level", lens=None, label=None, size="medium",
+                    open_to=False):
+        """Frame several characters from the side of the line (the first two set the line). With `open_to`
+        (fights), the first is the hero: the side is the one he faces, turned toward the foe so his face
+        is seen three-quarters on and the foe's back three-quarters."""
         people = [self.character(p) for p in people]
         heads = [p.head_point(t) for p in people]
         H = max(p.height() for p in people)
         xs = [h.x for h in heads]
         ys = [h.y for h in heads]
         mid = Vector((sum(xs) / len(xs), sum(ys) / len(ys), 0))
-        if len(people) >= 2:
+        if len(people) >= 2 and open_to:
+            hero, foe = people[0], people[1]
+            side = self.hero_side(hero, foe, t)
+            u = foe.position(t) - hero.position(t)
+            if u.length > 1e-3:
+                a = math.radians(self.OPEN_ANGLE)
+                side = (side * math.cos(a) + u.normalized() * math.sin(a)).normalized()
+        elif len(people) >= 2:
             side = self._side(people[0], people[1], t)
         else:
             side = Vector((0, -1))
@@ -587,7 +619,10 @@ class Director:
         el = math.radians(ANGLES.get(angle, 4.0))
         pos = aim + Vector((side.x * math.cos(el), side.y * math.cos(el), math.sin(el))) * dist
         names = ", ".join(p.name for p in people)
-        return self._add(kind, t, people, pos, aim, lens, 4.0, label or f"{kind}({names})", focus=aim)
+        shot = self._add(kind, t, people, pos, aim, lens, 4.0, label or f"{kind}({names})", focus=aim)
+        if open_to and len(people) >= 2:
+            shot.open_to = people[0]
+        return shot
 
     def frame_over_shoulder(self, past, on, t, angle="eye_level", lens=None):
         p, o = self.character(past), self.character(on)
@@ -909,8 +944,8 @@ class _Single(ShotType):
     size = "medium"
 
     def frame(self, d, t, of=None, other=None, angle="eye_level", side="auto", lens=None, dutch=0.0):
-        return d.frame_single(of, t, self.size, angle=angle, side=side, lens=lens,
-                              toward=other if side == "auto" and other else None)
+        # with a partner, the side (profile, three-quarter...) is taken from the line between them
+        return d.frame_single(of, t, self.size, angle=angle, side=side, lens=lens, toward=other or None)
 
 
 class Full(_Single):
@@ -962,7 +997,7 @@ class FullTwoShot(ShotType):
     subjects = 2
 
     def frame(self, d, t, of=None, other=None, angle="eye_level", side="auto", lens=None, dutch=0.0):
-        return d.frame_group([of, other], t, kind="two_shot", angle=angle, lens=lens, size="full",
+        return d.frame_group([of, other], t, kind="two_shot", angle=angle, lens=lens, size="full", open_to=True,
                              label=f"two_shot_full({d.character(of).name}, {d.character(other).name})")
 
 

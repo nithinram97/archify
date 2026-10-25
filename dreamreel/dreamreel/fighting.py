@@ -944,7 +944,7 @@ class Brawl:
         kw.setdefault("lens", 20)          # a wide lens close in: inside the ring of fighters, the action big
         try:
             self.s.cut.shot(kind, of=who[0].key if subjects >= 1 else None,
-                            other=who[1].key if subjects >= 2 and len(who) > 1 else None, at=max(0.0, t), **kw)
+                            other=who[1].key if subjects >= 1 and len(who) > 1 else None, at=max(0.0, t), **kw)
             self.shots += 1
         except ValueError:
             pass
@@ -970,7 +970,7 @@ class Brawl:
         c_at = max(hit + 0.25, hero_end - 0.35)
         down = _gesture(counter).power >= 0.65 or rng.random() < 0.3
         big = counter in ("uppercut", "spin_kick", "flying_kick")
-        self.cover(c_at + _gesture(counter).impact - 0.35, "full", hero, side="profile",
+        self.cover(c_at + _gesture(counter).impact - 0.35, "full", hero, a, side="profile",
                    angle="low" if big else None, handheld=not big)
         chit, c_end = self.strike(hero, counter, a, c_at, "knocked_down" if down else "flinch")
         self.back_to_ring(a)
@@ -1014,7 +1014,7 @@ class Brawl:
         # slip that, and take the one behind on the way round...
         hero_at = hero.busy - 0.25
         hero.turn_to(back.key, at=hero_at, wait=False)
-        self.cover(hero_at + 0.2, "full", hero, side="profile", angle="low", handheld=True)
+        self.cover(hero_at + 0.2, "full", hero, back, side="profile", angle="low", handheld=True)
         k_hit, _ = self.strike(hero, rng.choice(("spin_kick", "kick", "hook")), back, hero.busy - 0.05, "knocked_down")
         # ... then the one in front
         hero.turn_to(front.key, at=hero.busy - 0.1, wait=False)
