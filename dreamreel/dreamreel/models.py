@@ -27,7 +27,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 from . import shapes
-from .character import Character
+from .character import Character, _wrap
 from .plugins import Param
 
 FORMATS = (".glb", ".gltf", ".fbx", ".obj")
@@ -42,6 +42,14 @@ def files(root):
             if os.path.splitext(f)[1].lower() in FORMATS:
                 found.append(os.path.relpath(os.path.join(d, f), root).replace(os.sep, "/"))
     return sorted(found)
+
+
+def _basis(obj, t):
+    """An object's own transform at time t, between its keys (its parent's is not included)."""
+    from mathutils import Euler
+    from .keys import sample
+    return Matrix.LocRotScale(Vector(sample(obj, "location", t)), Euler(sample(obj, "rotation_euler", t)),
+                              Vector(sample(obj, "scale", t)))
 
 
 # ---------------------------------------------------------------------- importing
@@ -833,6 +841,8 @@ class ModelCharacter(Character):
                 q = R @ (v - base) * s
                 q.z += ankle_up
                 local[r] = Vector((-q.x, q.y, q.z)) if mirror else q
+            if i == 0:                       # where the capture has the feet, first and last (see settle_feet)
+                first = {1: local["l_ankle"].copy(), -1: local["r_ankle"].copy()}
             t = t0 + i / fps
             for name, (rot, loc) in solver.solve(local).items():
                 key(bones[name], "rotation_quaternion", t, tuple(rot), "linear")
@@ -847,11 +857,182 @@ class ModelCharacter(Character):
                 pos = pos + Vector((drift[0], drift[1], 0)) * u
             key(self.root, "location", t, tuple(pos), "linear")
             key(self.root, "rotation_euler", t, (0, 0, heading), "linear")
+        self._clips = getattr(self, "_clips", []) + [(t0 - blend, t0, t_end, t_end + blend, first,
+                                                       {1: local["l_ankle"].copy(), -1: local["r_ankle"].copy()})]
         for pb in bones:
             if any(fc.data_path.startswith(f'pose.bones["{pb.name}"].rotation') for fc in _compat.fcurves(self.rig)):
                 key(pb, "rotation_quaternion", t_end + blend, (1, 0, 0, 0))
                 key(pb, "location", t_end + blend, (0, 0, 0))
         return t_end + blend
+
+    # ------------------------------------------------------------------ turning on the spot by stepping
+    STEP_FRAMES = 5           # one step of a turn
+    STEP_TURN = 60.0          # the most a body turns in one step, in degrees
+    STEP_LIFT = 0.03          # how high a stepping foot rises, of the height
+    STEP_DIP = 0.01           # how far the pelvis drops as the weight moves over, of the height
+
+    def step_time(self, turn):
+        """How long stepping round by `turn` radians takes (0 if it's too small to step for)."""
+        from .keys import CLOCK
+        turn = abs(_wrap(turn))
+        if turn < math.radians(10):
+            return 0.0
+        return (max(1, math.ceil(turn / math.radians(self.STEP_TURN) - 1e-6)) + 1) * self.STEP_FRAMES / CLOCK.fps
+
+    STEP_MIN = 0.03           # metres: a foot nearer than this to where it should be doesn't step
+
+    def _leg_world(self, side, t):
+        return _basis(self.root, t) @ _basis(self.hips, t) @ _basis(self.legs[side], t)
+
+    def _foot_world(self, side, t):
+        from .keys import sample
+        return self._leg_world(side, t) @ Vector(sample(self.limb_targets[("leg", side)][0], "location", t))
+
+    def _plan_steps(self, t, h, land=None):
+        """(turn, steps of turning, the feet in the order they step) to face `h` from `t` and end with the
+        feet at `land` ({side: world point}; default: where the leg controls rest them)."""
+        turn = _wrap(h - self.heading(t))
+        if abs(turn) >= math.radians(10):
+            n = max(1, math.ceil(abs(turn) / math.radians(self.STEP_TURN) - 1e-6))
+            lead = 1 if turn > 0 else -1           # turning to the left: the left foot opens the turn
+            return turn, n, [lead if k % 2 == 0 else -lead for k in range(n + 1)]
+        off = {}
+        for side in (1, -1):
+            goal = land[side] if land else self._leg_world(side, t) @ self.limb_targets[("leg", side)][1]
+            off[side] = ((goal - self._foot_world(side, t)).to_2d()).length
+        return 0.0, 0, sorted((sd for sd in off if off[sd] > self.STEP_MIN), key=lambda sd: -off[sd])
+
+    def step_turn(self, t, h, land=None):
+        """Turn by stepping: the foot on the side of the turn steps first, then the other, a step for
+        every 60 degrees, and the last foot settles beside the first (no turn: just the feet that are out
+        of place step). The planted foot stays where it is in the world (its leg's IK target is keyed
+        against the turning body every frame); the moving one lifts in an arc, and the pelvis dips a
+        little as the weight goes over. `land`: where the feet end ({side: world point}), else where the
+        leg controls rest them. Returns when it's done, or None if there's no stepping to do."""
+        if not self.limb_targets.get(("leg", 1)) or not self.limb_targets.get(("leg", -1)) or self.sitting:
+            return None
+        from .keys import CLOCK, hold, key
+        turn, n, order = self._plan_steps(t, h, land)
+        if not order:
+            return None
+        h0 = self.heading(t)
+        step = self.STEP_FRAMES / CLOCK.fps
+        f0 = CLOCK.frame(t)
+        ends = [t + step * (k + 1) for k in range(len(order))]
+        targets = {side: self.limb_targets[("leg", side)] for side in (1, -1)}
+        # eased keys, not smooth ones: a smooth curve changes shape when later moves key nearby, and the
+        # planted foot is worked out against exactly this turn
+        planted = {side: self._foot_world(side, t) for side in targets}
+        for tgt, _ in targets.values():
+            hold(tgt, "location", t)
+        if n:
+            hold(self.root, "rotation_euler", t, ease="ease_in_out")
+            for k in range(n):
+                self._key_heading(ends[k], h0 + turn * (k + 1) / n, "ease_in_out")
+            key(self.root, "rotation_euler", ends[-1], (0, 0, h0 + turn), "ease_in_out")
+        z = hold(self.hips, "location", t, ease="ease_in_out")
+        for te in ends:
+            key(self.hips, "location", te - step / 2, (z[0], z[1], z[2] - self.STEP_DIP * self.H), "ease_in_out")
+            key(self.hips, "location", te, tuple(z), "ease_in_out")
+        steps = []
+        for k, side in enumerate(order):        # where each step lands: the foot's rest place (or `land`)
+            ts, te = ends[k] - step, ends[k]
+            last = side not in order[k + 1:]
+            goal = land[side] if land and last else self._leg_world(side, te) @ targets[side][1]
+            steps.append((side, ts, te, planted[side].copy(), goal))
+            planted[side] = goal
+        lift = self.STEP_LIFT * self.H
+        for f in range(f0 + 1, CLOCK.frame(ends[-1]) + 1):
+            tt = CLOCK.seconds(f)
+            for side, (tgt, rest) in targets.items():
+                done = [s for s in steps if s[0] == side and s[2] <= tt]
+                now = next((s for s in steps if s[0] == side and s[1] < tt < s[2]), None)
+                if now is not None:
+                    u = (tt - now[1]) / (now[2] - now[1])
+                    w = now[3].lerp(now[4], u * u * (3 - 2 * u)) + Vector((0, 0, lift * math.sin(math.pi * u)))
+                elif done:
+                    w = done[-1][4]
+                else:
+                    w = next((s[3] for s in steps if s[0] == side), planted[side])
+                key(tgt, "location", tt, tuple(self._leg_world(side, tt).inverted() @ w), "linear")
+        if not land:
+            for side, (tgt, rest) in targets.items():     # back to exactly where the leg's controls had it
+                key(tgt, "location", ends[-1], tuple(rest), "linear")
+        self._steps = getattr(self, "_steps", []) + [(t, ends[-1])]
+        return ends[-1]
+
+    def _feet_free(self, t0, t1):
+        """Nothing else moves this body's feet between t0 and t1: no walking, turning, capture or fall."""
+        from . import _compat
+        from .keys import CLOCK
+        if t0 < 0:
+            return False
+        busy = getattr(self, "_steps", []) + [(c[0], c[3]) for c in getattr(self, "_clips", [])]
+        if getattr(self, "_down", None):
+            busy.append(tuple(self._down))
+        for a, b in busy:
+            if a < t1 and b > t0:
+                return False
+        lo, hi = CLOCK.frame(t0) + 0.5, CLOCK.frame(t1) - 0.5
+        objs = [self.root] + list(self.legs.values()) + [self.limb_targets[("leg", sd)][0] for sd in (1, -1)]
+        for o in objs:
+            for fc in _compat.fcurves(o):
+                if fc.data_path in ("location", "rotation_euler") and any(lo < kp.co.x < hi for kp in fc.keyframe_points):
+                    return False
+        for fc in _compat.fcurves(self.rig):
+            if fc.data_path.startswith("pose.bones[") and any(lo < kp.co.x < hi for kp in fc.keyframe_points):
+                return False
+        return True
+
+    def settle_feet(self):
+        """Once the whole scene is known: the feet step into the stance each captured move starts from,
+        and back out of the one it ends in, wherever there's time. (Otherwise the leg controls and the
+        capture disagree about where the feet are, and the feet slide while one fades into the other.)"""
+        if not self.limb_targets.get(("leg", 1)) or not self.limb_targets.get(("leg", -1)):
+            return
+        from .keys import CLOCK, key
+        step = self.STEP_FRAMES / CLOCK.fps
+        clips = sorted(getattr(self, "_clips", []), key=lambda c: c[0])
+        for i, (b0, t0, t1, b1, first, last) in enumerate(clips):
+            land = {sd: _basis(self.root, t0) @ first[sd] for sd in (1, -1)}
+            k = len(self._plan_steps(b0, self.heading(b0), land)[2])
+            if not k or self._feet_free(b0 - k * step, b0):
+                if k:
+                    self.step_turn(b0 - k * step, self.heading(b0), land)
+                # the feet are where the capture starts: the legs switch over on its first frame (a
+                # fade from one leg pose to another swings the feet about, even between the same feet)
+                self._key_feet(b0, t0, {sd: land[sd] for sd in (1, -1)})
+                for ik in self._leg_iks():
+                    key(ik, "influence", t0 - 1.0 / CLOCK.fps, 1.0, "linear")
+                    key(ik, "influence", t0, 0.0, "linear")
+            # out: the leg controls take over where the capture left the feet, then step them home
+            nxt = clips[i + 1][0] if i + 1 < len(clips) else float("inf")
+            if not self._feet_free(b1, min(nxt, b1 + 3 * step)) and nxt > b1 + 3 * step:
+                continue                     # something else moves at once: the feet go home as it does
+            self._key_feet(t1, b1, {sd: _basis(self.root, t1) @ last[sd] for sd in (1, -1)})
+            for ik in self._leg_iks():
+                key(ik, "influence", t1 + 1.0 / CLOCK.fps, 1.0, "linear")
+            if nxt > b1 + 3 * step:
+                self.step_turn(b1, self.heading(b1))
+
+    def _key_feet(self, t0, t1, world):
+        """Hold the leg IK targets on `world` ({side: point}) from t0 to t1 (any other keys between go:
+        holds left there by moves made before the scene was finished)."""
+        from . import _compat
+        from .keys import CLOCK, key
+        lo, hi = CLOCK.frame(t0) + 0.5, CLOCK.frame(t1) + 0.5
+        for sd in (1, -1):
+            tgt = self.limb_targets[("leg", sd)][0]
+            for fc in _compat.fcurves(tgt):
+                if fc.data_path == "location":
+                    for kp in [kp for kp in fc.keyframe_points if lo < kp.co.x < hi][::-1]:
+                        fc.keyframe_points.remove(kp)
+            for t in (t0, t1):
+                key(tgt, "location", t, tuple(self._leg_world(sd, t).inverted() @ world[sd]), "linear")
+
+    def _leg_iks(self):
+        knees = {self.roles.get("l_knee"), self.roles.get("r_knee")}
+        return [ik for ik, lower in self.iks if lower.name in knees]
 
     @property
     def bends(self):

@@ -432,10 +432,27 @@ class Character(Plugin):
         p = self.position(t)
         h = self._facing_value(target, p, t)
         hold(self.root, "rotation_euler", t)
+        stepped = self.step_turn(t, h)
+        if stepped is not None:          # feet that step round, the planted one staying put
+            self._reset_head(t, min(stepped, t + 0.35))
+            return self._end(stepped, wait)
         dur = 0.25 + 0.3 * abs(_wrap(h - self.heading(t))) / math.pi
         self._key_heading(t + dur, h)
         self._reset_head(t, t + dur * 0.6)
         return self._end(t + dur, wait)
+
+    def walk_time(self, distance, speed="normal", t=None, how=None):
+        """How long walk_to takes to cover `distance` metres in a straight line (to plan walking in so
+        as to arrive in time)."""
+        sp = SPEEDS.get(speed, speed) if not isinstance(speed, (int, float)) else speed
+        sp *= acting.effort_of(self, self.busy if t is None else t, how).walk_speed()
+        stride, step_t = self.gait_timing(sp, sp >= 1.8)
+        return 0.18 + max(2, math.ceil(distance / stride)) * step_t
+
+    def step_turn(self, t, h):
+        """Turn to heading `h` from `t` by stepping round; returns when it's done, or None for bodies whose
+        feet go round with them (a toy's are part of its legs). Bodies with feet override it."""
+        return None
 
     def look_at(self, target, at=None, wait=False):
         """Turn just the head towards a character or mark (up to 70 degrees); the body stays."""

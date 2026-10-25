@@ -5,6 +5,7 @@ assets --pack humans`) a toy figure stands in, which is checked instead.
 
     python tests/test_humans.py
 """
+import math
 import os
 import sys
 
@@ -15,7 +16,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 
 import dreamreel as dr  # noqa: E402
-from dreamreel import handling, humans  # noqa: E402
+from dreamreel import handling, humans, lint  # noqa: E402
 
 
 def at(s, obj, t):
@@ -141,7 +142,42 @@ def fight():
         handling.evaluate(s, t_kick + k * 0.05)
         highest = max(highest, (arjun.rig.matrix_world @ foot.head).z)
     assert highest > 0.5, ("the kick comes up", highest)
-    print(f"  fight: ok (jab {near:.2f} m from the face, kick {highest:.2f} m high)")
+    slides = [w for w in lint.FootSlide(s).check(s)]
+    assert not slides, ("feet step into captured moves and out again, never sliding", slides)
+    print(f"  fight: ok (jab {near:.2f} m from the face, kick {highest:.2f} m high, no sliding feet)")
+
+
+def turning():
+    """Turning round on the spot is stepping round: the planted foot stays put in the world, the other
+    lifts and lands, the pelvis dips; the foot-slide check finds nothing."""
+    s = dr.Scene({"kind": "street"})
+    ravi = s.cast(ravi=dict(type="human", gender="male", age=34))
+    ravi.place((0, 0), facing="camera")
+    t0 = s.clock
+    ravi.turn_to("back")
+    t1 = s.clock
+    s.finish()
+    assert t1 - t0 >= 4 * ravi.STEP_FRAMES / dr.keys.CLOCK.fps - 1e-6, ("180 degrees is three steps and a settle", t1 - t0)
+    feet = []
+    for f in range(dr.keys.CLOCK.frame(t0), dr.keys.CLOCK.frame(t1) + 1):
+        handling.evaluate(s, dr.keys.CLOCK.seconds(f))
+        feet.append(ravi.foot_points())
+    lift = max(p.z for pts in feet for p in pts) - min(p.z for pts in feet for p in pts)
+    assert lift > 0.03, ("a stepping foot lifts", lift)
+    for side in (0, 1):                           # while a foot is down, it stays where it is
+        low = min(pts[side].z for pts in feet)
+        run = []
+        for pts in feet + [None]:
+            if pts is not None and pts[side].z < low + 0.004:
+                run.append(pts[side])
+                continue
+            if run:
+                drift = max((q - run[0]).length for q in run)
+                assert drift < 0.01, ("a planted foot stays put", side, drift)
+            run = []
+    assert abs(math.degrees(ravi.heading(t1)) % 360 - 180) < 2, math.degrees(ravi.heading(t1))
+    assert not lint.FootSlide(s).check(s)
+    print(f"  turning: ok ({t1 - t0:.2f} s of steps for half a turn, feet lift {lift * 100:.0f} cm, planted ones stay put)")
 
 
 def coat():
@@ -186,6 +222,7 @@ def main():
     recipes()
     person()
     fight()
+    turning()
     coat()
     print("humans: all ok")
 

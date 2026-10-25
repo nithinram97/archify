@@ -499,6 +499,9 @@ class Scene:
             return
         self._finished = True
         L = self.length
+        for c in self.actors.values():          # feet into and out of captured moves (now their times are known)
+            if hasattr(c, "settle_feet"):
+                c.settle_feet()
         from . import fighting
         fighting.keep_fighting(self)
         alive = float(((self.film or {}).get("acting") or {}).get("alive", 1.0))

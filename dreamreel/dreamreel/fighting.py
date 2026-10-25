@@ -89,7 +89,7 @@ def keep_fighting(scene):
         busy = sorted((e["t0"], e["t1"]) for e in scene.events if e["who"] is c)
         if getattr(c, "_down", None):
             busy.append(tuple(c._down))
-            busy.sort()
+        busy = sorted(busy + list(getattr(c, "_steps", [])))      # stepping round is moving too
         t = w0
         for b0, b1 in busy + [(w1, w1)]:
             if b0 - t >= IDLE_GAP and t < w1:
@@ -139,18 +139,31 @@ def gap_to(c, target, t):
     return math.hypot(q.x - p.x, q.y - p.y)
 
 
-def face_now(c, t, target, turn=0.25):
-    """Turn the whole body to face `target` by `t` (from `turn` seconds before)."""
+def face_now(c, t, target, turn=0.25, steps_by=None, offset=0.0):
+    """Turn the whole body to face `target` by `t` (from `turn` seconds before), or `offset` radians from
+    it. A body with feet steps round instead, finishing by `steps_by`, when it's free that long before
+    (not mid-move)."""
     if target is None:
         return
     q, p = c._point(target, t), c.position(t)
     if (q.to_2d() - p).length < 1e-3:
         return
+    h = heading_to(q.x - p.x, q.y - p.y) + offset
+    if abs((h - c.heading(t) + math.pi) % (2 * math.pi) - math.pi) < math.radians(4):
+        return                       # facing them already (a hold key now could land mid-step)
+    if steps_by is not None and hasattr(c, "step_time"):
+        h0 = c.heading(steps_by)
+        start = steps_by - c.step_time(h - h0)
+        if start >= max(0.0, c.busy) and c.step_turn(start, h) is not None:
+            hold(c.root, "rotation_euler", t)
+            return
     hold(c.root, "rotation_euler", t - turn)
     h0 = value_at(c.root, "rotation_euler", t - turn)[2]
-    h = heading_to(q.x - p.x, q.y - p.y)
     h = h0 + (h - h0 + math.pi) % (2 * math.pi) - math.pi          # the short way round
     key(c.root, "rotation_euler", t, (0, 0, h))
+
+
+STEP_IN = 0.35        # metres a captured blow may slide its body to reach; further than that, walk in first
 
 
 def captured(c, move, hit, lead, target=None, side=None, reach=None):
@@ -164,7 +177,17 @@ def captured(c, move, hit, lead, target=None, side=None, reach=None):
         return None
     m, mirror = got
     t0 = hit - lead
-    face_now(c, t0, target)
+    ready = t0 - fightmoves.BLEND           # the capture fades in from here: feet must be planted by then
+    if target is not None and reach is not None:   # too far to lunge: walk in (planting the feet) first
+        p = c.position(t0)
+        d = c._point(target, hit).to_2d() - p
+        walk = d.length - reach - STEP_IN
+        if walk > 0.1 and hasattr(c, "walk_time"):
+            start = ready - c.walk_time(walk, "fast", t0)
+            if start >= max(0.0, c.busy):
+                q = p + d.normalized() * walk
+                c.walk_to((q.x, q.y), speed="fast", at=start, wait=False)
+    face_now(c, t0, target, steps_by=ready, offset=-fightmoves.turn_into(m, mirror, lead))   # square on at the blow
     drift = None
     if target is not None and reach is not None:
         p = c.position(t0)

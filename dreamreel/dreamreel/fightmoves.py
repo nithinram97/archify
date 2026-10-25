@@ -12,6 +12,7 @@ Bodies with a skeleton (realistic people, rigged models) play them bone by bone
 (ModelCharacter.perform_clip); others keep dreamreel's hand-made moves.
 """
 import json
+import math
 import os
 import random
 import urllib.request
@@ -20,7 +21,7 @@ from mathutils import Matrix, Vector
 
 CACHE = os.path.join(os.path.expanduser("~"), ".cache", "dreamreel", "motions", "cmu")
 BASE = "http://mocap.cs.cmu.edu/subjects"
-VERSION = 6
+VERSION = 9
 
 # which recordings, and what to look for in each
 SOURCES = {
@@ -118,13 +119,17 @@ def segment(trial, what):
 
     head = [f["head"].z + f["_hips"].z - c.floor for f in F]
     standing = sorted(head)[int(0.9 * len(head))]
+    facing = [c.heading({r: v[i] for r, v in c.roles.items()}) for i in range(c.n)]
 
     def add(kind, side, i, **kw):
         before, after = WINDOW.get(kind, (0.6, 0.6))
         at = i / fps
+        i0, i1 = max(0, int((at - before) * fps)), min(len(head), int((at + after) * fps))
         if "kick" in kind:      # a kicker stays up: a head near the floor is a cartwheel or a fall, not a kick
-            i0, i1 = max(0, int((at - before) * fps)), min(len(head), int((at + after) * fps))
             if min(head[i0:i1]) < 0.6 * standing:
+                return
+        if kind in ("punch", "block"):   # thrown and taken square on: a body swinging far round is aiming elsewhere
+            if max(abs((facing[k] - facing[i] + math.pi) % (2 * math.pi) - math.pi) for k in range(i0, i + 1)) > math.radians(45):
                 return
         moves.append(dict(trial=trial, kind=kind, side=side, at=at, start=max(0.0, at - before),
                           end=min(c.length, at + after), **kw))
@@ -238,11 +243,24 @@ def pick(move, rng=None, side=None):
     return m, bool(side is not None and m["side"] not in (side, 0))
 
 
+BLEND = 0.2           # seconds a captured move takes to fade in over whatever came before
+
+
+def turn_into(move, mirror=False, lead=None):
+    """How far (radians) the body turns from the start of a captured move to its blow: a body that turns
+    into a punch has to start turned away by that much to land it square on."""
+    cl = clip(move["trial"])
+    start = move["start"] if lead is None else max(move["start"], move["at"] - lead)
+    d = cl.heading(cl.at(move["at"])) - cl.heading(cl.at(start))
+    d = (d + math.pi) % (2 * math.pi) - math.pi
+    return -d if mirror else d
+
+
 def play(c, move, hit, mirror=False, drift=None, lead=None, in_place=False):
     """Play a captured move on `c` so its blow lands at `hit` (seconds), starting at most `lead` before
     it. `drift`: (x, y) metres to travel by the blow (stepping in to reach). Returns the end time."""
     cl = clip(move["trial"])
     start = move["start"] if lead is None else max(move["start"], move["at"] - lead)
     t0 = hit - (move["at"] - start)
-    return c.perform_clip(cl, t0, mirror=mirror, in_place=in_place, start=start, end=move["end"], drift=drift,
-                          drift_until=max(0.05, move["at"] - start))
+    return c.perform_clip(cl, t0, mirror=mirror, in_place=in_place, blend=BLEND, start=start, end=move["end"],
+                          drift=drift, drift_until=max(0.05, move["at"] - start))
