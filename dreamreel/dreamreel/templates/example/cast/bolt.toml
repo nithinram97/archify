@@ -1,0 +1,7 @@
+# A character type from this film's extensions (extensions/party.py).
+type = "robot"
+name = "Bolt"
+metal = "#a9b4bd"
+trim = "teal"
+glow = "#7df9ff"
+voice = "en_US-joe-medium"

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dreamreel"
+version = "0.1.0"
+description = "Make animated films by writing what happens. Toy-style characters, sets and cameras built by code in Blender; no animation skills needed."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["bpy>=5.2", "pillow>=10"]  # pillow: subtitles in Indian scripts
+
+[project.optional-dependencies]
+voices = ["piper-tts"]
+claude = ["anthropic>=1.0"]
+
+[project.scripts]
+dreamreel = "dreamreel.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dreamreel*"]
+
+[tool.setuptools.package-data]
+dreamreel = ["templates/**/*", "studio/static/*", "booster/*.py"]

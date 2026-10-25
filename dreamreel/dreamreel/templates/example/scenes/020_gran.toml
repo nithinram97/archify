@@ -1,0 +1,111 @@
+# Scene 020: Gran comes looking for her cookies.
+set = "kitchen"
+cast = ["mia", "tom", "gran"]
+
+[[beats]]
+who = "mia"
+do = "sit"
+seat = "chair"
+already = true
+
+[[beats]]
+who = "tom"
+do = "sit"
+seat = "chair-2"
+already = true
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "feel"
+mood = "happy"
+with_previous = true
+
+[[beats]]
+who = "tom"
+do = "feel"
+mood = "happy"
+with_previous = true
+
+[[beats]]
+who = "gran"
+do = "enter"
+where = "door"
+
+[[beats]]
+who = "gran"
+do = "walk_to"
+where = "front"
+
+[[beats]]
+who = "gran"
+do = "turn_to"
+target = "camera"
+
+[[beats]]
+who = "gran"
+do = "say"
+line = "Has anyone seen my cookies?"
+mood = "surprised"
+
+[[beats]]
+who = "mia"
+do = "look_at"
+target = "tom"
+
+[[beats]]
+who = "tom"
+do = "look_at"
+target = "mia"
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "feel"
+mood = "scared"
+with_previous = true
+
+[[beats]]
+who = "tom"
+do = "feel"
+mood = "scared"
+with_previous = true
+
+[[beats]]
+do = "wait"
+seconds = 1.2
+
+[[beats]]
+who = "mia"
+do = "look_at"
+target = "gran"
+
+[[beats]]
+who = "tom"
+do = "look_at"
+target = "gran"
+with_previous = true
+
+[[beats]]
+who = "mia"
+do = "say"
+line = "Mice!"
+mood = "scared"
+to = "gran"
+
+[[beats]]
+who = "tom"
+do = "say"
+line = "Mice!"
+mood = "scared"
+to = "gran"
+with_previous = true
+
+[[beats]]
+do = "caption"
+text = "The end"
+duration = 2.5
+
+[[beats]]
+do = "wait"
+seconds = 2.0

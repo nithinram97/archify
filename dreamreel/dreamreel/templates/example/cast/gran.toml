@@ -1,0 +1,6 @@
+type = "person"
+name = "Gran"
+body = "woman"
+outfit = "formal"
+height = 1.58
+voice = "en_GB-southern_english_female-low"

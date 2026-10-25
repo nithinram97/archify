@@ -1,0 +1,17 @@
+kind = "outdoor"
+scale = "people"       # life-size furniture for people (toy: for toy figures)
+ground = "grass"
+trees = 7
+
+[[props]]
+type = "bench"
+place = "back"
+
+[[props]]
+type = "streetlamp"
+place = "back-right"
+
+[[props]]
+type = "cake"
+place = "right"
+candles = 6

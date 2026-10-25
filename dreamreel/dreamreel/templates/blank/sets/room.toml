@@ -1,0 +1,12 @@
+kind = "room"
+size = "small"
+walls = "cream"
+floor = "wood"
+
+[[props]]
+type = "door"
+place = "back-left"
+
+[[props]]
+type = "sofa"
+place = "back"

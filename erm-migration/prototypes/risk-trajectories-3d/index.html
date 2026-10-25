@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #0b1220; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+  #wrap { position: relative; width: 1600px; height: 1000px; }
+  .label { color: #e6edf7; font-size: 13px; background: rgba(11,18,32,0.78); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); white-space: nowrap; }
+  .label b { color: #94a3b8; font-weight: 500; margin-right: 6px; }
+  .tag { margin-left: 6px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+  .q { color: #94a3b8; font-size: 13px; white-space: nowrap; }
+  .q.now { color: #f1f5f9; font-weight: 600; }
+  .q.tgt { color: #a5b4fc; font-weight: 600; }
+  .axis { color: #94a3b8; font-size: 14px; font-weight: 600; letter-spacing: 1px; white-space: nowrap; }
+  .tick { color: #64748b; font-size: 12px; }
+  #title { position: absolute; left: 36px; top: 28px; color: #f1f5f9; }
+  #title h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  #title p { margin: 6px 0 0; color: #94a3b8; font-size: 15px; }
+  #legend { position: absolute; left: 36px; bottom: 30px; color: #cbd5e1; font-size: 14px; background: rgba(15,23,42,0.88); border: 1px solid #1e293b; border-radius: 10px; padding: 14px 18px; line-height: 1.9; }
+  .sw { display: inline-block; width: 26px; margin-right: 10px; vertical-align: middle; }
+  #card { position: absolute; right: 36px; top: 110px; width: 310px; color: #e2e8f0; background: rgba(15,23,42,0.93); border: 1px solid #334155; border-radius: 12px; padding: 18px 20px; font-size: 14px; line-height: 1.55; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+  #card h2 { margin: 0 0 10px; font-size: 17px; }
+  #card .row { display: flex; justify-content: space-between; border-top: 1px solid #1e293b; padding: 6px 0; }
+  #card .row span:first-child { color: #94a3b8; }
+  #card .sel { margin-top: 12px; padding-top: 12px; border-top: 2px solid #334155; }
+  #card .id { color: #f472b6; font-weight: 600; font-size: 13px; }
+  #hint { position: absolute; right: 36px; bottom: 30px; color: #64748b; font-size: 13px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="wrap">
+  <div id="title"><h1>Risk trajectories · heat map over time</h1><p>Sample data · floor = heat map · height = quarter · each line is one risk's path to today, then to its target</p></div>
+  <div id="legend">
+    <div><svg class="sw" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#e2e8f0" stroke-width="3"/></svg>Quarterly path (colour = cell criticality)</div>
+    <div><svg class="sw" height="14"><circle cx="13" cy="7" r="6" fill="#ef4444"/></svg>Position today</div>
+    <div><svg class="sw" height="14"><circle cx="13" cy="7" r="5.5" fill="none" stroke="#a5b4fc" stroke-width="2"/></svg>Target position</div>
+    <div><svg class="sw" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke="#a5b4fc" stroke-width="2" stroke-dasharray="4 3"/></svg>Remaining path to target</div>
+  </div>
+  <div id="card">
+    <h2>This dashboard, 6 quarters</h2>
+    <div class="row"><span>On track to target</span><span style="color:#22c55e;font-weight:600">5 risks</span></div>
+    <div class="row"><span>Stuck (no movement in 3 quarters)</span><span style="color:#f59e0b;font-weight:600">2 risks</span></div>
+    <div class="row"><span>Getting worse</span><span style="color:#ef4444;font-weight:600">1 risk</span></div>
+    <div class="sel">
+      <div class="id">Selected · #R-2072</div>
+      <div style="font-weight:600;font-size:16px;margin:2px 0 8px">Skills shortage</div>
+      <div class="row"><span>Q1 2025 → today</span><span>2 → <b style="color:#ef4444">16</b></span></div>
+      <div class="row"><span>Target</span><span>4 by Q4 2026</span></div>
+      <div class="row"><span>Mitigations open</span><span>1 of 4</span></div>
+    </div>
+  </div>
+  <div id="hint">Drag to orbit · view from above = today's heat map · click a path to select</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const W = 1600, H = 1000;
+const wrap = document.getElementById('wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+wrap.prepend(renderer.domElement);
+const labels = new CSS2DRenderer(); labels.setSize(W, H);
+Object.assign(labels.domElement.style, { position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+wrap.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1220');
+const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 200);
+camera.position.set(15, 14, 22);
+camera.lookAt(2.2, 4.4, 0);
+scene.add(new THREE.HemisphereLight('#e2e8f0', '#0b1220', 1.2));
+const key = new THREE.DirectionalLight('#ffffff', 1.5); key.position.set(10, 25, 10); scene.add(key);
+
+const label = (html, cls, pos) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; const o = new CSS2DObject(d); o.position.copy(pos); scene.add(o); return o; };
+
+// Heat map floor: 4 x 4, x = impact 1..4, z = probability 1..4 (probability grows towards the back).
+const CELL = 2.4, GAP = 0.12;
+const cellX = i => (i - 2.5) * CELL;            // impact 1..4
+const cellZ = p => (2.5 - p) * CELL;            // probability 1..4
+const level = s => s >= 12 ? '#ef4444' : s >= 8 ? '#f59e0b' : s >= 4 ? '#eab308' : '#22c55e';
+for (let p = 1; p <= 4; p++) for (let i = 1; i <= 4; i++) {
+  const c = new THREE.Color(level(p * i));
+  const tile = new THREE.Mesh(new THREE.BoxGeometry(CELL - GAP, 0.12, CELL - GAP),
+    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.25, roughness: 0.6, transparent: true, opacity: 0.55 }));
+  tile.position.set(cellX(i), -0.06, cellZ(p)); scene.add(tile);
+}
+for (let i = 1; i <= 4; i++) label(String(i), 'tick', new THREE.Vector3(cellX(i), -0.1, cellZ(1) + CELL * 0.75));
+for (let p = 1; p <= 4; p++) label(String(p), 'tick', new THREE.Vector3(cellX(1) - CELL * 0.75, -0.1, cellZ(p)));
+label('IMPACT →', 'axis', new THREE.Vector3(cellX(2.5), -0.2, cellZ(1) + CELL * 1.25));
+label('PROBABILITY →', 'axis', new THREE.Vector3(cellX(1) - CELL * 1.35, -0.2, cellZ(2.5)));
+
+// Time axis: one level per quarter, then the target level.
+const Q = ['Q1 2025', 'Q2 2025', 'Q3 2025', 'Q4 2025', 'Q1 2026', 'Q2 2026'];
+const STEP = 1.45, yOf = k => 0.5 + k * STEP;
+const TARGET_Y = yOf(Q.length) + 0.9;
+const corner = new THREE.Vector3(cellX(1) - CELL * 0.62, 0, cellZ(1) + CELL * 0.62);
+const axisPts = [new THREE.Vector3(corner.x, 0, corner.z), new THREE.Vector3(corner.x, TARGET_Y, corner.z)];
+scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(axisPts), new THREE.LineBasicMaterial({ color: '#475569' })));
+Q.forEach((q, k) => {
+  const y = yOf(k), now = k === Q.length - 1;
+  label(now ? `${q} · today` : q, 'q' + (now ? ' now' : ''), new THREE.Vector3(corner.x - 1.5, y, corner.z));
+  // faint frame of the heat map at each quarter
+  const s = CELL * 2, frame = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([x, z]) => new THREE.Vector3(x, y, z));
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(frame),
+    new THREE.LineBasicMaterial({ color: now ? '#94a3b8' : '#1e3a5f', transparent: true, opacity: now ? 0.7 : 0.6 })));
+});
+label('Target', 'q tgt', new THREE.Vector3(corner.x - 1.3, TARGET_Y, corner.z));
+{
+  const s = CELL * 2, frame = [[-s, -s], [s, -s], [s, s], [-s, s], [-s, -s]].map(([x, z]) => new THREE.Vector3(x, TARGET_Y, z));
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(frame), new THREE.LineDashedMaterial({ color: '#6366f1', dashSize: 0.3, gapSize: 0.2 }));
+  l.computeLineDistances(); scene.add(l);
+}
+
+// Sample risks: [id, title, positions per quarter as [probability, impact], target [p, i], status, jitter]
+const risks = [
+  ['R-2072', 'Skills shortage',        [[1,2],[2,2],[2,3],[3,3],[3,4],[4,4]], [2,2], 'worse',  [ 0.35,  0.35]],
+  ['R-1003', 'Cybersecurity',          [[4,4],[4,4],[3,4],[3,3],[2,3],[2,3]], [1,2], 'track',  [-0.35,  0.3]],
+  ['R-2041', 'Supplier capacity',      [[3,3],[4,3],[4,3],[4,3],[4,3],[4,3]], [2,3], 'stuck',  [-0.3,  -0.3]],
+  ['R-2051', 'Test campaign slip',     [[3,4],[3,4],[3,3],[2,3],[2,2],[2,2]], [1,2], 'track',  [ 0.3,  -0.3]],
+  ['R-3101', 'Castings delay',         [[3,3],[3,3],[3,3],[3,3],[3,3],[3,3]], [2,2], 'stuck',  [ 0.0,   0.0]],
+  ['R-2061', 'Legacy access model',    [[4,2],[3,2],[3,2],[2,2],[2,1],[1,1]], [1,1], 'track',  [ 0.0,   0.3]],
+  ['R-2042', 'Raw material price',     [[2,4],[2,4],[2,3],[2,3],[1,3],[1,3]], [1,2], 'track',  [ 0.3,   0.0]],
+  ['R-2062', 'Third-party tools',      [[3,1],[2,1],[2,1],[2,1],[1,1],[1,1]], [1,1], 'track',  [-0.3,   0.0]],
+];
+const highlighted = new Set(['R-2072', 'R-1003', 'R-2041']);
+const selectedId = 'R-2072';
+const STATUS = { track: ['on track', '#22c55e'], stuck: ['stuck', '#f59e0b'], worse: ['getting worse', '#ef4444'] };
+
+for (const [id, title, path, target, status, [jx, jz]] of risks) {
+  const hot = highlighted.has(id), sel = id === selectedId;
+  const pts = path.map(([p, i], k) => new THREE.Vector3(cellX(i) + jx, yOf(k), cellZ(p) + jz));
+  const tgt = new THREE.Vector3(cellX(target[1]) + jx, TARGET_Y, cellZ(target[0]) + jz);
+
+  // One tube per quarter-to-quarter segment, coloured by the cell it arrives in.
+  for (let k = 1; k < pts.length; k++) {
+    const [p, i] = path[k];
+    const curve = new THREE.LineCurve3(pts[k - 1], pts[k]);
+    const c = new THREE.Color(level(p * i));
+    scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 4, sel ? 0.1 : hot ? 0.075 : 0.035, 10, false),
+      new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: sel ? 0.6 : hot ? 0.35 : 0.15, transparent: true, opacity: hot ? 1 : 0.35 })));
+  }
+  // Quarter markers
+  pts.forEach((pt, k) => {
+    const [p, i] = path[k], c = new THREE.Color(level(p * i));
+    const last = k === pts.length - 1;
+    const r = last ? (sel ? 0.42 : hot ? 0.34 : 0.22) : (hot ? 0.11 : 0.07);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16),
+      new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: last ? 0.5 : 0.3, transparent: !hot, opacity: hot ? 1 : 0.45 }));
+    m.position.copy(pt); scene.add(m);
+  });
+  // Shadow of today's position on the floor (what the normal heat map shows)
+  const now = pts[pts.length - 1];
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(hot ? 0.3 : 0.2, 32), new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: hot ? 0.55 : 0.25 }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.set(now.x, 0.02, now.z); scene.add(shadow);
+  // Dashed remaining path to target, and target ring
+  const d = new THREE.Line(new THREE.BufferGeometry().setFromPoints([now, tgt]),
+    new THREE.LineDashedMaterial({ color: '#a5b4fc', dashSize: 0.25, gapSize: 0.18, transparent: true, opacity: hot ? 0.95 : 0.35 }));
+  d.computeLineDistances(); scene.add(d);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(hot ? 0.32 : 0.22, 0.04, 12, 48), new THREE.MeshBasicMaterial({ color: '#a5b4fc', transparent: true, opacity: hot ? 1 : 0.4 }));
+  ring.rotation.x = Math.PI / 2; ring.position.copy(tgt); scene.add(ring);
+  if (sel) {
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.05, 16, 64), new THREE.MeshBasicMaterial({ color: '#f472b6' }));
+    halo.rotation.x = Math.PI / 2.3; halo.position.copy(now); scene.add(halo);
+  }
+  if (hot) {
+    const [txt, col] = STATUS[status];
+    label(`<b>${id}</b>${title}<span class="tag" style="background:${col}22;color:${col};border:1px solid ${col}66">${txt}</span>`,
+      'label', now.clone().add(new THREE.Vector3(0, 0.75, 0)));
+  }
+}
+
+renderer.render(scene, camera);
+labels.render(scene, camera);
+window.__done = true;
+</script>
+</body>
+</html>

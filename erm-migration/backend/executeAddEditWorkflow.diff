@@ -1,0 +1,361 @@
+--- original.ts	2026-10-02 11:59:05.498488850 +0000
++++ executeAddEditWorkflow.ts	2026-10-02 11:58:48.991839026 +0000
+@@ -17,17 +17,21 @@
+  *   duplicate         Vx.y         -> new V(x+1).1
+  *
+  * Differences from the previous version:
+- *  - Authorisation uses the STORED dashboard roles, never the permission lists sent by the caller
+- *    (before, a caller could put themselves in permissionsOwnerNames and pass the check, and
+- *    readers were allowed to edit).
+- *  - Edit / duplicate / iteration fail loudly when the dashboard is not found, and creation fails
+- *    when the target V x.y already exists (no silent no-op, no duplicate primary key).
+- *  - Locked dashboards: no perimeter / risk-record changes, only permissions (owners / officers).
+- *  - All queries page through every result (fetchPage only returned the first page) and large
+- *    $in filters are chunked.
+- *  - Officers are looked up only for the dashboard's siglums.
+- *  - The "rescue" of permissions granted by other dashboards' sharings is applied per risk
+- *    instead of globally.
++ *  - ARM read access (R&O, mitigations, waterfalls) is derived on the server from STORED vs FINAL
++ *    state instead of the caller's permissionsToAdd / permissionsToRemove:
++ *      new risks      -> every final member (readers, writers, owners, officers) gets access
++ *      kept risks     -> added members get access, removed members lose it
++ *      dropped risks  -> every previous member loses it
++ *    so creating a board, adding risks (dialog or Full Search), removing risks and officer
++ *    changes now share / revoke like the Slate app did. permissionsToAdd / permissionsToRemove
++ *    are kept in the signature for client compatibility but are no longer used.
++ *  - Revocations are "rescued" per risk for users who still get access through another dashboard
++ *    containing that risk (any of its roles) or through an explicit sharing / escalation.
++ *    Both lookups run as the calling user, so dashboards and sharings hidden from them by the
++ *    restricted views cannot rescue (same limit as the Slate app).
++ *  - Only risks the caller can read are added to the perimeter; stored risks the caller cannot
++ *    see are kept untouched (they could not have been removed knowingly from the client).
++ *  - Locked dashboards keep their stored perimeter; only permissions change.
+  */
+ 
+ type WorkflowEdits =
+@@ -53,6 +57,9 @@
+ const OFFICER_SIGLUM_2 = "userSiglum2letter";
+ const OFFICER_COVERS_SUB_SIGLUMS = true;
+ 
++/** Dashboards in these statuses no longer grant access to their risks. */
++const NON_GRANTING_STATUSES = ["deleted"];
++
+ const norm = (v: unknown): string => (typeof v === "string" ? v.trim().toUpperCase() : "");
+ 
+ function officerCoversSiglum(user: any, siglum: string): boolean {
+@@ -67,12 +74,18 @@
+ const lower = (list: readonly (string | undefined | null)[] | undefined): string[] =>
+     (list || []).filter((s): s is string => Boolean(s)).map(s => s.trim().toLowerCase());
+ 
++const uniqLower = (list: readonly (string | undefined | null)[] | undefined): string[] =>
++    Array.from(new Set(lower(list)));
++
+ const toIso = (epoch: Long | number | string | undefined): string | undefined => {
+     if (epoch === undefined || epoch === null || epoch === "") return undefined;
+     const n = Number(epoch);
+     return !isNaN(n) && n > 0 ? new Date(n).toISOString() : String(epoch);
+ };
+ 
++const toPkList = (list: readonly unknown[] | undefined): number[] =>
++    Array.from(new Set((list || []).map(Number).filter(n => !isNaN(n) && n > 0)));
++
+ function chunk<T>(list: T[], size = IN_CHUNK): T[][] {
+     const out: T[][] = [];
+     for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+@@ -98,7 +111,6 @@
+ /**
+  * Same lookup as the previous (working) implementation: filter on version / iteration server-side,
+  * compare creationDate in memory (works whether it is stored as a timestamp or an ISO string).
+- * All pages are read, so the match is not missed when many dashboards share V1.1.
+  */
+ async function findDashboard(client: Client, type: any, creationDateIso: string, version: number, iteration: number): Promise<any | undefined> {
+     const targetMs = new Date(creationDateIso).getTime();
+@@ -106,12 +118,38 @@
+     return candidates.find((d: any) => d.creationDate && new Date(d.creationDate).getTime() === targetMs);
+ }
+ 
+-function cascadePermissions(currentList: string[] | undefined, toAdd: string[], toRemove: Set<string>): string[] {
++/** Every user holding a role on a dashboard (lower-cased). */
++function dashboardMembers(board: any, extraOfficers: string[] = []): string[] {
++    if (!board) return uniqLower(extraOfficers);
++    return uniqLower([
++        ...(board.permissionsReadNames || []),
++        ...(board.permissionsWriteNames || []),
++        ...(board.permissionsOwnerNames || []),
++        ...(board.permissionsOfficerNames || []),
++        ...extraOfficers,
++    ]);
++}
++
++/** Applies additions / removals to a read list, case-insensitively, keeping the stored casing. */
++function applyAccess(currentList: string[] | undefined, toAdd: string[], toRemove: Set<string>): string[] {
+     const keep = (currentList || []).filter(name => !toRemove.has(name.trim().toLowerCase()));
+     const seen = new Set(keep.map(n => n.trim().toLowerCase()));
+-    return [...keep, ...toAdd.filter(n => !seen.has(n.trim().toLowerCase()))];
++    const added: string[] = [];
++    toAdd.forEach(n => {
++        const key = n.trim().toLowerCase();
++        if (key && !seen.has(key)) {
++            seen.add(key);
++            added.push(n.trim());
++        }
++    });
++    return [...keep, ...added];
+ }
+ 
++const sameMembers = (a: string[] | undefined, b: string[]): boolean => {
++    const la = uniqLower(a), lb = uniqLower(b);
++    return la.length === lb.length && la.every(x => lb.includes(x));
++};
++
+ export default async function executeAddEditWorkflow(
+     client: Client,
+     userMail: string,
+@@ -123,8 +161,8 @@
+     ownerDashboard: string[],
+     pkImpactIdList: Integer[],
+     actionList: string[],
+-    permissionsToAdd: string[],
+-    permissionsToRemove: string[],
++    permissionsToAdd: string[],     // no longer used: access is derived on the server (kept for client compatibility)
++    permissionsToRemove: string[],  // no longer used: access is derived on the server (kept for client compatibility)
+     permissionsReadNames: string[],
+     permissionsWriteNames: string[],
+     permissionsOwnerNames: string[],
+@@ -157,11 +195,12 @@
+         const TargetDashboardType: any = isMaster ? ErmDashboardUserInput : ErmDashboardUserInputDev;
+         const TargetRiskType: any = isMaster ? ErmRiskUserInput : ErmRiskUserInputDev;
+         const TargetSharingType: any = isMaster ? ErmRisksSharingEdits : ErmRisksSharingEditsDev;
++        const readField = isMaster ? "permissionsReadNames" : "permissionsReadNamesDev";
+ 
+         const creationDateIso = toIso(creationDate)!;
+         const version = Number(boardVersion);
+         const iteration = Number(boardIteration);
+-        const pkList = (pkImpactIdList || []).map(Number).filter(n => !isNaN(n) && n > 0);
++        const requestedPks = toPkList(pkImpactIdList);
+ 
+         // ==========================================
+         // PHASE 1: LOAD STORED STATE
+@@ -195,7 +234,6 @@
+         // Officers: stored ones + officers of the (stored, or requested for new dashboards) siglums.
+         const roleSource = action === "edit" ? targetBoard : sourceBoard;
+         const siglums = Array.from(new Set([...(ownerDashboard || []), ...((roleSource?.ownerDashboard as string[]) || [])]));
+-        // Only filter server-side on userAppProfile (known to exist); match siglums in memory.
+         const officerUsers = siglums.length > 0
+             ? await fetchAll(client(ErmCockpitUser).where({ userAppProfile: "Officer" }))
+             : [];
+@@ -249,7 +287,36 @@
+             : officersForRequestedSiglums;
+ 
+         // ==========================================
+-        // PHASE 3: DASHBOARD RECORD
++        // PHASE 3: PERIMETER (what risks the board holds, before vs after)
++        // ==========================================
++        // Baseline = the stored target (edit) or the source board (new version / iteration).
++        // A brand-new board ("add") starts empty, so every risk and every member is "new".
++        const baselineBoard = action === "edit" ? targetBoard : (action === "add" ? undefined : sourceBoard);
++        const storedPks = toPkList(baselineBoard?.pkImpactIdList);
++
++        // Locked dashboards cannot change perimeter.
++        const wantedPks = dashboardLocked ? storedPks : requestedPks;
++
++        // R&O rows for everything we may touch. The objects are restricted views and this function
++        // runs as the caller, so only risks the caller can read come back.
++        const candidatePks = Array.from(new Set([...wantedPks, ...storedPks]));
++        const roRows = await fetchAllIn(client, ErmDashboardRiskAndOpportunity, "pkImpactId", candidatePks);
++        const visiblePks = new Set(roRows.map((ro: any) => Number(ro.pkImpactId)));
++
++        // Final perimeter: requested risks the caller can read + stored risks hidden from the caller
++        // (the client never showed them, so they cannot have been removed on purpose).
++        const finalPks = Array.from(new Set([
++            ...wantedPks.filter(pk => visiblePks.has(pk)),
++            ...storedPks.filter(pk => !visiblePks.has(pk)),
++        ]));
++        const finalPkSet = new Set(finalPks);
++        const storedPkSet = new Set(storedPks);
++        const newPks = finalPks.filter(pk => !storedPkSet.has(pk) && visiblePks.has(pk));
++        const keptPks = finalPks.filter(pk => storedPkSet.has(pk) && visiblePks.has(pk));
++        const droppedPks = storedPks.filter(pk => !finalPkSet.has(pk) && visiblePks.has(pk));
++
++        // ==========================================
++        // PHASE 4: DASHBOARD RECORD
+         // ==========================================
+         const dashboardProperties: any = {
+             permissionsOfficerNames: finalOfficers,
+@@ -267,7 +334,7 @@
+             dashboardProperties.reportType = reportType || "Report";
+             dashboardProperties.settings = settings;
+             dashboardProperties.ownerDashboard = ownerDashboard;
+-            dashboardProperties.pkImpactIdList = pkList;
++            dashboardProperties.pkImpactIdList = finalPks;
+             if (editableUntil) dashboardProperties.editableUntil = toIso(editableUntil);
+         }
+ 
+@@ -287,66 +354,112 @@
+             batch.update(targetBoard, dashboardProperties);
+         }
+ 
+-        if (pkList.length === 0) return batch.getEdits();
++        // ==========================================
++        // PHASE 5: ARM READ ACCESS (derived from stored vs final state)
++        // ==========================================
++        const membersBefore = baselineBoard
++            ? dashboardMembers(baselineBoard, action === "edit" ? [] : officersForStoredSiglums)
++            : [];
++        const membersAfter = uniqLower([...finalReaders, ...finalWriters, ...finalOwners, ...finalOfficers]);
++        const addedMembers = membersAfter.filter(u => !membersBefore.includes(u));
++        const removedMembers = membersBefore.filter(u => !membersAfter.includes(u));
++
++        // Per risk: who gains access, who loses it.
++        const grantFor = new Map<number, string[]>();
++        const revokeFor = new Map<number, string[]>();
++        newPks.forEach(pk => grantFor.set(pk, membersAfter));
++        keptPks.forEach(pk => {
++            if (addedMembers.length) grantFor.set(pk, addedMembers);
++            if (removedMembers.length) revokeFor.set(pk, removedMembers);
++        });
++        droppedPks.forEach(pk => revokeFor.set(pk, membersBefore));
++
++        const touchedPks = Array.from(new Set([...grantFor.keys(), ...revokeFor.keys()]));
++        const revokePks = Array.from(revokeFor.keys());
++        const strTouched = touchedPks.map(String);
++
++        const [mitigations, waterfalls, sharings, otherBoards] = await Promise.all([
++            fetchAllIn(client, ErmDashboardMitigation, "pkImpactIdAsString", strTouched),
++            fetchAllIn(client, ErmDashboardWaterfall, "pkImpactIdAsString", strTouched),
++            revokePks.length ? fetchAllIn(client, TargetSharingType, "pkImpactId", revokePks) : Promise.resolve([]),
++            // Every dashboard the caller can see; used to keep access granted through another board.
++            revokePks.length ? fetchAll(client(TargetDashboardType)) : Promise.resolve([]),
++        ]);
++
++        // Rescue: users who keep read access to a risk through another dashboard or an explicit share.
++        const protectedByPk = new Map<number, Set<string>>();
++        const protect = (pk: unknown, users: string[]) => {
++            const key = Number(pk);
++            if (!revokeFor.has(key)) return;
++            const set = protectedByPk.get(key) || new Set<string>();
++            users.forEach(u => set.add(u));
++            protectedByPk.set(key, set);
++        };
++        sharings.forEach((share: any) => {
++            if (share.dashboardFrom === targetDashboardId) return;
++            protect(share.pkImpactId, lower(share.destinator));
++        });
++        const targetMs = new Date(creationDateIso).getTime();
++        const isTargetBoard = (board: any) =>
++            board.dashboardId === targetDashboardId ||
++            (Number(board.boardVersion) === version && Number(board.boardIteration) === iteration &&
++                board.creationDate && new Date(board.creationDate).getTime() === targetMs);
++        otherBoards.forEach((board: any) => {
++            if (isTargetBoard(board)) return;
++            if (NON_GRANTING_STATUSES.includes(String(board.boardStatus || "").toLowerCase())) return;
++            const members = dashboardMembers(board);
++            toPkList(board.pkImpactIdList).forEach(pk => protect(pk, members));
++        });
++
++        const removalSet = (pk: number): Set<string> => {
++            const wanted = revokeFor.get(pk) || [];
++            const keep = protectedByPk.get(pk);
++            return new Set(keep ? wanted.filter(u => !keep.has(u)) : wanted);
++        };
++
++        const updateAccess = (obj: any, pk: unknown) => {
++            const key = Number(pk);
++            const add = grantFor.get(key) || [];
++            const remove = removalSet(key);
++            if (add.length === 0 && remove.size === 0) return;
++            const next = applyAccess(obj[readField], add, remove);
++            if (sameMembers(obj[readField], next)) return; // skip no-op edits
++            batch.update(obj, { [readField]: next } as any);
++        };
++
++        const touchedSet = new Set(touchedPks);
++        roRows.forEach((ro: any) => { if (touchedSet.has(Number(ro.pkImpactId))) updateAccess(ro, ro.pkImpactId); });
++        mitigations.forEach((m: any) => updateAccess(m, m.pkImpactIdAsString));
++        waterfalls.forEach((w: any) => updateAccess(w, w.pkImpactIdAsString));
+ 
+         // ==========================================
+-        // PHASE 4: PERMISSION CASCADE (with per-risk rescue)
++        // PHASE 6: PER-DASHBOARD RISK RECORDS
+         // ==========================================
+-        const toAdd = canSetReadWrite ? (permissionsToAdd || []) : [];
+-        const toRemove = canSetReadWrite ? lower(permissionsToRemove) : [];
+-        const hasPermissionChanges = toAdd.length > 0 || toRemove.length > 0;
+-        const strPkList = pkList.map(String);
++        const perimeterRows = roRows.filter((ro: any) => finalPkSet.has(Number(ro.pkImpactId)));
++        if (perimeterRows.length === 0) return batch.getEdits();
+ 
+-        const [matchingRo, mitigations, waterfalls, existingInputRisks, sourceInputRisks, sharings] = await Promise.all([
+-            fetchAllIn(client, ErmDashboardRiskAndOpportunity, "pkImpactId", pkList),
+-            hasPermissionChanges ? fetchAllIn(client, ErmDashboardMitigation, "pkImpactIdAsString", strPkList) : Promise.resolve([]),
+-            hasPermissionChanges ? fetchAllIn(client, ErmDashboardWaterfall, "pkImpactIdAsString", strPkList) : Promise.resolve([]),
++        const perimeterPks = perimeterRows.map((ro: any) => Number(ro.pkImpactId));
++        const [existingInputRisks, sourceInputRisks] = await Promise.all([
+             isCreation
+                 ? Promise.resolve([]) // brand-new target: no records yet
+-                : fetchAllIn(client, TargetRiskType, "pkImpactId", pkList, {
++                : fetchAllIn(client, TargetRiskType, "pkImpactId", perimeterPks, {
+                     dashboardCreationDate: creationDateIso,
+                     boardVersion: version,
+                     boardIteration: iteration,
+                 }),
+             (action === "duplicate" || action === "create_iteration")
+-                ? fetchAllIn(client, TargetRiskType, "pkImpactId", pkList, {
++                ? fetchAllIn(client, TargetRiskType, "pkImpactId", perimeterPks, {
+                     dashboardCreationDate: toIso(creationDateBasedOn),
+                     boardVersion: Number(boardVersionBasedOn),
+                     boardIteration: Number(boardIterationBasedOn),
+                 })
+                 : Promise.resolve([]),
+-            toRemove.length > 0 ? fetchAllIn(client, TargetSharingType, "pkImpactId", pkList) : Promise.resolve([]),
+         ]);
+ 
+-        // A user keeps read access to a risk when another dashboard shared it with them.
+-        const protectedByPk = new Map<string, Set<string>>();
+-        sharings.forEach((share: any) => {
+-            if (share.dashboardFrom === targetDashboardId) return;
+-            const set = protectedByPk.get(String(share.pkImpactId)) || new Set<string>();
+-            lower(share.destinator).forEach(d => set.add(d));
+-            protectedByPk.set(String(share.pkImpactId), set);
+-        });
+-        const removalFor = (pk: unknown) => {
+-            const keep = protectedByPk.get(String(pk));
+-            return new Set(keep ? toRemove.filter(u => !keep.has(u)) : toRemove);
+-        };
+-        const readField = isMaster ? "permissionsReadNames" : "permissionsReadNamesDev";
+-
+-        if (hasPermissionChanges) {
+-            const cascade = (obj: any, pk: unknown) =>
+-                batch.update(obj, { [readField]: cascadePermissions(obj[readField], toAdd, removalFor(pk)) } as any);
+-            matchingRo.forEach((ro: any) => cascade(ro, ro.pkImpactId));
+-            mitigations.forEach((m: any) => cascade(m, m.pkImpactIdAsString));
+-            waterfalls.forEach((w: any) => cascade(w, w.pkImpactIdAsString));
+-        }
+-
+-        // ==========================================
+-        // PHASE 5: PER-DASHBOARD RISK RECORDS
+-        // ==========================================
+         const existingByPk = new Map<number, any>(existingInputRisks.filter((r: any) => r.pkImpactId).map((r: any) => [Number(r.pkImpactId), r]));
+         const sourceByPk = new Map<number, any>(sourceInputRisks.filter((r: any) => r.pkImpactId).map((r: any) => [Number(r.pkImpactId), r]));
+ 
+-        matchingRo.forEach((ro: any) => {
++        perimeterRows.forEach((ro: any) => {
+             const pk = Number(ro.pkImpactId);
+             const existing = existingByPk.get(pk);
+ 
+@@ -366,7 +479,7 @@
+                 riskProperties.riskDescription = ro.riskDescription;
+                 riskProperties.updatedOn = now;
+ 
+-                const idx = pkList.indexOf(pk);
++                const idx = requestedPks.indexOf(pk);
+                 const act = idx !== -1 ? actionList?.[idx] : undefined;
+                 if (act?.includes("escalation")) riskProperties.riskToprisk = 1;
+                 else if (act?.includes("child")) riskProperties.riskParent = Number(act.split("___")[1]);
+@@ -414,4 +527,4 @@
+         });
+         throw error;
+     }
+-}
+\ No newline at end of file
++}
